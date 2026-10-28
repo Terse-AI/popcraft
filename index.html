@@ -1769,7 +1769,7 @@ const CAST={
   pucky:{zh:'PUCKY',en:'Pucky',accent:'#a8dc9a',tag:'林间 · 精灵',line:'',ab:['','']},
   zsiga:{zh:'ZSIGA',en:'Zsiga',accent:'#eeb9cb',tag:'带刺 · 其实是保护色',line:'',ab:['','']}
 };
-const PLAYABLE=['lumi'];
+const PLAYABLE=['lumi','twinkle'];
 
 /* ======================================================================
    8 · MATERIALS + PRIMITIVES
@@ -4773,7 +4773,20 @@ function updateCamera(dt){
   camera.lookAt(_ce);
   if(avatar){
     avatar.position.set(player.p.x,player.p.y,player.p.z);
-    avatar.rotation.y=player.yaw;
+    // A generated figure turns to face the way it is actually walking, so
+    // strafing (A/D) and backing up (S) visibly rotate it instead of sliding
+    // sideways facing the camera. Walking straight forward still lines up with
+    // the view. Procedural residents keep facing the view as before.
+    if(avatarParts&&avatarParts.glb){
+      const sp=Math.hypot(player.v.x,player.v.z);
+      if(player._face===undefined) player._face=player.yaw;
+      const target=sp>0.4?Math.atan2(-player.v.x,-player.v.z):player._face;
+      let d=target-player._face; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+      player._face+=d*Math.min(1,(dt||0.016)*9);
+      avatar.rotation.y=player._face;
+    } else {
+      avatar.rotation.y=player.yaw;
+    }
     avatar.visible=thirdPerson && !camTight;
   }
 }
@@ -4798,7 +4811,27 @@ function animateAvatar(dt,t){
     avatarParts.halo.material.opacity=0.30*nightness;
     const k=2.0+nightness*1.4; avatarParts.halo.scale.set(k,k,1);
   }
-  avatar.children[0].position.y=Math.sin(player.bob*2)*0.03*Math.min(1,sp*0.3);
+  // A generated (GLB) figure has no separate limbs — the arm/leg holders above
+  // are empty — so give the whole body a lively procedural walk instead: a bob
+  // on every step, a side-to-side rock, a forward lean into the stride, a gentle
+  // squash-stretch, and a bank into turns so even a round body visibly steers.
+  const body=avatar.children[0];
+  if(avatarParts.glb){
+    const moving=Math.min(1,sp*0.5);
+    body.position.y=Math.abs(Math.sin(player.bob))*0.14*moving;
+    body.rotation.z=Math.sin(player.bob)*0.12*moving;
+    const sg=player.swing>0?(1-player.swing)*0.5:0;
+    body.rotation.x=clamp(sp*0.5,0,0.30)+sg;
+    const f=player._face===undefined?player.yaw:player._face;
+    let dyaw=f-(player._pface===undefined?f:player._pface);
+    player._pface=f;
+    while(dyaw>Math.PI)dyaw-=2*Math.PI; while(dyaw<-Math.PI)dyaw+=2*Math.PI;
+    body.rotation.z+=clamp(-dyaw*1.6,-0.22,0.22);
+    const sq=Math.sin(player.bob*2)*0.05*moving, s0=avatarParts.glb.userData.s0;
+    avatarParts.glb.scale.set(s0*(1-sq),s0*(1+sq),s0*(1-sq));
+  } else {
+    body.position.y=Math.sin(player.bob*2)*0.03*Math.min(1,sp*0.3);
+  }
   if(player.swing>0) player.swing=Math.max(0,player.swing-dt*3.4);
 }
 function hurt(n){
