@@ -1,0 +1,12 @@
+{
+  "name": "popcraft",
+  "version": "1.0.0",
+  "description": "An open-world voxel sandbox that runs entirely in the browser — infinite procedural terrain, mining, building, crafting and creatures, with a stylized shader-pack look (physical sky, normal-mapped surfaces, soft shadows). Single HTML file, no build step.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
