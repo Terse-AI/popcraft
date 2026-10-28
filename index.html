@@ -1582,7 +1582,18 @@ const matComp=new T.ShaderMaterial({
     // the eye loses colour before it loses light: night desaturates
     ' col=mix(col,vec3(l)*vec3(0.80,0.88,1.12),uNight*0.34);',
     ' col=pow(max(col*1.03-0.004,0.0),vec3(1.04));',
-    ' col=mix(col,col*vec3(0.26,0.62,0.82)+vec3(0.0,0.03,0.06),uUnder*0.80);',
+    ' col=mix(col,col*vec3(0.22,0.58,0.80)+vec3(0.0,0.03,0.07),uUnder*0.85);',
+    // caustics: two drifting wave fields crossed into bright ripples of light,
+    // the thing that makes being under water feel like being under water
+    ' if(uUnder>0.01){',
+    '   vec2 cp=uv*uRes*0.010;',
+    '   float ca=sin(cp.x*2.1+uTime*1.3)+sin(cp.y*2.7-uTime*1.1)',
+    '           +sin((cp.x+cp.y)*1.8+uTime*0.9)+sin((cp.x-cp.y)*2.3-uTime*1.5);',
+    '   float caust=pow(max(ca*0.25+0.5,0.0),3.0);',
+    '   col+=vec3(0.18,0.30,0.32)*caust*uUnder;',
+    '   float vg=smoothstep(1.1,0.2,length(d));',   // dark edges, a diving-mask feel
+    '   col*=mix(1.0,0.55+vg*0.45,uUnder);',
+    ' }',
     // rain pulls the colour out of everything and flattens the contrast
     ' col=mix(col,vec3(dot(col,vec3(0.2126,0.7152,0.0722)))*vec3(0.92,0.96,1.06),uWet*0.30);',
     // the ink line, last, so nothing else tints it
@@ -3363,21 +3374,46 @@ const moonSprite=new T.Sprite(new T.SpriteMaterial({map:GLOW_WHITE,transparent:t
 moonSprite.scale.set(74,74,1); skyScene.add(moonSprite);
 
 /* a flat scrolling deck of cloud, the way a block game has always done it */
-let cloudPlane=null;
+let cloudPlane=null, cloudMat=null;
 (function(){
-  const S=512, c=cv(S,S), x=c.getContext('2d');
-  x.clearRect(0,0,S,S);
-  for(let i=0;i<210;i++){
-    const px=Math.random()*S, py=Math.random()*S, r=18+Math.random()*52;
-    x.globalAlpha=0.05+Math.random()*0.10;
-    x.fillStyle=radial(x,px,py,r,[[0,'#ffffff'],[1,'rgba(255,255,255,0)']]);
-    x.fillRect(px-r,py-r,r*2,r*2);
-  }
-  const t=texOf(c); t.wrapS=t.wrapT=T.RepeatWrapping; t.repeat.set(5,5);
-  const g=new T.PlaneGeometry(1100,1100); g.rotateX(-Math.PI/2);
-  cloudPlane=new T.Mesh(g,new T.MeshBasicMaterial({map:t,transparent:true,
-    depthWrite:false,depthTest:false,opacity:0.5,fog:false,color:0xffffff}));
-  cloudPlane.position.y=104; cloudPlane.frustumCulled=false; skyScene.add(cloudPlane);
+  // A flat deck lit like volume: fbm shapes the puffs, and the sun side is
+  // found by stepping the density toward the sun — a cheap self-shadow that
+  // makes the clouds read as fluffy and three-dimensional, not a painted plane.
+  const g=new T.PlaneGeometry(2400,2400); g.rotateX(-Math.PI/2);
+  cloudMat=new T.ShaderMaterial({
+    uniforms:{uTime:{value:0},uSunDir:{value:new T.Vector3(0,1,0)},
+      uSunCol:{value:new T.Color(0xffe6c0)},uShade:{value:new T.Color(0x9fb0cc)},
+      uCov:{value:0.5},uOpacity:{value:0.9},uCam:{value:new T.Vector3()}},
+    vertexShader:['varying vec3 vW;void main(){',
+      'vW=(modelMatrix*vec4(position,1.0)).xyz;',
+      'gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}'].join('\n'),
+    fragmentShader:['precision highp float;',
+      'uniform float uTime,uCov,uOpacity; uniform vec3 uSunDir,uSunCol,uShade,uCam;',
+      'varying vec3 vW;',
+      'float h(vec2 p){ p=fract(p*vec2(123.34,345.45)); p+=dot(p,p+34.345); return fract(p.x*p.y); }',
+      'float vn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);',
+      '  return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }',
+      'float fbm(vec2 p){ float a=0.5,v=0.0; for(int i=0;i<5;i++){ v+=a*vn(p); p*=2.03; a*=0.5; } return v; }',
+      'float clouds(vec2 p){ float d=fbm(p*0.012+vec2(uTime*0.004,uTime*0.0026));',
+      '  d=smoothstep(1.0-uCov,1.0-uCov+0.42,d); return d; }',
+      'void main(){',
+      '  vec2 p=vW.xz;',
+      '  float d=clouds(p);',
+      '  if(d<=0.003) discard;',
+      '  // step toward the sun: if there is cloud between here and the sun, shade it',
+      '  vec2 sv=normalize(uSunDir.xz+vec2(0.001))*18.0;',
+      '  float ahead=clouds(p+sv)*0.6+clouds(p+sv*2.2)*0.4;',
+      '  float lit=clamp(1.0-ahead*1.1,0.0,1.0);',
+      '  float rim=smoothstep(0.0,0.5,d)*(1.0-smoothstep(0.5,0.95,d));',
+      '  vec3 col=mix(uShade,uSunCol*1.05,lit);',
+      '  col+=uSunCol*rim*0.25*max(uSunDir.y,0.0);',
+      '  // fade at the edge of the deck so it never shows a hard border',
+      '  float far=1.0-smoothstep(700.0,1150.0,length(vW.xz-uCam.xz));',
+      '  gl_FragColor=vec4(col, d*uOpacity*far);',
+      '}'].join('\n'),
+    transparent:true,depthWrite:false,depthTest:false,fog:false,side:T.DoubleSide});
+  cloudPlane=new T.Mesh(g,cloudMat);
+  cloudPlane.position.y=118; cloudPlane.frustumCulled=false; skyScene.add(cloudPlane);
 })();
 
 /* ---- motes — the air is not empty -----------------------------------
@@ -4041,9 +4077,14 @@ function updateDay(dt){
   }
   if(cloudPlane){
     cloudPlane.position.x=camera.position.x; cloudPlane.position.z=camera.position.z;
-    cloudPlane.material.map.offset.x+=dt*0.0022;
-    cloudPlane.material.color.copy(_c2).lerp(new T.Color(0xffffff),daylight*0.7);
-    cloudPlane.material.opacity=lerp(0.22,0.48,daylight);
+    const cu=cloudMat.uniforms;
+    cu.uTime.value=performance.now()/1000;
+    cu.uSunDir.value.copy(SUN);
+    cu.uSunCol.value.copy(CHUNK_U.uSunCol.value).lerp(new T.Color(0xffffff),0.4);
+    cu.uShade.value.copy(_c1).lerp(new T.Color(0x8ea2c4),0.5);
+    cu.uCov.value=lerp(0.40,0.58,daylight)+WEATHER.wet*0.30;
+    cu.uOpacity.value=lerp(0.5,0.92,daylight);
+    cu.uCam.value.copy(camera.position);
   }
 }
 /* ======================================================================
