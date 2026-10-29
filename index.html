@@ -1407,6 +1407,9 @@ const GLOW_WHITE=glowTex('rgba(255,255,255,1)','rgba(192,216,255,0.45)');
 const canvas=$('#gl');
 const renderer=new T.WebGLRenderer({canvas:canvas,antialias:false});
 let pixelBudget=Math.min(window.devicePixelRatio||1,1.0);   // capped for smoothness; Quality setting adjusts
+// Which post-processing passes run, set by the Quality setting (Low/Med/High).
+// Low drops them for frames; High adds the wide soft-bloom + stronger AO/rays.
+let FX_RAYS=true, FX_WIDE=false, FX_SSAO=true;
 renderer.setPixelRatio(pixelBudget);
 renderer.outputColorSpace=T.SRGBColorSpace;
 renderer.toneMapping=T.NoToneMapping;      // graded in the composite instead
@@ -1561,7 +1564,7 @@ const matComp=new T.ShaderMaterial({
     '   float w=smoothstep(0.02,0.14,max(mx-l0,l0-mn));',
     '   col=mix(c0,(nw+ne+sw+se+c0)*0.2,w*0.85);',
     ' }',
-    ' col*=ssao(uv,linz(uv));',
+    ' if(uAO>0.004) col*=ssao(uv,linz(uv));',   // SSAO skipped when Quality is Low
     ' col+=texture2D(tRays,uv).rgb*uRays;',
     ' vec3 bl=texture2D(tBloom,uv).rgb*0.60+texture2D(tWide,uv).rgb*1.00;',
     ' col+=bl*uBloom;',
@@ -1672,12 +1675,14 @@ function renderFrame(time){
   renderer.setRenderTarget(rtA); renderer.render(postScene,postCam);
   blurPass(rtA,rtB,1,0,1.0); blurPass(rtB,rtA,0,1,1.0);
   blurPass(rtA,rtC,1,0,1.0); blurPass(rtC,rtD,0,1,1.0);
-  blurPass(rtD,rtC,1,0,2.2); blurPass(rtC,rtD,0,1,2.2);
+  if(FX_WIDE){ blurPass(rtD,rtC,1,0,2.2); blurPass(rtC,rtD,0,1,2.2); }  // extra soft bloom (High only)
 
-  // light shafts, smeared out of the already-bright pixels
-  pquad.material=matRays;
-  matRays.uniforms.tDiffuse.value=rtA.texture;
-  renderer.setRenderTarget(rtB); renderer.render(postScene,postCam);
+  // light shafts, smeared out of the already-bright pixels (skipped on Low)
+  if(FX_RAYS){
+    pquad.material=matRays;
+    matRays.uniforms.tDiffuse.value=rtA.texture;
+    renderer.setRenderTarget(rtB); renderer.render(postScene,postCam);
+  }
 
   pquad.material=matComp;
   matComp.uniforms.tRays.value=rtB.texture;
@@ -4924,6 +4929,11 @@ function setQuality(q){
   const cap = q<=1?0.7 : (q===2?1.0 : Math.min(dpr,1.5));
   pixelBudget=cap; renderer.setPixelRatio(cap);
   VIEW = q<=1?4 : (q===2?6 : 8);
+  FX_RAYS = q>=2; FX_SSAO = q>=2; FX_WIDE = q>=3;
+  try{
+    matComp.uniforms.uRays.value = FX_RAYS ? (q>=3?1.5:1.0) : 0.0;
+    matComp.uniforms.uAO.value   = FX_SSAO ? (q>=3?0.92:0.80) : 0.0;
+  }catch(e){}
   if(typeof resize==='function') resize();
   if(typeof updateChunks==='function') updateChunks(player.p.x,player.p.z,true);
 }
@@ -4936,10 +4946,29 @@ const I18N={
   ko:{mode:'모드',sur:'생존',cre:'창작',render:'렌더 거리',fov:'시야',sens:'감도',inv:'Y 반전',quality:'화질',lang:'언어',low:'낮음',med:'중간',high:'높음',resume:'계속',settings:'설정',start:'시작',hint:'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl/W더블 달리기<br>우클릭/화살표 시점 · 좌클릭 캐기 · 우클릭 놓기 · 휠 선택<br>1-9 단축바 · Q 버리기 · E 가방 · F5 시점 · O 설정'}
 };
 function t(k){ return (I18N[LANG]||I18N.zh)[k]||I18N.zh[k]||k; }
+// Generic personality keywords per resident, for the non-Chinese UI.
+const TAG_EN={
+  lumi:'Curious · Afraid of the dark · Carries a lantern',
+  twinkle:'Cheerful · Brave · A little dreamy',
+  molly:'Pouty · Stubborn · Always with a brush',
+  labubu:'Mischievous · Kind-hearted',
+  dimoo:'Shy · Dreamer · Lives with a cloud',
+  skull:'Aloof · Curious · A traveler',
+  crybaby:'Tearful · Gentle · Honest'
+};
+function charInfo(id){
+  const c=CAST[id]; if(!c) return;
+  const zh=(LANG==='zh');
+  const sz=document.getElementById('selZh'), st=document.getElementById('selTag'), sl=document.getElementById('selLine');
+  if(sz) sz.textContent = zh ? c.zh : (c.en||c.zh);
+  if(st) st.textContent = zh ? c.tag : (TAG_EN[id]||c.tag);
+  if(sl) sl.textContent = zh ? c.line : '';   // detailed zh lore stays zh-only
+}
 function applyLang(lang){
   LANG=lang;
   const gb=document.getElementById('goBtn'); if(gb) gb.textContent=t('start');
   const hn=document.getElementById('hint'); if(hn) hn.innerHTML=t('hint');
+  const row=document.getElementById('cards'); if(row && row.dataset.id) charInfo(row.dataset.id);
   if(window.__relabelSettings) window.__relabelSettings();
 }
 let settingsOpen=false;
@@ -6045,16 +6074,13 @@ function buildTitle(){
     card.onclick=function(){
       [].forEach.call(row.children,function(n){ n.classList.remove('on'); });
       card.classList.add('on');
-      $('#selZh').textContent=c.zh; $('#selTag').textContent=c.tag;
-      $('#selLine').textContent=c.line;
-      row.dataset.id=id;
+      row.dataset.id=id; charInfo(id);
     };
     row.appendChild(card);
   });
   row.dataset.id=PLAYABLE[0];
   const c0=CAST[PLAYABLE[0]];
-  $('#selZh').textContent=c0.zh; $('#selTag').textContent=c0.tag;
-  $('#selLine').textContent=c0.line;
+  charInfo(PLAYABLE[0]);
   $('#goBtn').onclick=function(){ startGame(row.dataset.id); };
   $('#respawnBtn').onclick=function(){ respawn(); wantLock(); };
 }
