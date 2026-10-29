@@ -1406,7 +1406,7 @@ const GLOW_WHITE=glowTex('rgba(255,255,255,1)','rgba(192,216,255,0.45)');
 
 const canvas=$('#gl');
 const renderer=new T.WebGLRenderer({canvas:canvas,antialias:false});
-let pixelBudget=Math.min(window.devicePixelRatio||1,1.25);
+let pixelBudget=Math.min(window.devicePixelRatio||1,1.0);   // capped for smoothness; Quality setting adjusts
 renderer.setPixelRatio(pixelBudget);
 renderer.outputColorSpace=T.SRGBColorSpace;
 renderer.toneMapping=T.NoToneMapping;      // graded in the composite instead
@@ -4123,7 +4123,7 @@ function updateDay(dt){
 let VIEW=7;                         // chunks of sight, trimmed if frames run long
 // --- game mode + player-adjustable settings (Minecraft-style) ---
 let creative=false, flying=false, VIEW_LOCK=false;
-let LOOK_SENS=0.0026, INVERT_Y=false, _lastSpace=0;
+let LOOK_SENS=0.0026, INVERT_Y=false, _lastSpace=0, QUALITY=2, LANG='zh';
 const CH=new Map();                 // live chunks
 const EDITS=new Map();              // every block the player ever changed, forever
 const UPLOAD_BUDGET=2;
@@ -4755,7 +4755,7 @@ function playerInput(dt){
   // sneak beats sprint, the way it does everywhere else
   // Minecraft-style gait ratios (sneak ~0.3×, sprint ~1.3×) on a brisk base.
   const gait=sneak?0.30:(sprint?1.33:1.0);
-  const sp=(player.inWater?3.0:(player.onGround?4.9:4.6))*gait;
+  const sp=(player.inWater?3.6:(player.onGround?6.0:5.4))*gait;   // brisker walk
   const len=Math.hypot(mx,mz)||1;
   const tx=(_fwd.x*mz+_rgt.x*mx)/len*sp, tz=(_fwd.z*mz+_rgt.z*mx)/len*sp;
   const acc=player.onGround?42:9;   // near-instant ground accel, Minecraft-snappy
@@ -4918,6 +4918,30 @@ function setMode(cr){
   if(typeof refreshBag==='function') refreshBag();
   document.body.classList.toggle('creative',creative);
 }
+function setQuality(q){
+  QUALITY=q;
+  const dpr=window.devicePixelRatio||1;
+  const cap = q<=1?0.7 : (q===2?1.0 : Math.min(dpr,1.5));
+  pixelBudget=cap; renderer.setPixelRatio(cap);
+  VIEW = q<=1?4 : (q===2?6 : 8);
+  if(typeof resize==='function') resize();
+  if(typeof updateChunks==='function') updateChunks(player.p.x,player.p.z,true);
+}
+const I18N={
+  zh:{mode:'模式',sur:'生存',cre:'创造',render:'渲染距离',fov:'视野',sens:'灵敏度',inv:'反转视角',quality:'画质',lang:'语言',low:'低',med:'中',high:'高',resume:'继续',settings:'设置',start:'出 发',hint:'WASD 移动 · 空格 跳 · Shift 潜行 · Ctrl 或双击 W 疾跑<br>右键拖动 或 方向键 转视角 · 左键 挖/打 · 右键 放块 · 滚轮 换物品<br>1-9 快捷栏 · Q 丢弃 · E 背包 · F5 切换视角 · O 设置'},
+  en:{mode:'Mode',sur:'Survival',cre:'Creative',render:'Render Dist.',fov:'FOV',sens:'Sensitivity',inv:'Invert Y',quality:'Quality',lang:'Language',low:'Low',med:'Med',high:'High',resume:'Resume',settings:'Settings',start:'PLAY',hint:'WASD move · Space jump · Shift sneak · Ctrl / double-tap W sprint<br>Right-drag or arrows look · Left dig · Right place · Wheel select<br>1-9 hotbar · Q drop · E bag · F5 view · O settings'},
+  ja:{mode:'モード',sur:'サバイバル',cre:'クリエイティブ',render:'描画距離',fov:'視野',sens:'感度',inv:'Y反転',quality:'画質',lang:'言語',low:'低',med:'中',high:'高',resume:'続ける',settings:'設定',start:'スタート',hint:'WASD 移動 · スペース ジャンプ · Shift スニーク · Ctrl/W二回 ダッシュ<br>右ドラッグ/矢印 視点 · 左 採掘 · 右 設置 · ホイール 選択<br>1-9 ホットバー · Q 捨てる · E バッグ · F5 視点 · O 設定'},
+  es:{mode:'Modo',sur:'Supervivencia',cre:'Creativo',render:'Distancia',fov:'FOV',sens:'Sensibilidad',inv:'Invertir Y',quality:'Calidad',lang:'Idioma',low:'Baja',med:'Media',high:'Alta',resume:'Continuar',settings:'Ajustes',start:'JUGAR',hint:'WASD mover · Espacio saltar · Shift agacharse · Ctrl/doble W correr<br>Clic der./flechas mirar · Izq picar · Der poner · Rueda elegir<br>1-9 barra · Q soltar · E bolsa · F5 vista · O ajustes'},
+  fr:{mode:'Mode',sur:'Survie',cre:'Créatif',render:'Distance',fov:'FOV',sens:'Sensibilité',inv:'Inverser Y',quality:'Qualité',lang:'Langue',low:'Bas',med:'Moyen',high:'Haut',resume:'Continuer',settings:'Réglages',start:'JOUER',hint:'WASD déplacer · Espace sauter · Shift accroupir · Ctrl/double W courir<br>Clic droit/flèches regarder · Gauche miner · Droit poser · Molette choisir<br>1-9 barre · Q lâcher · E sac · F5 vue · O réglages'},
+  ko:{mode:'모드',sur:'생존',cre:'창작',render:'렌더 거리',fov:'시야',sens:'감도',inv:'Y 반전',quality:'화질',lang:'언어',low:'낮음',med:'중간',high:'높음',resume:'계속',settings:'설정',start:'시작',hint:'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl/W더블 달리기<br>우클릭/화살표 시점 · 좌클릭 캐기 · 우클릭 놓기 · 휠 선택<br>1-9 단축바 · Q 버리기 · E 가방 · F5 시점 · O 설정'}
+};
+function t(k){ return (I18N[LANG]||I18N.zh)[k]||I18N.zh[k]||k; }
+function applyLang(lang){
+  LANG=lang;
+  const gb=document.getElementById('goBtn'); if(gb) gb.textContent=t('start');
+  const hn=document.getElementById('hint'); if(hn) hn.innerHTML=t('hint');
+  if(window.__relabelSettings) window.__relabelSettings();
+}
 let settingsOpen=false;
 function toggleSettings(){
   if(state!=='play' && !settingsOpen) return;
@@ -4956,31 +4980,52 @@ function toggleSettings(){
   const btn=document.createElement('div'); btn.id='setBtn'; btn.textContent='⚙'; root.appendChild(btn);
   const el=document.createElement('div'); el.id='settings';
   el.innerHTML=
-    "<div class='sc'><h3>设置 · SETTINGS</h3>"+
-    "<div class='row'><span>模式 Mode</span><span class='mb'>"+
-    "<button id='mSur'>生存</button><button id='mCre'>创造</button></span></div>"+
-    "<div class='row'><span>渲染距离 Render</span><input id='sView' type='range' min='3' max='12' step='1'><b id='vView'></b></div>"+
-    "<div class='row'><span>视野 FOV</span><input id='sFov' type='range' min='50' max='110' step='1'><b id='vFov'></b></div>"+
-    "<div class='row'><span>灵敏度 Sens</span><input id='sSens' type='range' min='5' max='40' step='1'><b id='vSens'></b></div>"+
-    "<div class='row'><span>反转视角 Invert Y</span><input id='sInv' type='checkbox'></div>"+
-    "<button class='done' id='sDone'>继续 Resume</button></div>";
+    "<div class='sc'><h3 id='lTitle'></h3>"+
+    "<div class='row'><span id='lMode'></span><span class='mb'>"+
+    "<button id='mSur'></button><button id='mCre'></button></span></div>"+
+    "<div class='row'><span id='lQual'></span><span class='mb'>"+
+    "<button id='qLow'></button><button id='qMed'></button><button id='qHigh'></button></span></div>"+
+    "<div class='row'><span id='lView'></span><input id='sView' type='range' min='3' max='12' step='1'><b id='vView'></b></div>"+
+    "<div class='row'><span id='lFov'></span><input id='sFov' type='range' min='50' max='110' step='1'><b id='vFov'></b></div>"+
+    "<div class='row'><span id='lSens'></span><input id='sSens' type='range' min='5' max='40' step='1'><b id='vSens'></b></div>"+
+    "<div class='row'><span id='lInv'></span><input id='sInv' type='checkbox'></div>"+
+    "<div class='row'><span id='lLang'></span><select id='sLang'>"+
+    "<option value='zh'>中文</option><option value='en'>English</option><option value='ja'>日本語</option>"+
+    "<option value='es'>Español</option><option value='fr'>Français</option><option value='ko'>한국어</option></select></div>"+
+    "<button class='done' id='sDone'></button></div>";
   root.appendChild(el);
   const G=id=>document.getElementById(id);
+  window.__relabelSettings=function(){
+    G('lTitle').textContent=t('settings'); G('lMode').textContent=t('mode');
+    G('mSur').textContent=t('sur'); G('mCre').textContent=t('cre');
+    G('lQual').textContent=t('quality');
+    G('qLow').textContent=t('low'); G('qMed').textContent=t('med'); G('qHigh').textContent=t('high');
+    G('lView').textContent=t('render'); G('lFov').textContent=t('fov');
+    G('lSens').textContent=t('sens'); G('lInv').textContent=t('inv');
+    G('lLang').textContent=t('lang'); G('sDone').textContent=t('resume');
+  };
   window.__syncSettings=function(){
+    window.__relabelSettings();
     G('mSur').classList.toggle('on',!creative); G('mCre').classList.toggle('on',creative);
+    G('qLow').classList.toggle('on',QUALITY===1); G('qMed').classList.toggle('on',QUALITY===2); G('qHigh').classList.toggle('on',QUALITY===3);
     G('sView').value=VIEW; G('vView').textContent=VIEW;
     const fv=Math.round(fovBase||70); G('sFov').value=fv; G('vFov').textContent=fv;
     G('sSens').value=Math.round(LOOK_SENS*10000); G('vSens').textContent=Math.round(LOOK_SENS*10000);
-    G('sInv').checked=INVERT_Y;
+    G('sInv').checked=INVERT_Y; G('sLang').value=LANG;
   };
   G('mSur').onclick=function(){ setMode(false); window.__syncSettings(); };
   G('mCre').onclick=function(){ setMode(true);  window.__syncSettings(); };
+  G('qLow').onclick=function(){ setQuality(1); window.__syncSettings(); };
+  G('qMed').onclick=function(){ setQuality(2); window.__syncSettings(); };
+  G('qHigh').onclick=function(){ setQuality(3); window.__syncSettings(); };
+  G('sLang').onchange=function(e){ applyLang(e.target.value); window.__syncSettings(); };
   G('sView').oninput=function(e){ VIEW=+e.target.value; VIEW_LOCK=true; G('vView').textContent=VIEW; updateChunks(player.p.x,player.p.z,true); };
   G('sFov').oninput=function(e){ fovBase=+e.target.value; camera.fov=fovBase; camera.updateProjectionMatrix(); G('vFov').textContent=fovBase; };
   G('sSens').oninput=function(e){ LOOK_SENS=(+e.target.value)/10000; G('vSens').textContent=e.target.value; };
   G('sInv').onchange=function(e){ INVERT_Y=e.target.checked; };
   G('sDone').onclick=function(){ toggleSettings(); };
   btn.onclick=function(){ toggleSettings(); };
+  window.__relabelSettings();
   setInterval(function(){ btn.style.display=(state==='play')?'flex':'none'; },400);
 })();
 /* ======================================================================
@@ -5304,8 +5349,9 @@ const MOB_CAP=12;
 let spawnT=0;
 
 const MOBDEF={
-  shade: {hp:8,  speed:3.4, dmg:2, r:0.42, h:1.3, agro:28, atk:1.0, night:1, burn:1},
-  slime: {hp:12, speed:2.4, dmg:2, r:0.52, h:1.0, agro:22, atk:1.2, dark:1},
+  // Minecraft-like hostiles: ~20 HP, ~35-block follow range, brisk chase, real bite
+  shade: {hp:20, speed:4.0, dmg:3, r:0.42, h:1.3, agro:35, atk:1.0, night:1, burn:1},
+  slime: {hp:16, speed:3.0, dmg:2, r:0.52, h:1.0, agro:24, atk:1.2, dark:1},
   bunny: {hp:6,  speed:2.6, dmg:0, r:0.34, h:0.7, agro:0,  atk:0,   calm:1}
 };
 
@@ -5463,7 +5509,7 @@ function mobBlocked(m,x,y,z){
 const _md=new T.Vector3();
 function updateMobs(dt,t){
   spawnT-=dt;
-  if(spawnT<=0){ spawnT=2.4; trySpawn(); }
+  if(spawnT<=0){ spawnT=(daylight<0.26?1.1:3.2); trySpawn(); }   // night presses harder
   for(let i=mobs.length-1;i>=0;i--){
     const m=mobs[i], d=m.def;
     const dist=m.p.distanceTo(player.p);
@@ -5608,6 +5654,7 @@ function trySpawn(){
     else if(dark) kind='slime';
     else if(Math.random()<0.5) kind='bunny';
     if(!kind) continue;
+    if(creative && kind!=='bunny') continue;   // creative mode is peaceful
     if(kind==='bunny' && mobs.length>12) continue;
     spawnMob(kind,x,y,z);
     return;
@@ -6034,7 +6081,7 @@ bootWorkers(function(){
     $('#warn').textContent='后台线程不可用，世界会生成得慢一些。';
   }
   $('#goBtn').disabled=false;
-  $('#goBtn').textContent='出 发';
+  $('#goBtn').textContent=(typeof t==='function'?t('start'):'出 发');
   const s0=findSpawn();
   TITLE_AT[0]=s0[0]+0.5; TITLE_AT[1]=s0[2]+1; TITLE_AT[2]=s0[1]+0.5;
   VIEW=TOUCH?3:4; updateChunks(TITLE_AT[0],TITLE_AT[2],true);  // a world behind the menu
