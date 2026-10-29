@@ -509,6 +509,8 @@ Noise.prototype.ridge2=function(x,y,oct){   // 1-|n| stacked: sharp crests
    pass gives a climate and a surface height, then a 3D pass carves.
    ------------------------------------------------------------------- */
 var WSEED=0, N={};
+// per-world terrain "flavor", derived from the seed in initWorld (see below)
+var WV_amp=1, WV_hilly=0.5, WV_tshift=0, WV_hshift=0, WV_detail=1;
 function initWorld(seed){
   WSEED=seed|0;
   N.cont =new Noise(WSEED+1);  N.ero  =new Noise(WSEED+2);
@@ -518,6 +520,15 @@ function initWorld(seed){
   N.surf =new Noise(WSEED+9);  N.cld  =new Noise(WSEED+10);
   N.vary =new Noise(WSEED+11); N.var  =new Noise(WSEED+12);
   N.var2 =new Noise(WSEED+13); N.river=new Noise(WSEED+14);
+  // Every seed now makes a genuinely different world: some flat plains, some
+  // mountainous, some drier/colder/warmer, with different biome mixes — instead
+  // of every map feeling the same. Deterministic from the seed so it is shareable.
+  function _hs(k){ return hash3(k*97+1,k*57+7,k*31+13,WSEED); }
+  WV_amp    = 0.62 + _hs(1)*1.25;      // 0.62 flat .. 1.87 mountainous
+  WV_hilly  = _hs(2);                  // extra ridge weight for dramatic peaks
+  WV_tshift = (_hs(3)-0.5)*0.55;       // climate shift
+  WV_hshift = (_hs(4)-0.5)*0.55;       // humidity shift -> more desert/forest/swamp
+  WV_detail = 0.7 + _hs(5)*0.8;        // surface roughness
 }
 function sstep(a,b,x){ x=(x-a)/(b-a); x=x<0?0:(x>1?1:x); return x*x*(3-2*x); }
 function mix(a,b,t){ return a+(b-a)*t; }
@@ -538,17 +549,17 @@ function column(x,z){
   var c =N.cont.fbm2(x/900,  z/900,  4,2.0,0.5);
   var e =N.ero .fbm2(x/330,  z/330,  3,2.0,0.5);
   var w =N.weird.ridge2(x/230, z/230, 4);
-  var t =N.temp.fbm2(x/1400, z/1400, 2,2.0,0.5);
-  var hm=N.humid.fbm2(x/950,  z/950,  2,2.0,0.5);
+  var t =N.temp.fbm2(x/1400, z/1400, 2,2.0,0.5)+WV_tshift;
+  var hm=N.humid.fbm2(x/950,  z/950,  2,2.0,0.5)+WV_hshift;
   var v =N.vary.fbm2(x/260,  z/260,  2,2.0,0.5);
 
   var land=sstep(-0.26,0.10,c);
   var base=16+land*16;
   var flat=sstep(-0.10,0.45,e);
-  var amp=(1-flat)*34*land+3*land;
+  var amp=((1-flat)*34*land+3*land)*WV_amp;
   var det=(N.surf.fbm2(x/60,z/60,5,2.1,0.60)*7.0
           +N.surf.n2(x/7.0+90,z/7.0+90)*1.45)*land;
-  var h=base+amp*(0.25+0.75*w)+det;
+  var h=base+amp*(0.25+0.75*w*(0.7+WV_hilly*0.7))+det*WV_detail;
 
   var bandH=5.0+N.ero.n2(x/180,z/180)*2.0;
   var f=h/bandH, fi=Math.floor(f), fr=f-fi;
@@ -1499,7 +1510,7 @@ const matRays=new T.ShaderMaterial({
 
 const matComp=new T.ShaderMaterial({
   uniforms:{tDiffuse:{value:null},tBloom:{value:null},tWide:{value:null},
-    tRays:{value:null},uRays:{value:1.35},uAO:{value:0.80},
+    tRays:{value:null},uRays:{value:1.35},uAO:{value:0.80},uSharp:{value:0.30},
     tDepth:{value:null},uTexel:{value:new T.Vector2(1/800,1/600)},
     uNear:{value:0.1},uFar:{value:900},
     uOutline:{value:0.9},uOutW:{value:1.0},uSat:{value:1.16},
@@ -1512,7 +1523,7 @@ const matComp=new T.ShaderMaterial({
     'uniform vec2 uRes;uniform float uTime,uBloom,uExposure,uVig,uHalo,uNight;',
     'uniform float uUnder,uWet,uReal;',
     'uniform sampler2D tDepth,tRays; uniform vec2 uTexel;',
-    'uniform float uRays,uAO;',
+    'uniform float uRays,uAO,uSharp;',
     'uniform float uNear,uFar,uOutline,uOutW,uSat;',
     // view depth, so an edge threshold can scale with distance instead of
     // fattening up close and vanishing far away
@@ -1585,6 +1596,7 @@ const matComp=new T.ShaderMaterial({
     '   float mx=max(max(dot(nw,L),dot(ne,L)),max(dot(sw,L),dot(se,L)));',
     '   float w=smoothstep(0.02,0.14,max(mx-l0,l0-mn));',
     '   col=mix(c0,(nw+ne+sw+se+c0)*0.2,w*0.85);',
+    '   col+=(col-(nw+ne+sw+se)*0.25)*uSharp;',   // unsharp mask — recover clarity without more pixels
     ' }',
     ' if(uAO>0.004) col*=ssao(uv,linz(uv));',   // SSAO skipped when Quality is Low
     ' col+=texture2D(tRays,uv).rgb*uRays;',
@@ -4960,7 +4972,7 @@ function setQuality(q){
   const cap = q<=1?0.7 : (q===2?1.0 : Math.min(dpr,1.5));
   pixelBudget=cap; renderer.setPixelRatio(cap);
   VIEW = q<=1?4 : (q===2?6 : 8);
-  FX_RAYS = q>=2; FX_SSAO = q>=2; FX_WIDE = q>=3;
+  FX_RAYS = q>=3; FX_SSAO = q>=2; FX_WIDE = q>=3;   // volumetric rays High-only → smoother Med
   try{
     matComp.uniforms.uRays.value = FX_RAYS ? (q>=3?1.5:1.0) : 0.0;
     matComp.uniforms.uAO.value   = FX_SSAO ? (q>=3?0.92:0.80) : 0.0;
@@ -6068,7 +6080,10 @@ function beginPlay(){
   player.yaw=bestYaw; player.pitch=-0.15;
   $('#loading').style.display='none';
   $('#hud').style.display='block';
-  invAdd(I_PICK_W,1); invAdd(PLANK,16); invAdd(LAMP,4);
+  // a Minecraft-style starter kit, with a block already in hand ready to build
+  invAdd(GRASS,64); invAdd(DIRT,64); invAdd(COBBLE,64); invAdd(PLANK,64); invAdd(LOG,16);
+  invAdd(I_PICK_W,1); invAdd(LAMP,8);
+  hotbarSel=0;                         // select the first block so right-click places at once
   refreshHotbar();
   toast('WASD 走 · 空格 跳 · Shift 潜行 · Ctrl/双击W 疾跑 · 左键挖 · 右键放 · Q 丢 · E 背包 · F5 视角');
   wantLock();
