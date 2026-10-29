@@ -1006,7 +1006,7 @@ var DIMS=[SX,SY,SZ];
 /* Scratch, allocated once and reused for every chunk. It is several
    megabytes, so it is built on first use: the page usually never meshes
    anything itself and should not pay for the buffers. */
-var MAXQ=26000, WMAXQ=6000;
+var MAXQ=32000, WMAXQ=6000;   // more headroom for lusher grass + foliage
 var blocks=null, sky=null, blk=null, lqueue=null;
 var oPos,oNrm,oCol,oLt,oFx,oIdx, wPos,wNrm,wCol,wLt,wFx,wIdx, mKey,mAO;
 var oV=0,oI=0,wV=0,wI=0;
@@ -1285,7 +1285,7 @@ function emitCover(cx,cz){
     var by=ytop+1;
     // Up to two tufts per cell, each a cluster of four tapered blades. Denser
     // and more varied than a single sprig: this is most of "草地更多细节".
-    var tufts=(hash3(wx,19,wz,WSEED)<0.62)?2:1;
+    var _tr=hash3(wx,19,wz,WSEED); var tufts=(_tr<0.42)?3:((_tr<0.80)?2:1);
     for(var tf=0;tf<tufts;tf++){
       var j1=hash3(wx,31+tf*7,wz,WSEED), j2=hash3(wx,37+tf*7,wz,WSEED),
           j3=hash3(wx,41+tf*7,wz,WSEED), j4=hash3(wx,43+tf*7,wz,WSEED);
@@ -1302,13 +1302,18 @@ function emitCover(cx,cz){
       blade(bx,by,bz, Math.cos(a+1.05),Math.sin(a+1.05), 0.23,0.045,h*0.84,-lean,c0,c1,sl,bl);
       blade(bx,by,bz, Math.cos(a+2.1),Math.sin(a+2.1), 0.21,0.04,h*0.70,lean*1.4,c0,c1,sl,bl);
       blade(bx,by,bz, Math.cos(a+3.6),Math.sin(a+3.6), 0.18,0.035,h*0.55,-lean*1.2,c0,c1,sl,bl);
-      if(tf===0 && r1<cv.d*cv.fl){            // a flower on the tallest few
-        var pc=PETALS[(j3*PETALS.length)|0], st=h*0.92, pw=0.26;
-        blade(bx,by+st,bz, Math.cos(a+0.8),Math.sin(a+0.8), pw,pw*0.9,0.14,0,pc,pc,sl,bl);
-        blade(bx,by+st,bz, -Math.sin(a+0.8),Math.cos(a+0.8), pw,pw*0.9,0.14,0,pc,pc,sl,bl);
-        // a tiny bright centre
-        var yc=[1.0,0.92,0.5];
-        blade(bx,by+st,bz, 1.0,0.0, 0.08,0.07,0.05,0,yc,yc,sl,bl);
+      if(tf===0 && (r1<cv.d*cv.fl || j2<0.10)){   // fuller, more frequent blooms
+        var daisy=(j1<0.6);
+        var pc=daisy?[1.0,1.0,0.97]:PETALS[(j3*PETALS.length)|0];
+        var st=h*0.92, pw=0.22, np=daisy?6:5;
+        for(var pp=0;pp<np;pp++){
+          var pa=a+pp*(6.283/np);
+          blade(bx,by+st,bz, Math.cos(pa),Math.sin(pa), pw,pw*0.82,0.15,0.04,pc,pc,sl,bl);
+        }
+        // a warm yellow eye in the middle
+        var yc=daisy?[1.0,0.85,0.34]:[1.0,0.92,0.5];
+        blade(bx,by+st+0.015,bz, 1.0,0.0, 0.09,0.08,0.06,0,yc,yc,sl,bl);
+        blade(bx,by+st+0.015,bz, 0.0,1.0, 0.09,0.08,0.06,0,yc,yc,sl,bl);
       }
     }
   }
@@ -1324,7 +1329,7 @@ function emitCover(cx,cz){
                   (at(px2,y2,pz2+1)===0)||(at(px2,y2,pz2-1)===0);
       if(!upAir && !sideAir) continue;
       var wx2=lx2+cx*SX, wz2=lz2+cz*SZ;
-      if(hash3(wx2,51,wz2*7+y2,WSEED)>0.5) continue;      // thin it out
+      if(hash3(wx2,51,wz2*7+y2,WSEED)>0.72) continue;     // leafier canopy
       var li2=pidx(px2,Math.min(SY-1,y2+1),pz2);
       var sl2=sky[li2]/15, bl2=blk[li2]/15;
       var hx2=BLOCKS[lid].t;
@@ -1332,7 +1337,7 @@ function emitCover(cx,cz){
       var jf=hash3(wx2,53,wz2+y2,WSEED), jf2=hash3(wx2,59,wz2+y2,WSEED);
       var dark=[lr*0.62,lg2*0.62,lb2*0.62];
       var lite=[Math.min(1,lr*1.15),Math.min(1,lg2*1.12),Math.min(1,lb2*1.1)];
-      var cx2=lx2+0.5, cz2=lz2+0.5, nf=2+((jf2*2)|0);
+      var cx2=lx2+0.5, cz2=lz2+0.5, nf=3+((jf2*3)|0);
       for(var ff=0;ff<nf;ff++){
         var ang=(ff/nf)*6.283+jf*6.283, dcx=Math.cos(ang), dcz=Math.sin(ang);
         blade(cx2+dcx*0.3, y2+1, cz2+dcz*0.3, dcx,dcz, 0.52,0.18,
