@@ -1316,6 +1316,20 @@ function emitCover(cx,cz){
         blade(bx,by+st+0.015,bz, 0.0,1.0, 0.09,0.08,0.06,0,yc,yc,sl,bl);
       }
     }
+    // occasional shrub or fern clump, to break the flat lawn into varied plants
+    var deco=hash3(wx,61,wz,WSEED);
+    if(deco<0.05){                       // a low bushy shrub
+      var bc0=[cv.c0[0]*0.70,cv.c0[1]*0.84,cv.c0[2]*0.66], bc1=[cv.c1[0]*0.92,cv.c1[1]*1.0,cv.c1[2]*0.84];
+      var bcx=lx+0.5, bcz=lz+0.5;
+      for(var bb=0;bb<8;bb++){ var ba2=(bb/8)*6.283+deco*6.283;
+        blade(bcx+Math.cos(ba2)*0.12, by, bcz+Math.sin(ba2)*0.12, Math.cos(ba2),Math.sin(ba2),
+          0.34,0.12, 0.34+hash3(wx,67+bb,wz,WSEED)*0.2, 0.5+hash3(wx,71+bb,wz,WSEED)*0.3, bc0,bc1,sl,bl); }
+    } else if(deco<0.082){               // a tall arching fern / tall-grass clump
+      var fc0=[cv.c0[0]*0.9,cv.c0[1]*1.02,cv.c0[2]*0.78], fc1=[Math.min(1,cv.c1[0]*1.05),Math.min(1,cv.c1[1]*1.1),cv.c1[2]*0.82];
+      var fcx=lx+0.5, fcz=lz+0.5;
+      for(var fn=0;fn<5;fn++){ var fa=(fn/5)*6.283+deco*3.0;
+        blade(fcx, by, fcz, Math.cos(fa),Math.sin(fa), 0.12,0.02, 0.95+hash3(wx,79+fn,wz,WSEED)*0.45, 0.7, fc0,fc1,sl,bl); }
+    }
   }
   // ---- LEAF FRONDS: drooping cards on exposed leaf blocks, which is what
   // actually breaks the cube silhouette of a canopy into foliage. Gated by a
@@ -1346,6 +1360,9 @@ function emitCover(cx,cz){
       if(upAir){
         blade(cx2, y2+1.0, cz2, 1.0,0.0, 0.7,0.5,0.14,0.0, lite,lite, sl2,bl2);
         blade(cx2, y2+1.0, cz2, 0.0,1.0, 0.7,0.5,0.14,0.0, lite,lite, sl2,bl2);
+        // two more diagonal crown fronds, for a rounder, fuller canopy top
+        blade(cx2, y2+1.05, cz2, 0.7,0.7, 0.6,0.4,0.18,0.0, lite,lite, sl2,bl2);
+        blade(cx2, y2+1.05, cz2, 0.7,-0.7, 0.6,0.4,0.18,0.0, lite,lite, sl2,bl2);
       }
     }
   }
@@ -1582,11 +1599,11 @@ const matComp=new T.ShaderMaterial({
     ' col=aces(col);',
     ' float l=dot(col,vec3(0.2126,0.7152,0.0722));',
     // shadows toward night-blue, highlights toward lamplight
-    ' col=mix(col*vec3(0.80,0.90,1.18),col*vec3(1.16,1.05,0.86),smoothstep(0.06,0.60,l));',
+    ' col=mix(col*vec3(0.80,0.91,1.17),col*vec3(1.20,1.07,0.80),smoothstep(0.06,0.60,l));',  // warmer golden-hour highlights
     // the reference look lives on saturated colour, so this pushes chroma
     // instead of only lifting contrast
     ' col=mix(vec3(l),col,mix(uSat,1.12,uReal));',
-    ' col=mix(col, col*col*(3.0-2.0*col), uReal*0.40);',   // filmic S-curve
+    ' col=mix(col, col*col*(3.0-2.0*col), uReal*0.28);',   // gentler, softer contrast
     ' col=pow(col,vec3(0.94));',    // lift the midtones, a softer, sunnier curve
     ' col=mix(col,vec3(l),smoothstep(0.74,1.0,l)*0.45);',
     ' col*=mix(vec3(0.95,0.93,1.05),vec3(1.04,1.00,0.94),smoothstep(0.12,0.78,l));',
