@@ -1257,8 +1257,9 @@ COVER[B_DESERT] ={d:0.08,c0:[0.44,0.38,0.21],c1:[0.64,0.57,0.33],h:[0.28,0.58],f
 COVER[B_BADLANDS]={d:0.05,c0:[0.42,0.32,0.18],c1:[0.60,0.48,0.28],h:[0.26,0.52],fl:0.0};
 COVER[B_PEAK]   ={d:0.05,c0:[0.44,0.50,0.58],c1:[0.64,0.70,0.80],h:[0.22,0.40],fl:0.0};
 COVER[B_STONY]  ={d:0.06,c0:[0.34,0.40,0.34],c1:[0.52,0.60,0.50],h:[0.24,0.46],fl:0.0};
-var PETALS=[[0.96,0.66,0.78],[1.00,0.94,0.66],[0.78,0.70,0.95],
-            [0.98,0.98,0.96],[0.98,0.74,0.56]];
+var PETALS=[[0.98,0.52,0.66],[1.00,0.88,0.42],[0.70,0.58,0.96],
+            [1.00,1.00,0.98],[1.00,0.62,0.40],[0.58,0.76,1.00],
+            [0.96,0.46,0.52],[0.86,0.60,0.98]];
 function emitCover(cx,cz){
   var ox=cx*SX, oz=cz*SZ, lx,lz,y,i;
   for(lz=0;lz<SZ;lz++) for(lx=0;lx<SX;lx++){
@@ -1566,7 +1567,9 @@ const matComp=new T.ShaderMaterial({
     ' col+=bl*uBloom;',
     // film scatters the red layer furthest, which is most of why a lamp at
     // night feels warm rather than merely bright
-    ' col+=bl*vec3(0.42,0.17,0.06)*uHalo;',
+    ' col+=bl*vec3(0.46,0.20,0.07)*uHalo;',
+    ' float gl=smoothstep(0.55,1.1,dot(bl,vec3(0.33)));',
+    ' col+=vec3(0.26,0.19,0.09)*gl*uBloom*0.9;',
     ' col*=uExposure;',
     ' col=aces(col);',
     ' float l=dot(col,vec3(0.2126,0.7152,0.0722));',
@@ -1579,6 +1582,9 @@ const matComp=new T.ShaderMaterial({
     ' col=pow(col,vec3(0.94));',    // lift the midtones, a softer, sunnier curve
     ' col=mix(col,vec3(l),smoothstep(0.74,1.0,l)*0.45);',
     ' col*=mix(vec3(0.95,0.93,1.05),vec3(1.04,1.00,0.94),smoothstep(0.12,0.78,l));',
+    ' float lb=dot(col,vec3(0.2126,0.7152,0.0722));',
+    ' col+=vec3(-0.015,0.004,0.020)*(1.0-smoothstep(0.0,0.5,lb))*uReal;',
+    ' col+=vec3(0.022,0.010,-0.016)*smoothstep(0.5,1.0,lb)*uReal;',
     // the eye loses colour before it loses light: night desaturates
     ' col=mix(col,vec3(l)*vec3(0.80,0.88,1.12),uNight*0.34);',
     ' col=pow(max(col*1.03-0.004,0.0),vec3(1.04));',
@@ -1609,8 +1615,10 @@ const matComp=new T.ShaderMaterial({
     ' float paper=pN(pp)*0.55+pN(pp*2.7)*0.30+pN(pp*7.3)*0.15;',
     ' col*=0.955+paper*0.085*(1.0-uReal*0.78);',
     ' col+=vec3(0.012,0.004,-0.010)*(pN(uv*uRes*0.035)-0.5)*0.9;',
-    ' float vig=smoothstep(1.16,0.28,length(d)*1.42);',
+    ' float vd2=length(d)*1.38;',
+    ' float vig=smoothstep(1.22,0.20,vd2);',
     ' col*=mix(uVig*mix(1.0,0.55,uUnder),1.0,vig);',
+    ' col*=1.0+0.05*(1.0-smoothstep(0.0,0.7,vd2));',
     ' float g=h21(floor(uv*uRes)+vec2(uTime*61.0,uTime*37.0));',
     ' col+=(g-0.5)*0.026*smoothstep(0.02,0.36,l);',
     ' col=clamp(col,0.0,1.0);',
@@ -1797,10 +1805,8 @@ function toonRamp(){
   TOON_RAMP.generateMipmaps=false; TOON_RAMP.colorSpace=T.SRGBColorSpace;
   return TOON_RAMP;
 }
-// A lifted ramp for the photographed (GLB) figures. The procedural residents
-// are painted flat, but a Tripo toy already carries colour and soft shading in
-// its texture, so the dark cel band only needs to shape it, not darken it —
-// the shadow side stays bright and barely cool instead of sinking to mud.
+// A lifted ramp for the photographed (GLB) figures: the shadow side stays
+// bright and barely cool so a textured toy never sinks to a dark blob.
 let GLB_RAMP=null;
 function glbRamp(){
   if(GLB_RAMP) return GLB_RAMP;
@@ -2903,10 +2909,7 @@ function parseGLB(buf){
     map.flipY=false;                 // glTF UVs already run top-down
     map.anisotropy=4;
   }
-  // cel shading, so a generated mesh sits in the same world as the rest — but
-  // on a lifted ramp, and with its own texture fed back as a gentle emissive so
-  // the toy keeps its painted colour even on the shadow side and at dusk, never
-  // reading as a dark blob. Lighter watercolour so the edge doesn't pool dark.
+  // cel shading, so a generated mesh sits in the same world as the rest
   if(map) map.anisotropy=8;
   const material=papery(new T.MeshToonMaterial({map:map,gradientMap:glbRamp(),
     emissive:0xffffff, emissiveMap:map, emissiveIntensity:0.34}),0.45);
@@ -4118,6 +4121,9 @@ function updateDay(dt){
    it does that a couple per frame so walking never stutters.
    ====================================================================== */
 let VIEW=7;                         // chunks of sight, trimmed if frames run long
+// --- game mode + player-adjustable settings (Minecraft-style) ---
+let creative=false, flying=false, VIEW_LOCK=false;
+let LOOK_SENS=0.0026, INVERT_Y=false, _lastSpace=0;
 const CH=new Map();                 // live chunks
 const EDITS=new Map();              // every block the player ever changed, forever
 const UPLOAD_BUDGET=2;
@@ -4419,9 +4425,16 @@ function inWaterAt(x,y,z){
 function movePlayer(dt){
   const p=player.p, v=player.v;
   player.inWater=inWaterAt(p.x,p.y,p.z);
-  const g=player.inWater?-7.0:-26.0;
-  v.y+=g*dt;
-  if(player.inWater){ v.y=Math.max(v.y,-3.2); v.x*=0.86; v.z*=0.86; }
+  if(flying){
+    // creative flight: no gravity — Space rises, Shift descends
+    const up=(keys[' ']?1:0)-(sneak?1:0);
+    v.y += (up*22 - v.y)*Math.min(1,dt*10);
+    if(!up) v.y*=0.80;
+  } else {
+    const g=player.inWater?-7.0:-26.0;
+    v.y+=g*dt;
+    if(player.inWater){ v.y=Math.max(v.y,-3.2); v.x*=0.86; v.z*=0.86; }
+  }
   let ny;
   // sneaking refuses any step that would leave you standing on nothing,
   // which is the whole reason the key exists
@@ -4509,6 +4522,12 @@ addEventListener('keydown',function(e){
   }
   if(state!=='play') return;
   if(k===' '||k.indexOf('Arrow')===0||k==='Tab') e.preventDefault();
+  if(k===' ' && !e.repeat && creative){
+    const now=performance.now();
+    if(now-_lastSpace<300){ flying=!flying; player.v.y=0; }   // double-tap space to fly
+    _lastSpace=now;
+  }
+  if((k==='o'||k==='O') && !e.repeat){ toggleSettings(); return; }
   // E has to be reachable WITH the panel open, or it can open it and never
   // close it again — the bag key must work both ways
   if(k==='e'){ if(!e.repeat) toggleCraft(); return; }
@@ -4556,7 +4575,8 @@ document.addEventListener('visibilitychange',function(){ if(document.hidden) cle
 const DRAG_SLOP=6;                  // px before a press counts as a look
 function lookBy(dx,dy,k){
   player.yaw-=dx*k;
-  player.pitch=clamp(player.pitch-dy*k,-1.55,1.55);
+  const dp=(INVERT_Y?-dy:dy)*k;
+  player.pitch=clamp(player.pitch-dp,-1.55,1.55);
 }
 canvas.addEventListener('mousedown',function(e){
   if(state!=='play'||craftOpen) return;
@@ -4573,7 +4593,7 @@ canvas.addEventListener('mousedown',function(e){
 addEventListener('mousemove',function(e){
   if(state!=='play'||craftOpen) return;
   if(locked){
-    lookBy(e.movementX||0,e.movementY||0,0.0022);
+    lookBy(e.movementX||0,e.movementY||0,LOOK_SENS);
     return;
   }
   if(!mBtn) return;                  // unlocked: only a held button looks
@@ -4728,16 +4748,17 @@ function playerInput(dt){
   if(keys['a']) mx-=1;
   if(keys['d']) mx+=1;
   if(TOUCH){ mx+=tMove.x; mz+=tMove.z; }
-  if(keys['ArrowLeft'])  player.yaw+=dt*2.1;
-  if(keys['ArrowRight']) player.yaw-=dt*2.1;
+  if(keys['ArrowLeft'])  player.yaw+=dt*3.0;
+  if(keys['ArrowRight']) player.yaw-=dt*3.0;
   if(keys['ArrowUp'])    player.pitch=clamp(player.pitch+dt*1.7,-1.45,1.45);
   if(keys['ArrowDown'])  player.pitch=clamp(player.pitch-dt*1.7,-1.45,1.45);
   // sneak beats sprint, the way it does everywhere else
-  const gait=sneak?0.32:(sprint?1.42:1.0);
-  const sp=(player.inWater?3.4:(player.onGround?4.6:4.1))*gait;
+  // Minecraft-style gait ratios (sneak ~0.3×, sprint ~1.3×) on a brisk base.
+  const gait=sneak?0.30:(sprint?1.33:1.0);
+  const sp=(player.inWater?3.0:(player.onGround?4.9:4.6))*gait;
   const len=Math.hypot(mx,mz)||1;
   const tx=(_fwd.x*mz+_rgt.x*mx)/len*sp, tz=(_fwd.z*mz+_rgt.z*mx)/len*sp;
-  const acc=player.onGround?14:5;
+  const acc=player.onGround?42:9;   // near-instant ground accel, Minecraft-snappy
   if(mx||mz){
     player.v.x+=(tx-player.v.x)*Math.min(1,acc*dt);
     player.v.z+=(tz-player.v.z)*Math.min(1,acc*dt);
@@ -4798,13 +4819,12 @@ function updateCamera(dt){
   if(avatar){
     avatar.position.set(player.p.x,player.p.y,player.p.z);
     // A generated figure turns to face the way it is actually walking, so
-    // strafing (A/D) and backing up (S) visibly rotate it instead of sliding
-    // sideways facing the camera. Walking straight forward still lines up with
-    // the view. Procedural residents keep facing the view as before.
+    // strafing (A/D) and backing up (S) visibly rotate it and the face points
+    // the way it moves. Procedural residents keep facing the view as before.
     if(avatarParts&&avatarParts.glb){
       const sp=Math.hypot(player.v.x,player.v.z);
       if(player._face===undefined) player._face=player.yaw;
-      const target=sp>0.4?Math.atan2(-player.v.x,-player.v.z):player._face;
+      const target=sp>0.4?Math.atan2(player.v.x,player.v.z):player._face;
       let d=target-player._face; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
       player._face+=d*Math.min(1,(dt||0.016)*9);
       avatar.rotation.y=player._face;
@@ -4835,19 +4855,15 @@ function animateAvatar(dt,t){
     avatarParts.halo.material.opacity=0.30*nightness;
     const k=2.0+nightness*1.4; avatarParts.halo.scale.set(k,k,1);
   }
-  // A generated (GLB) figure has no separate limbs — the arm/leg holders above
-  // are empty — so give the whole body a lively procedural walk instead: a bob
-  // on every step, a side-to-side rock, a forward lean into the stride, a gentle
-  // squash-stretch, and a bank into turns so even a round body visibly steers.
+  // A generated (GLB) figure has no separate limbs — the arm/leg holders are
+  // empty — so drive the whole body: a springy hop, side rock, waddle, forward
+  // lean and squash-stretch while walking, and an always-on breathing bob +
+  // slow sway + look-around while idle, so it is never frozen in place.
   const body=avatar.children[0];
   if(avatarParts.glb){
     const tt=t||performance.now()*0.001;
     const moving=Math.min(1,sp*0.55), idle=1-moving;
-    const ph=player.bob;                       // stride phase
-    // WALK: a springy hop each step, a side rock, a cute waddle around the
-    // facing, a forward lean into the stride and a squash-stretch.
-    // IDLE: an always-on breathing bob, a slow sway and a gentle look-around,
-    // so the figure is clearly alive and never frozen in place.
+    const ph=player.bob;
     const hop    = Math.abs(Math.sin(ph))*0.22*moving;
     const breath = (Math.sin(tt*1.8)*0.5+0.5)*0.07*idle;
     body.position.y = hop + breath;
@@ -4859,7 +4875,7 @@ function animateAvatar(dt,t){
     let dyaw=f-(player._pface===undefined?f:player._pface);
     player._pface=f;
     while(dyaw>Math.PI)dyaw-=2*Math.PI; while(dyaw<-Math.PI)dyaw+=2*Math.PI;
-    body.rotation.z += clamp(-dyaw*1.7,-0.24,0.24);   // bank into turns
+    body.rotation.z += clamp(-dyaw*1.7,-0.24,0.24);
     const sq = Math.sin(ph*2)*0.08*moving + Math.sin(tt*1.8)*0.035*idle;
     const s0 = avatarParts.glb.userData.s0;
     avatarParts.glb.scale.set(s0*(1-sq*0.6),s0*(1+sq),s0*(1-sq*0.6));
@@ -4869,6 +4885,7 @@ function animateAvatar(dt,t){
   if(player.swing>0) player.swing=Math.max(0,player.swing-dt*3.4);
 }
 function hurt(n){
+  if(creative) return;                 // invincible in creative mode
   if(player.dead||player.hurtT>0) return;
   player.hp-=n; player.hurtT=0.85; player.calm=0;
   flash('#d04d4d',0.35); sfxHurt();
@@ -4880,6 +4897,92 @@ function respawn(){
   player.v.set(0,0,0); player.hp=player.maxHp; player.dead=false; player.air=10;
   hideDeath();
 }
+
+/* ======================================================================
+   Minecraft-style game mode + settings menu (press O or the ⚙ button)
+   ====================================================================== */
+function setMode(cr){
+  creative=!!cr;
+  if(!creative) flying=false;
+  if(creative){
+    // a creative palette: every placeable block, effectively unlimited
+    for(let i=0;i<INV_N;i++) inv[i]=null;
+    let slot=0;
+    for(let id=1; id<100 && slot<INV_N; id++){
+      if(BLOCKS[id] && isPlaceable(id)) inv[slot++]={id:id,n:99};
+    }
+    player.hp=player.maxHp; player.dead=false; player.air=10;
+    if(typeof hideDeath==='function') hideDeath();
+  }
+  if(typeof refreshHotbar==='function') refreshHotbar();
+  if(typeof refreshBag==='function') refreshBag();
+  document.body.classList.toggle('creative',creative);
+}
+let settingsOpen=false;
+function toggleSettings(){
+  if(state!=='play' && !settingsOpen) return;
+  settingsOpen=!settingsOpen;
+  const el=document.getElementById('settings');
+  if(el) el.style.display=settingsOpen?'flex':'none';
+  if(settingsOpen){
+    if(window.__syncSettings) window.__syncSettings();
+    if(document.exitPointerLock) document.exitPointerLock();
+    if(typeof clearInput==='function') clearInput();
+  }
+}
+(function buildSettingsUI(){
+  const css=document.createElement('style');
+  css.textContent=
+    "#setBtn{position:absolute;top:14px;right:16px;width:34px;height:34px;border-radius:9px;"+
+    "background:rgba(18,22,36,.72);border:1px solid rgba(255,255,255,.14);display:none;"+
+    "align-items:center;justify-content:center;font-size:18px;cursor:pointer;z-index:22;"+
+    "pointer-events:auto;color:#f4f1ea}"+
+    "#settings{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;"+
+    "justify-content:center;background:rgba(8,11,22,.74);z-index:41;color:#f4f1ea;font-size:14px}"+
+    "#settings .sc{min-width:342px;padding:24px 28px;border-radius:16px;"+
+    "background:rgba(22,27,43,.92);border:1px solid rgba(255,255,255,.1)}"+
+    "#settings h3{font-size:13px;letter-spacing:.3em;font-weight:600;opacity:.7;margin-bottom:16px;text-align:center}"+
+    "#settings .row{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:13px 0}"+
+    "#settings .row>span:first-child{opacity:.82}#settings .row b{min-width:44px;text-align:right}"+
+    "#settings input[type=range]{width:170px}"+
+    "#settings .mb{display:flex;gap:8px}"+
+    "#settings button{padding:8px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.18);"+
+    "background:rgba(255,255,255,.06);color:#f4f1ea;cursor:pointer;font:inherit}"+
+    "#settings button.on{border-color:#ffd48a;background:rgba(255,200,120,.2)}"+
+    "#settings .done{margin-top:18px;width:100%}"+
+    "body.creative #hearts,body.creative #air{display:none!important}";
+  document.head.appendChild(css);
+  const root=document.getElementById('app')||document.body;
+  const btn=document.createElement('div'); btn.id='setBtn'; btn.textContent='⚙'; root.appendChild(btn);
+  const el=document.createElement('div'); el.id='settings';
+  el.innerHTML=
+    "<div class='sc'><h3>设置 · SETTINGS</h3>"+
+    "<div class='row'><span>模式 Mode</span><span class='mb'>"+
+    "<button id='mSur'>生存</button><button id='mCre'>创造</button></span></div>"+
+    "<div class='row'><span>渲染距离 Render</span><input id='sView' type='range' min='3' max='12' step='1'><b id='vView'></b></div>"+
+    "<div class='row'><span>视野 FOV</span><input id='sFov' type='range' min='50' max='110' step='1'><b id='vFov'></b></div>"+
+    "<div class='row'><span>灵敏度 Sens</span><input id='sSens' type='range' min='5' max='40' step='1'><b id='vSens'></b></div>"+
+    "<div class='row'><span>反转视角 Invert Y</span><input id='sInv' type='checkbox'></div>"+
+    "<button class='done' id='sDone'>继续 Resume</button></div>";
+  root.appendChild(el);
+  const G=id=>document.getElementById(id);
+  window.__syncSettings=function(){
+    G('mSur').classList.toggle('on',!creative); G('mCre').classList.toggle('on',creative);
+    G('sView').value=VIEW; G('vView').textContent=VIEW;
+    const fv=Math.round(fovBase||70); G('sFov').value=fv; G('vFov').textContent=fv;
+    G('sSens').value=Math.round(LOOK_SENS*10000); G('vSens').textContent=Math.round(LOOK_SENS*10000);
+    G('sInv').checked=INVERT_Y;
+  };
+  G('mSur').onclick=function(){ setMode(false); window.__syncSettings(); };
+  G('mCre').onclick=function(){ setMode(true);  window.__syncSettings(); };
+  G('sView').oninput=function(e){ VIEW=+e.target.value; VIEW_LOCK=true; G('vView').textContent=VIEW; updateChunks(player.p.x,player.p.z,true); };
+  G('sFov').oninput=function(e){ fovBase=+e.target.value; camera.fov=fovBase; camera.updateProjectionMatrix(); G('vFov').textContent=fovBase; };
+  G('sSens').oninput=function(e){ LOOK_SENS=(+e.target.value)/10000; G('vSens').textContent=e.target.value; };
+  G('sInv').onchange=function(e){ INVERT_Y=e.target.checked; };
+  G('sDone').onclick=function(){ toggleSettings(); };
+  btn.onclick=function(){ toggleSettings(); };
+  setInterval(function(){ btn.style.display=(state==='play')?'flex':'none'; },400);
+})();
 /* ======================================================================
    MAIN · 5 — mining, placing, carrying, crafting
    ====================================================================== */
@@ -5005,7 +5108,7 @@ function updateMining(dt){
   if(k!==mineKey){ mineKey=k; mineT=0;
     const B=BLOCKS[target.id];
     const sp=hardKind(target.id)?bestTool():1;
-    mineNeed=Math.max(0.12,B.hard/sp);
+    mineNeed=creative?0.001:Math.max(0.12,B.hard/sp);   // instant break in creative
   }
   mineT+=dt;
   player.swing=1;
@@ -5022,7 +5125,7 @@ function updateMining(dt){
     setBlock(target.x,target.y,target.z,0);
     blockBits(target.x+0.5,target.y+0.5,target.z+0.5,id,14);
     const dr=dropOf(id);
-    if(dr) spawnDrop(dr,1,target.x+0.5,target.y+0.5,target.z+0.5,
+    if(!creative && dr) spawnDrop(dr,1,target.x+0.5,target.y+0.5,target.z+0.5,
       (Math.random()-0.5)*1.2,2.0,(Math.random()-0.5)*1.2);
     sfxBreak(id);
     mineT=0; mineKey=''; crackBox.visible=false;
@@ -5038,7 +5141,7 @@ function tryPlace(){
   const px=player.p.x, py=player.p.y, pz=player.p.z;
   if(x+1>px-PW/2 && x<px+PW/2 && z+1>pz-PW/2 && z<pz+PW/2 && y+1>py && y<py+PH) return;
   if(setBlock(x,y,z,s.id)){
-    s.n--; if(s.n<=0) inv[hotbarSel]=null;
+    if(!creative){ s.n--; if(s.n<=0) inv[hotbarSel]=null; }   // infinite blocks in creative
     refreshHotbar(); refreshBag(); player.swing=1; sfxPlace();
   }
 }
@@ -5819,9 +5922,9 @@ function tick(){
   renderFrame(t);
   frameAvg+=(dt-frameAvg)*0.05;
   if(state==='play' && now-startedAt>7000){
-    if(frameAvg>0.034 && VIEW>4){
+    if(!VIEW_LOCK && frameAvg>0.034 && VIEW>4){
       VIEW--; updateChunks(player.p.x,player.p.z,true); startedAt=now;
-    } else if(frameAvg<0.019 && VIEW<8){
+    } else if(!VIEW_LOCK && frameAvg<0.019 && VIEW<8){
       VIEW++; updateChunks(player.p.x,player.p.z,true); startedAt=now;
     }
   }
@@ -5918,7 +6021,7 @@ if(TOUCH){
   VIEW=5;
   pixelBudget=Math.min(window.devicePixelRatio||1,1.1);
   renderer.setPixelRatio(pixelBudget);
-  camera.fov=76; camera.updateProjectionMatrix();
+  camera.fov=70; camera.updateProjectionMatrix();   // Minecraft default FOV
   sunLight.shadow.mapSize.set(1024,1024);
   CHUNK_U.uShadowTexel.value.set(1/1024,1/1024);
 }
