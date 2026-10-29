@@ -3760,6 +3760,15 @@ const CHUNK_FS=[
   '    col*=0.90+gr*0.20;',
   '    col*=mix(0.70,1.0,seam);',                  // the groove between blocks
   '    col*=mix(1.06,1.0,bev);',                   // and the bevel inside it
+  // Round the hard cube edges in SHADING only (no extra geometry): near the
+  // in-plane edges, tilt the normal outward so a flat face catches the light
+  // like a softly rounded block. This is what takes the "all cubes" harshness
+  // off the silhouette without touching the mesh.
+  '    vec3 _et=vec3(0.0);',
+  '    if(abs(n.y)>0.5){ _et.x=0.5-fp.x; _et.z=0.5-fp.z; }',
+  '    else if(abs(n.x)>0.5){ _et.y=0.5-fp.y; _et.z=0.5-fp.z; }',
+  '    else { _et.x=0.5-fp.x; _et.y=0.5-fp.y; }',
+  '    n=normalize(n - _et*((1.0-bev)*0.75));',
   // --- the surface. Each family is drawn in the face's own 0..1 coords,
   // which is exactly where a texture would have sat, so every block type
   // reads as its own material without a single image being loaded.
