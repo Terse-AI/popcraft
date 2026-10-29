@@ -1797,6 +1797,25 @@ function toonRamp(){
   TOON_RAMP.generateMipmaps=false; TOON_RAMP.colorSpace=T.SRGBColorSpace;
   return TOON_RAMP;
 }
+// A lifted ramp for the photographed (GLB) figures. The procedural residents
+// are painted flat, but a Tripo toy already carries colour and soft shading in
+// its texture, so the dark cel band only needs to shape it, not darken it —
+// the shadow side stays bright and barely cool instead of sinking to mud.
+let GLB_RAMP=null;
+function glbRamp(){
+  if(GLB_RAMP) return GLB_RAMP;
+  const c=cv(96,1), x=c.getContext('2d');
+  const steps=[[0.00,'#cfd4de'],[0.36,'#e6e7ec'],[0.62,'#f5f3f0'],[1.00,'#ffffff']];
+  for(let i=0;i<steps.length;i++){
+    const a0=Math.round(steps[i][0]*96);
+    const a1=(i+1<steps.length)?Math.round(steps[i+1][0]*96):96;
+    x.fillStyle=steps[i][1]; x.fillRect(a0,0,Math.max(1,a1-a0),1);
+  }
+  GLB_RAMP=new T.CanvasTexture(c);
+  GLB_RAMP.minFilter=T.NearestFilter; GLB_RAMP.magFilter=T.NearestFilter;
+  GLB_RAMP.generateMipmaps=false; GLB_RAMP.colorSpace=T.SRGBColorSpace;
+  return GLB_RAMP;
+}
 let TOON=false;
 /* ---- RIM — the moon draws the silhouette ----------------------------
    A figure reads as a solid object the moment something traces its edge that
@@ -2884,8 +2903,13 @@ function parseGLB(buf){
     map.flipY=false;                 // glTF UVs already run top-down
     map.anisotropy=4;
   }
-  // cel shading, so a generated mesh sits in the same world as the rest
-  const material=papery(new T.MeshToonMaterial({map:map,gradientMap:toonRamp()}),1.15);
+  // cel shading, so a generated mesh sits in the same world as the rest — but
+  // on a lifted ramp, and with its own texture fed back as a gentle emissive so
+  // the toy keeps its painted colour even on the shadow side and at dusk, never
+  // reading as a dark blob. Lighter watercolour so the edge doesn't pool dark.
+  if(map) map.anisotropy=8;
+  const material=papery(new T.MeshToonMaterial({map:map,gradientMap:glbRamp(),
+    emissive:0xffffff, emissiveMap:map, emissiveIntensity:0.34}),0.45);
   const bb=geo.boundingBox, h=bb.max.y-bb.min.y;
   return {geometry:geo, material:material, height:h, minY:bb.min.y};
 }
@@ -4817,18 +4841,28 @@ function animateAvatar(dt,t){
   // squash-stretch, and a bank into turns so even a round body visibly steers.
   const body=avatar.children[0];
   if(avatarParts.glb){
-    const moving=Math.min(1,sp*0.5);
-    body.position.y=Math.abs(Math.sin(player.bob))*0.14*moving;
-    body.rotation.z=Math.sin(player.bob)*0.12*moving;
-    const sg=player.swing>0?(1-player.swing)*0.5:0;
-    body.rotation.x=clamp(sp*0.5,0,0.30)+sg;
+    const tt=t||performance.now()*0.001;
+    const moving=Math.min(1,sp*0.55), idle=1-moving;
+    const ph=player.bob;                       // stride phase
+    // WALK: a springy hop each step, a side rock, a cute waddle around the
+    // facing, a forward lean into the stride and a squash-stretch.
+    // IDLE: an always-on breathing bob, a slow sway and a gentle look-around,
+    // so the figure is clearly alive and never frozen in place.
+    const hop    = Math.abs(Math.sin(ph))*0.22*moving;
+    const breath = (Math.sin(tt*1.8)*0.5+0.5)*0.07*idle;
+    body.position.y = hop + breath;
+    body.rotation.z = Math.sin(ph)*0.16*moving + Math.sin(tt*0.9)*0.06*idle;
+    body.rotation.y = Math.sin(ph)*0.13*moving + Math.sin(tt*0.6)*0.08*idle;
+    const sg = player.swing>0?(1-player.swing)*0.6:0;
+    body.rotation.x = clamp(sp*0.5,0,0.30)+sg + Math.sin(tt*1.8)*0.03*idle;
     const f=player._face===undefined?player.yaw:player._face;
     let dyaw=f-(player._pface===undefined?f:player._pface);
     player._pface=f;
     while(dyaw>Math.PI)dyaw-=2*Math.PI; while(dyaw<-Math.PI)dyaw+=2*Math.PI;
-    body.rotation.z+=clamp(-dyaw*1.6,-0.22,0.22);
-    const sq=Math.sin(player.bob*2)*0.05*moving, s0=avatarParts.glb.userData.s0;
-    avatarParts.glb.scale.set(s0*(1-sq),s0*(1+sq),s0*(1-sq));
+    body.rotation.z += clamp(-dyaw*1.7,-0.24,0.24);   // bank into turns
+    const sq = Math.sin(ph*2)*0.08*moving + Math.sin(tt*1.8)*0.035*idle;
+    const s0 = avatarParts.glb.userData.s0;
+    avatarParts.glb.scale.set(s0*(1-sq*0.6),s0*(1+sq),s0*(1-sq*0.6));
   } else {
     body.position.y=Math.sin(player.bob*2)*0.03*Math.min(1,sp*0.3);
   }
