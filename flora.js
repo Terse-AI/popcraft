@@ -104,15 +104,15 @@ function floraMaterial(depth,plantsR,leafy){
     fragmentShader:`#include <packing>\n precision highp float; uniform sampler2D uMap; uniform float uLodT; varying vec2 vUv; varying float vTrunk;
       void main(){ if(vTrunk<.5&&texture2D(uMap,vUv).a<.4) discard; gl_FragColor=packDepthToRGBA(gl_FragCoord.z); }` });
   return new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, alphaToCoverage:true,
-    uniforms:{ ...U, uLodT:plantsR?U.uLodP:U.uLodT, uDetail:{value:leafy?.26:.9}, uMap:{value:TEX.sheet_near}, uWoodRow:{value:rowV('wood')}, uIceRow:{value:rowV('ice')} }, vertexShader:vs,
-    fragmentShader:`precision highp float; uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog,uSunDirW; uniform float uSnow,uWoodRow,uIceRow,uLodT,uDetail; uniform vec4 uReveal; uniform vec2 uRes;
+    uniforms:{ ...U, uLodT:plantsR?U.uLodP:U.uLodT, uDetail:{value:leafy?.26:.9}, uMipBias:{value:leafy?-1.6:-.6}, uMap:{value:TEX.sheet_near}, uWoodRow:{value:rowV('wood')}, uIceRow:{value:rowV('ice')} }, vertexShader:vs,
+    fragmentShader:`precision highp float; uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog,uSunDirW; uniform float uSnow,uWoodRow,uIceRow,uLodT,uDetail,uMipBias; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv; varying vec3 vN; varying float vRow,vTone,vShade,vTrunk,vFog,vD,vY; ${RAMP_GLSL} ${dith}
       void main(){ float fade=smoothstep(uLodT-10.,uLodT-1.,vD); if(fade>dith(gl_FragCoord.xy)+.001) discard;
         if(vD<uReveal.z){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.26){ if(dith(gl_FragCoord.xy*.5)>rr/.26*1.1-.08) discard; } }
         vec3 c; float a=1.; float lam=dot(normalize(vN),uSunDirW);
         if(vTrunk>1.5){ c=ramp(.17+vTone,vRow)*mix(uShade,uLit,.32); }
         else if(vTrunk>.5){ float g=fract(sin(floor(vUv.y*5.)+floor(vUv.x*5.)*7.)*43758.5); float v=.22+.34*(lam*.5+.5)+g*.14; c=ramp(v,uWoodRow); c*=mix(uShade,uLit,.45); }
-        else { vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard; a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
+        else { vec4 t=texture2D(uMap,vUv,uMipBias); if(t.a<.32) discard; a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
           float v=mix(.42,t.r,uDetail)+(t.g-.5)*.2+vTone+lam*.3*(.6+.4*vShade)+(vShade-.5)*.34;
           c=ramp(v,vRow);
           if(uSnow>.01) c=mix(c,ramp(.45+v*.6,uIceRow),uSnow*smoothstep(.1,.6,t.b)*smoothstep(-.3,.35,normalize(vN).y));
