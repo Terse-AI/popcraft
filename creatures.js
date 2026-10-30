@@ -76,7 +76,7 @@ export function quadruped(o){
 export function poseQuadruped(A,dt,opts={}){
   const {speed,sit=0,lookYaw=0,lookPitch=0,excite=0,graze=0}=opts, s=A.root.scale.x, o=A.o;
   A.speed=damp(A.speed,speed,10,dt); A.sit=damp(A.sit,sit,6,dt); A.graze=damp(A.graze||0,graze,5,dt); A.breath+=dt*(1.5+excite*3);
-  const v=A.speed, g=clamp(v/(A.strideLen*s*1.4),0,1), on=Math.min(1,g*4);
+  const v=A.speed, g=clamp(v/(A.strideLen*s*1.4),0,1), on=Math.min(1,g*5);
   A.phase=(A.phase+v*dt/(A.strideLen*s))%1;                   // distance walked turns the legs, so feet do not slide
   const P=A.phase*tau, swing=(.38+.3*g)*on, tilt=.62*A.sit, frontZ=len(o);
   // a positive rotation swings a hanging limb backward, a negative one forward
@@ -98,7 +98,7 @@ export function poseQuadruped(A,dt,opts={}){
 }
 const len=o=>(o.len||.9)/2-(o.len||.9)*.14;
 
-export const makeDog=()=>quadruped({len:.72,height:.56,girth:.17,legLen:.44,back:0xc8923c,belly:0xe0b264,foot:0xe8c68a,legCol:0xd4a050,neckLen:.26,neckUp:.84,headR:.14,muzzle:.13,muzzleR:.066,muzzleCol:0xeccc92,earCol:0xa8702c,earSize:.17,tailLen:.5,tailTip:0xe0bc78,scale:1,stride:.92,tailLift:.5});
+export const makeDog=()=>quadruped({len:.8,girth:.23,legLen:.4,legR:.078,fatLeg:1.12,back:0xc08a3a,belly:0xdcae62,foot:0xe6c48a,legCol:0xcc9a4c,neckLen:.2,neckUp:.92,headR:.175,muzzle:.12,muzzleR:.082,muzzleCol:0xe8c88e,earCol:0x9c6a2a,earSize:.21,tailLen:.46,tailTip:0xd2a256,stride:.86,tailLift:.42,tuck:.6});
 export const makeBear=()=>quadruped({len:1.5,girth:.46,legLen:.62,legR:.13,fatLeg:1.05,back:0x4e3020,belly:0x6e4a30,foot:0x2e1c12,neckLen:.34,neckUp:.2,headR:.27,muzzle:.2,muzzleR:.12,muzzleCol:0x8e6846,ear:'round',earSize:.15,earCol:0x3a2416,hump:.42,tail:'stub',tailLen:.14,scale:1,stride:1.5,tuck:.9,tailLift:.3});
 export const makeDeer=()=>quadruped({len:1.1,girth:.2,legLen:.92,legR:.042,back:0x9a7448,belly:0xc8a878,foot:0x2a1e16,legCol:0xa88258,neckLen:.56,neckUp:1.0,headR:.13,muzzle:.15,muzzleR:.055,muzzleCol:0xdcc8a4,ear:'long',earSize:.2,earCol:0xa88258,tail:'stub',tailLen:.16,tailTip:0xf0e8d8,antlers:true,stride:1.6});
 export const makeCow=()=>quadruped({len:1.3,girth:.34,legLen:.7,legR:.08,back:0xf2efe8,belly:0xe6e0d4,foot:0x2a2622,neckLen:.3,neckUp:.34,headR:.2,muzzle:.15,muzzleR:.1,muzzleCol:0xe8b8a8,ear:'long',earSize:.16,earCol:0x3a322c,tail:'thin',tailLen:.6,tailTip:0x2a2622,horns:true,stride:1.3,tailLift:-1.2,patches:true});
