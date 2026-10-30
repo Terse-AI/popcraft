@@ -185,7 +185,7 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt
+  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
 import { setupFlora, updateFlora, refreshFlora } from './flora.js';
 import { makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, makeSheep, makeGoat, makePig, makeWalkDuck, makeFish, poseQuadruped, poseBird, damp, angDamp } from './creatures.js';
@@ -237,6 +237,7 @@ const cropName = id => { const c=CROPS[id.split('~')[0]]; return c.nm[LANG]||c.n
 const metaOf=(k,i)=>G.META.of(k,i);
 
 /* ---------- game state ---------- */
+const DBG=(()=>{ const p=new URLSearchParams(location.search); if(!p.has('shot')) return null; const o={}; for(const [k,v] of p) if(k!=='shot') o[k]=isNaN(+v)?v:+v; return o; })();
 const S = defaultState();
 const G = { S, LANG:()=>LANG };
 
@@ -1097,6 +1098,7 @@ function rebuildDigs(){ digG.clear(); for(const d of S.digs){ const g=new THREE.
 let jellyOn=false, jellies=null;
 function updateJellies(t){ const p=jellies.geometry.attributes.position; for(let i=0;i<p.count;i++){ p.setX(i,(jellyBase[i*2]+t*1.2)%160-80+15); p.setZ(i,jellyBase[i*2+1]+Math.sin(t*.4+i)*2); } p.needsUpdate=true; if(S.time<1300||S.time>1450||S.day!==28) { jellies.visible=false; jellyOn=false; } }
 const jellyBase=[]; G.jellies=()=>{ if(!jellies){ const n=240, g=new THREE.BufferGeometry(), a=new Float32Array(n*3); for(let i=0;i<n;i++){ jellyBase.push(Math.random()*160,50+Math.random()*90); a[i*3+1]=WATER_Y+.05; } g.setAttribute('position',new THREE.BufferAttribute(a,3)); jellies=new THREE.Points(g,new THREE.PointsMaterial({color:0x8ae8ff,size:1.1,map:dotTex(),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false})); jellies.frustumCulled=false; world.add(jellies); } jellies.visible=true; jellyOn=true; };
+function resetSave(){ try{ localStorage.removeItem('sv_save'); }catch(e){} location.reload(); }
 function setupValley(){
   Object.assign(G,{L,$,toast,modal,camera,scene,renderer,world,player,itemIcon,renderHotbar,renderStatus,renderEnergy,getTile,tkey,refreshTileMesh,rebuildCrop,aoe,spawnPlacement,spawnAnimal,rebuildDebris,rebuildForage,rebuildDigs,onMine,fadeMsg,floatText,
     spend:spendEnergy, target:()=>targetCell, toolNames:()=>t('tools'), toolEm:()=>TOOL_EM, seasonName:i=>t('season')[i], MINE_ENT, ANIMALS:null,
