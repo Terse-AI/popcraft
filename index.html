@@ -237,7 +237,12 @@ const CROPS = {
   pumpkin:   {em:'🎃', nm:{zh:'南瓜',en:'Pumpkin'},    season:[2], days:13,price:320, seed:100,col:0x8aad55, fruit:0xe08a2a },
   eggplant:  {em:'🍆', nm:{zh:'茄子',en:'Eggplant'},   season:[2], days:5, price:60,  seed:20, col:0x6f9b4d, fruit:0x7a4ba0 },
   cranberry: {em:'🔴', nm:{zh:'蔓越莓',en:'Cranberry'},season:[2], days:7, price:75,  seed:240,col:0x5fa05a, fruit:0xc0392b },
-  yam:       {em:'🍠', nm:{zh:'山药',en:'Yam'},        season:[2], days:10,price:160, seed:60, col:0x9ab35a, fruit:0xc87d3a }
+  yam:       {em:'🍠', nm:{zh:'山药',en:'Yam'},        season:[2], days:10,price:160, seed:60, col:0x9ab35a, fruit:0xc87d3a },
+  kale:      {em:'🥬', nm:{zh:'羽衣甘蓝',en:'Kale'},   season:[0], days:6, price:110, seed:70, col:0x6fae5b, fruit:0x4f8f3a },
+  radish:    {em:'🔴', nm:{zh:'萝卜',en:'Radish'},     season:[1], days:6, price:90,  seed:40, col:0x8fc35a, fruit:0xe0506a },
+  melon:     {em:'🍈', nm:{zh:'甜瓜',en:'Melon'},      season:[1], days:12,price:250, seed:80, col:0x8fc35a, fruit:0xa8d26a },
+  wheat:     {em:'🌾', nm:{zh:'小麦',en:'Wheat'},      season:[1,2],days:4,price:25,  seed:10, col:0xd8c25a, fruit:0xe8d06a },
+  grape:     {em:'🍇', nm:{zh:'葡萄',en:'Grape'},      season:[2], days:10,price:80,  seed:60, col:0x7fae5b, fruit:0x7a4ba0 }
 };
 const cropName = id => CROPS[id].nm[LANG] || CROPS[id].nm.en;
 
@@ -265,14 +270,29 @@ const CRAFTABLES={
   fence:{em:'🪵',nm:{zh:'栅栏',en:'Fence'},cost:{'mat:wood':2}},
   torch:{em:'🔥',nm:{zh:'火把',en:'Torch'},cost:{'mat:wood':1,'ore:coal':1}}
 };
-const DB={seed:CROPS,crop:CROPS,fish:FISH,ore:ORES,product:PRODUCTS,mat:MATS,craft:CRAFTABLES};
+const FOOD={
+  fried_egg:{em:'🍳',nm:{zh:'煎蛋',en:'Fried Egg'},price:55,energy:50},
+  omelet:{em:'🍲',nm:{zh:'蛋卷',en:'Omelet'},price:125,energy:100},
+  baked_potato:{em:'🥔',nm:{zh:'烤土豆',en:'Baked Potato'},price:90,energy:55},
+  salad:{em:'🥗',nm:{zh:'田园沙拉',en:'Salad'},price:110,energy:70},
+  pumpkin_pie:{em:'🥧',nm:{zh:'南瓜派',en:'Pumpkin Pie'},price:385,energy:180},
+  sashimi:{em:'🍣',nm:{zh:'生鱼片',en:'Sashimi'},price:95,energy:75},
+  bread:{em:'🍞',nm:{zh:'面包',en:'Bread'},price:60,energy:50}
+};
+const COOK={
+  fried_egg:{cost:{'product:egg':1}}, omelet:{cost:{'product:egg':1,'product:milk':1}},
+  baked_potato:{cost:{'crop:potato':1}}, salad:{cost:{'crop:kale':1,'crop:radish':1}},
+  pumpkin_pie:{cost:{'crop:pumpkin':1,'product:milk':1,'product:egg':1}},
+  sashimi:{cost:{'fish:salmon':1}}, bread:{cost:{'crop:wheat':2}}
+};
+const DB={seed:CROPS,crop:CROPS,fish:FISH,ore:ORES,product:PRODUCTS,mat:MATS,craft:CRAFTABLES,food:FOOD};
 function metaOf(kind,id){
   const d=(DB[kind]||{})[id];
   if(kind==='seed') return {em:CROPS[id].em, name:cropName(id)+' '+t('seedsuf'), price:0};
   if(!d) return {em:'❔',name:id,price:0};
   return { em:d.em, name:(d.nm&&(d.nm[LANG]||d.nm.en))||id, price:d.price||0 };
 }
-const SELLABLE=['crop','fish','ore','product'];
+const SELLABLE=['crop','fish','ore','product','food'];
 function payCost(cost){ for(const k in cost){ const [kind,id]=k.split(':'); if(invCount(kind,id)<cost[k]) return false; } for(const k in cost){ const [kind,id]=k.split(':'); invTake(kind,id,cost[k]); } return true; }
 function costStr(cost){ return Object.keys(cost).map(k=>{ const [kind,id]=k.split(':'); return metaOf(kind,id).em+cost[k]; }).join(' '); }
 function hasCost(cost){ for(const k in cost){ const [kind,id]=k.split(':'); if(invCount(kind,id)<cost[k]) return false; } return true; }
@@ -282,6 +302,8 @@ const S = {
   season:0, day:1, time:360,         // minutes from midnight; start 6:00 = 360
   gold:500, energy:270, maxEnergy:270,
   tool:0,                            // 0..4 tools
+  toolLvl:[0,0,0,0,0],               // upgrade tier per tool (0=basic..4=iridium)
+  festDone:false,                    // festival mini-game played today
   heldSeed:null,                     // crop id when holding a seed
   inv:{},                            // id -> count (seeds use 'seed:ID', crops use 'crop:ID')
   shipped:0,                         // gold pending from shipping bin
@@ -762,23 +784,26 @@ function useTool(){
     rebuildCrop(x,z); toast(c.em+' '+t('plant')+cropName(S.heldSeed));
     if(invCount('seed',S.heldSeed)<=0){ S.heldSeed=null; } renderHotbar(); return;
   }
-  const tool=S.tool;
-  if(tool===0){ // hoe
-    if(!tl){ tl={tilled:true,watered:false,crop:null}; S.tiles.set(tkey(x,z),tl); }
-    else if(!tl.tilled){ tl.tilled=true; }
-    refreshTileMesh(x,z); spendEnergy(2); toast('🪓 '+t('till'));
-  } else if(tool===1){ // watering can
-    if(tl&&tl.tilled){ tl.watered=true; if(tl.crop) tl.crop.watered=true; refreshTileMesh(x,z); spendEnergy(2); toast('💧 '+t('water')); }
-    else toast(t('needtill'));
+  const tool=S.tool, lvl=S.toolLvl[tool], ec=Math.max(1,(tool===2||tool===3?3:2)-lvl);
+  if(tool===0){ // hoe (upgrades widen the area tilled per swing)
+    let did=0; for(const [dx,dz] of aoe(lvl)){ const cx=x+dx,cz=z+dz; if(Math.abs(cx)>FARM_HALF||Math.abs(cz)>FARM_HALF) continue;
+      let t2=getTile(cx,cz); if(!t2){ t2={tilled:true,watered:false,crop:null}; S.tiles.set(tkey(cx,cz),t2); did++; } else if(!t2.tilled){ t2.tilled=true; did++; } refreshTileMesh(cx,cz); }
+    if(did){ spendEnergy(ec); toast('⛏️ '+t('till')+(lvl?' ×'+aoe(lvl).length:'')); }
+  } else if(tool===1){ // watering can (upgrades widen the area watered)
+    let did=0; for(const [dx,dz] of aoe(lvl)){ const cx=x+dx,cz=z+dz; const t2=getTile(cx,cz); if(t2&&t2.tilled){ t2.watered=true; if(t2.crop) t2.crop.watered=true; refreshTileMesh(cx,cz); did++; } }
+    if(did){ spendEnergy(ec); toast('💧 '+t('water')+(lvl?' ×'+did:'')); } else toast(t('needtill'));
   } else if(tool===4){ // scythe: harvest ripe crop, else cut grass for fiber
     if(tl&&tl.crop&&tl.crop.stage>=CROPS[tl.crop.id].days){ harvest(x,z); }
     else { spendEnergy(1); if(Math.random()<0.55){ invAdd('mat','fiber',1); toast('🌿 +'+metaOf('mat','fiber').name); } }
-  } else if(tool===2){ // axe
-    spendEnergy(3); invAdd('mat','wood',1); toast('🪵 '+t('chop'));
-  } else if(tool===3){ // pick
-    spendEnergy(3); invAdd('mat','stone',1); toast('⛏ '+t('mine'));
-  }
+  } else if(tool===2){ spendEnergy(ec); invAdd('mat','wood',1+Math.floor(lvl/2)); toast('🪵 '+t('chop')); }
+  else if(tool===3){ spendEnergy(ec); invAdd('mat','stone',1+Math.floor(lvl/2)); toast('⛏ '+t('mine')); }
 }
+function aoe(lvl){ const o=[[0,0]];
+  if(lvl>=1){ o.push([-1,0],[1,0]); }
+  if(lvl>=2){ o.push([-1,-1],[0,-1],[1,-1],[-1,1],[0,1],[1,1]); }
+  if(lvl>=3){ o.push([-2,0],[2,0],[-2,-1],[2,-1],[-2,1],[2,1]); }
+  if(lvl>=4){ o.push([-2,-2],[-1,-2],[0,-2],[1,-2],[2,-2],[-2,2],[-1,2],[0,2],[1,2],[2,2]); }
+  return o; }
 function harvest(x,z){
   const tl=getTile(x,z); const id=tl.crop.id; invAdd('crop',id,1);
   toast(CROPS[id].em+' '+t('harvest')+cropName(id)+' +1');
@@ -787,6 +812,9 @@ function harvest(x,z){
 function near(p,d){ return Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<d; }
 function interact(){
   if(S.inMine) return;
+  if(S.festival && !S.festDone && near(PLAZA,11)){ openFestival(); return; }
+  if(near(ANVIL,2.8)){ openBlacksmith(); return; }
+  if(near(STOVE,2.8)){ openCook(); return; }
   for(const n of NPCS){ if(n.mesh && Math.hypot(player.pos.x-n.x,player.pos.z-n.z)<2.6){ openDialogue(n); return; } }
   if(near(COOP,4)){ openCoop(); return; }
   if(near(MINE_ENT,3.2)){ enterMine(); return; }
@@ -853,7 +881,7 @@ function advanceDay(){
   rollWeather();                     // new day's weather (rain auto-waters)
   // sprinklers water their 4 neighbours for the new day
   for(const [k,tl] of S.tiles){ if(tl.sprinkler){ const [x,z]=k.split(',').map(Number); for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nt=getTile(x+dx,z+dz); if(nt&&nt.tilled){ nt.watered=true; if(nt.crop) nt.crop.watered=true; refreshTileMesh(x+dx,z+dz); } } } }
-  animalsProduce(); NPCS.forEach(n=>n.gifted=false); checkFestival();
+  animalsProduce(); NPCS.forEach(n=>n.gifted=false); S.festDone=false; checkFestival();
   renderStatus(); renderEnergy();
   return earned;
 }
@@ -888,8 +916,10 @@ function renderEnergy(){ $('#ebar>i').style.width=(S.energy/S.maxEnergy*100)+'%'
 function renderHotbar(){
   const hot=$('#hot'); hot.innerHTML='';
   const toolE=['⛏️','🪣','🪓','🔨','🌾']; // hoe(dig), can, axe, pick(break), scythe — all widely-rendered
+  const tierAb=['','Cu','Fe','Au','Ir'];
   for(let i=0;i<5;i++){ const s=document.createElement('div'); s.className='slot'+(S.tool===i&&!S.heldSeed&&!S.heldPlace?' on':'');
-    s.innerHTML='<span class="key">'+(i+1)+'</span><span class="em">'+toolE[i]+'</span><span class="nm">'+t('tools')[i]+'</span>';
+    const badge=S.toolLvl[i]?'<span class="cnt" style="color:#8ecdff">'+tierAb[S.toolLvl[i]]+'</span>':'';
+    s.innerHTML='<span class="key">'+(i+1)+'</span><span class="em">'+toolE[i]+'</span><span class="nm">'+t('tools')[i]+'</span>'+badge;
     s.onclick=()=>{S.tool=i;S.heldSeed=null;S.heldPlace=null;renderHotbar();}; hot.appendChild(s); }
   // held item slot (seed or placeable)
   const hs=document.createElement('div'); hs.className='slot'+((S.heldSeed||S.heldPlace)?' on':'');
@@ -918,11 +948,12 @@ function openInv(){
   let any=false;
   for(const k in S.inv){ const [kind,id]=k.split(':'); const n=S.inv[k]; if(n<=0) continue; any=true;
     const mt=metaOf(kind,id);
-    const sub = kind==='craft' ? ('×'+n+' · '+t('place')) : (mt.price?('×'+n+' · '+mt.price+'g'):('×'+n));
+    const sub = kind==='craft' ? ('×'+n+' · '+t('place')) : kind==='food' ? ('×'+n+' · '+L('食用','eat')+' ⚡'+FOOD[id].energy) : (mt.price?('×'+n+' · '+mt.price+'g'):('×'+n));
     const b=document.createElement('div'); b.className='buy';
     b.innerHTML='<div class="em">'+mt.em+'</div><div class="nm">'+mt.name+'</div><div class="pr">'+sub+'</div>';
     if(kind==='seed'){ b.onclick=()=>{ S.heldSeed=id; S.heldPlace=null; renderHotbar(); closeAll(); toast(t('hold')+cropName(id)); }; }
     else if(kind==='craft'){ b.onclick=()=>{ S.heldPlace=id; S.heldSeed=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); }; }
+    else if(kind==='food'){ b.onclick=()=>{ eat(id); openInv(); }; }
     g.appendChild(b); }
   if(!any){ g.innerHTML='<div class="hint" style="grid-column:1/-1">—</div>'; }
   $('#inv').classList.remove('hidden');
@@ -1338,7 +1369,61 @@ function endFish(success){ if(!fishUI) return; fishUI.remove(); fishUI=null; fis
 /* ---- festivals ---- */
 const FESTIVALS={ '0,13':{zh:'🌸 春之花舞',en:'🌸 Flower Dance'}, '1,11':{zh:'🏖 夏日海滩节',en:'🏖 Summer Luau'}, '2,16':{zh:'🍂 秋之集市',en:'🍂 Fall Fair'}, '3,8':{zh:'❄️ 冬夜集市',en:'❄️ Winter Market'} };
 function checkFestival(){ const f=FESTIVALS[S.season+','+S.day]; S.festival=f?(LANG==='zh'?f.zh:f.en):null;
-  if(f){ NPCS.forEach(n=>{ n.tgt={x:34+(Math.random()-.5)*6,z:-24+(Math.random()-.5)*6}; }); const bonus=200+S.season*50; S.gold+=bonus; renderStatus(); toast('🎉 '+(LANG==='zh'?f.zh:f.en)+' · +'+bonus+'g'); } }
+  if(f){ NPCS.forEach(n=>{ n.tgt={x:34+(Math.random()-.5)*6,z:-24+(Math.random()-.5)*6}; }); const bonus=200+S.season*50; S.gold+=bonus; renderStatus(); toast('🎉 '+(LANG==='zh'?f.zh:f.en)+' · +'+bonus+'g · '+L('去广场参加活动','join the plaza event')); } }
+
+/* ---- blacksmith: tool upgrades ---- */
+const ANVIL={x:-3,z:-14}, STOVE={x:3.4,z:-13.6}, PLAZA={x:34,z:-24};
+const TOOL_TIERS=[
+  {ab:'Cu',nm:{zh:'铜',en:'Copper'},gold:500,ore:'copper',n:3},
+  {ab:'Fe',nm:{zh:'铁',en:'Iron'},gold:1200,ore:'iron',n:3},
+  {ab:'Au',nm:{zh:'金',en:'Gold'},gold:3000,ore:'gold_ore',n:3},
+  {ab:'Ir',nm:{zh:'铱',en:'Iridium'},gold:6000,ore:'gem',n:2}
+];
+function buildAnvil(){ const g=new THREE.Group();
+  const block=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.5,0.5), new THREE.MeshStandardMaterial({color:0x44484d,metalness:0.7,roughness:0.4})); block.position.y=0.75;
+  const stump=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.35,0.5,10), new THREE.MeshStandardMaterial({color:0x5a3f28})); stump.position.y=0.25;
+  g.add(block,stump); g.traverse(o=>o.castShadow=true); g.position.set(ANVIL.x,terrainH(ANVIL.x,ANVIL.z),ANVIL.z); world.add(g); }
+function buildStove(){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.7), new THREE.MeshStandardMaterial({color:0x6a6e73,metalness:0.5,roughness:0.5})); body.position.y=0.45;
+  const top=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.08,0.75), new THREE.MeshStandardMaterial({color:0x2a2a2e,emissive:0xff5a1a,emissiveIntensity:0.5})); top.position.y=0.92;
+  g.add(body,top); g.traverse(o=>o.castShadow=true); g.position.set(STOVE.x,terrainH(STOVE.x,STOVE.z),STOVE.z); world.add(g); }
+function openBlacksmith(){ modal(L('🔨 铁匠铺 · 工具升级','🔨 Blacksmith · Upgrades'), body=>{
+  body.innerHTML='<div class="hint">'+L('用矿石和金币升级工具：锄头/水壶范围变大，所有工具更省体力。','Upgrade tools with ore + gold: bigger hoe/can area, all tools cost less energy.')+'</div>';
+  const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
+  const toolE=['⛏️','🪣','🪓','🔨','🌾'];
+  for(let i=0;i<5;i++){ const lvl=S.toolLvl[i]; const b=document.createElement('div'); b.className='buy';
+    if(lvl>=4){ b.classList.add('dim'); b.innerHTML='<div class="em">'+toolE[i]+'</div><div class="nm">'+t('tools')[i]+'</div><div class="pr">'+L('已满级','MAX')+'</div>'; }
+    else { const tr=TOOL_TIERS[lvl]; const ok=S.gold>=tr.gold && invCount('ore',tr.ore)>=tr.n; if(!ok) b.classList.add('dim');
+      b.innerHTML='<div class="em">'+toolE[i]+'</div><div class="nm">'+t('tools')[i]+' → '+(LANG==='zh'?tr.nm.zh:tr.nm.en)+'</div><div class="pr">'+ORES[tr.ore].em+tr.n+' · '+tr.gold+'g</div>';
+      b.onclick=()=>{ if(S.gold<tr.gold||invCount('ore',tr.ore)<tr.n){ toast(L('材料或金币不足','Not enough ore/gold')); return;} S.gold-=tr.gold; invTake('ore',tr.ore,tr.n); S.toolLvl[i]++; renderStatus(); renderHotbar(); toast('🔧 '+t('tools')[i]+' → '+(LANG==='zh'?tr.nm.zh:tr.nm.en)+'!'); openBlacksmith(); };
+    }
+    g.appendChild(b); }
+}); }
+
+/* ---- cooking + eating ---- */
+function openCook(){ modal(L('🍳 烹饪','🍳 Cooking'), body=>{
+  body.innerHTML='<div class="hint">'+L('用食材烹饪料理，食用恢复体力，也可出售。','Cook ingredients into dishes — eat to restore energy, or sell them.')+'</div>';
+  const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
+  for(const id in COOK){ const r=COOK[id]; const f=FOOD[id]; const ok=hasCost(r.cost); const b=document.createElement('div'); b.className='buy'+(ok?'':' dim');
+    b.innerHTML='<div class="em">'+f.em+'</div><div class="nm">'+metaOf('food',id).name+'</div><div class="pr">'+costStr(r.cost)+' · ⚡'+f.energy+'</div>';
+    b.onclick=()=>{ if(!payCost(r.cost)){ toast(L('食材不足','Missing ingredients')); return;} invAdd('food',id,1); toast('🍽 +'+metaOf('food',id).name); openCook(); };
+    g.appendChild(b); }
+}); }
+function eat(id){ const f=FOOD[id]; if(!f||!invCount('food',id)) return; invTake('food',id,1); S.energy=clamp(S.energy+f.energy,0,S.maxEnergy); renderEnergy(); toast('🍽 '+metaOf('food',id).name+' +⚡'+f.energy); }
+
+/* ---- festival mini-game: lucky pick ---- */
+function openFestival(){ modal('🎉 '+(S.festival||L('节日','Festival')), body=>{
+  body.innerHTML='<div class="hint">'+L('选一个礼盒，试试运气！','Pick a gift box — try your luck!')+'</div>';
+  const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
+  for(let i=0;i<3;i++){ const b=document.createElement('div'); b.className='buy'; b.innerHTML='<div class="em">🎁</div><div class="nm">'+L('礼盒','Box')+' '+(i+1)+'</div>';
+    b.onclick=()=>{ if(S.festDone) return; S.festDone=true; const r=Math.random(); let msg;
+      if(r<0.3){ const amt=400+Math.floor(Math.random()*4)*200; S.gold+=amt; msg='🪙 +'+amt+'g'; }
+      else if(r<0.55){ invAdd('ore','gem',1); msg='💎 '+metaOf('ore','gem').name; }
+      else if(r<0.8){ const ids=Object.keys(CROPS); const cid=ids[Math.floor(Math.random()*ids.length)]; invAdd('seed',cid,3); msg='🌱 '+cropName(cid)+' ×3'; }
+      else { invAdd('food','pumpkin_pie',1); msg='🥧 '+metaOf('food','pumpkin_pie').name; }
+      renderStatus(); toast('🎉 '+msg); body.innerHTML='<div style="text-align:center;font-size:17px;padding:14px">🎉 '+msg+'</div>'; };
+    g.appendChild(b); }
+}); }
 
 /* ============================ BOOT ============================ */
 function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; }
@@ -1348,7 +1433,7 @@ async function boot(){
   $('#loadsub').textContent='加载 3D 资源 · loading assets…';
   await loadModels(); setProgress(42);
   scatterRealProps(); buildPond(); buildGrassField(); buildRain(); buildCritters(); setProgress(55);
-  makeCottage(); makeBed(); makeStall(); makeBin(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(62);
+  makeCottage(); makeBed(); makeStall(); makeBin(); buildAnvil(); buildStove(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(62);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(72);
 
   // HDRI environment (CC0 Poly Haven) — image-based lighting + sky
