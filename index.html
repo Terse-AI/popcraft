@@ -136,7 +136,8 @@
     <kbd>WASD</kbd> <span id="h1">移动</span> · <kbd>Shift</kbd> <span id="h2">奔跑</span><br>
     <span id="h3">鼠标</span> <span id="h4">视角</span> · <kbd>1-5</kbd> <span id="h5">工具</span><br>
     <kbd>←click</kbd> <span id="h6">使用工具</span> · <kbd>E</kbd> <span id="h7">交互/睡觉</span><br>
-    <kbd>B</kbd> <span id="h8">商店</span> · <kbd>Tab</kbd> <span id="h9">背包</span>
+    <kbd>B</kbd> <span id="h8">商店</span> · <kbd>Tab</kbd> <span id="h9">背包</span><br>
+    <kbd>C</kbd> <span id="h10">制作</span> · <kbd>F</kbd> <span id="h11">钓鱼</span> · <kbd>E</kbd> <span id="h12">鸡舍/矿洞/交谈</span>
   </div>
 </div>
 
@@ -240,6 +241,42 @@ const CROPS = {
 };
 const cropName = id => CROPS[id].nm[LANG] || CROPS[id].nm.en;
 
+/* ---------- fish / ore / products / materials / craftables ---------- */
+const FISH={
+  carp:{em:'🐟',nm:{zh:'鲤鱼',en:'Carp'},price:30,season:[0,1,2,3]},
+  sardine:{em:'🐠',nm:{zh:'沙丁鱼',en:'Sardine'},price:45,season:[0,2,3]},
+  bass:{em:'🎣',nm:{zh:'鲈鱼',en:'Bass'},price:60,season:[0,1,2,3]},
+  salmon:{em:'🐡',nm:{zh:'鲑鱼',en:'Salmon'},price:80,season:[2]},
+  tuna:{em:'🐟',nm:{zh:'金枪鱼',en:'Tuna'},price:110,season:[1,3]},
+  catfish:{em:'🐠',nm:{zh:'鲶鱼',en:'Catfish'},price:130,season:[0,2]}
+};
+const ORES={
+  coal:{em:'⚫',nm:{zh:'煤',en:'Coal'},price:15},
+  copper:{em:'🟠',nm:{zh:'铜矿',en:'Copper'},price:20},
+  iron:{em:'⚙️',nm:{zh:'铁矿',en:'Iron'},price:40},
+  gold_ore:{em:'🟡',nm:{zh:'金矿',en:'Gold'},price:80},
+  gem:{em:'💎',nm:{zh:'宝石',en:'Gem'},price:160}
+};
+const PRODUCTS={ egg:{em:'🥚',nm:{zh:'鸡蛋',en:'Egg'},price:50}, milk:{em:'🥛',nm:{zh:'牛奶',en:'Milk'},price:125} };
+const MATS={ wood:{em:'🪵',nm:{zh:'木头',en:'Wood'},price:2}, stone:{em:'🪨',nm:{zh:'石头',en:'Stone'},price:2}, fiber:{em:'🌿',nm:{zh:'纤维',en:'Fiber'},price:1} };
+const CRAFTABLES={
+  sprinkler:{em:'💧',nm:{zh:'洒水器',en:'Sprinkler'},cost:{'mat:stone':2,'ore:copper':1}},
+  scarecrow:{em:'🥷',nm:{zh:'稻草人',en:'Scarecrow'},cost:{'mat:wood':12,'mat:fiber':4}},
+  fence:{em:'🪵',nm:{zh:'栅栏',en:'Fence'},cost:{'mat:wood':2}},
+  torch:{em:'🔥',nm:{zh:'火把',en:'Torch'},cost:{'mat:wood':1,'ore:coal':1}}
+};
+const DB={seed:CROPS,crop:CROPS,fish:FISH,ore:ORES,product:PRODUCTS,mat:MATS,craft:CRAFTABLES};
+function metaOf(kind,id){
+  const d=(DB[kind]||{})[id];
+  if(kind==='seed') return {em:CROPS[id].em, name:cropName(id)+' '+t('seedsuf'), price:0};
+  if(!d) return {em:'❔',name:id,price:0};
+  return { em:d.em, name:(d.nm&&(d.nm[LANG]||d.nm.en))||id, price:d.price||0 };
+}
+const SELLABLE=['crop','fish','ore','product'];
+function payCost(cost){ for(const k in cost){ const [kind,id]=k.split(':'); if(invCount(kind,id)<cost[k]) return false; } for(const k in cost){ const [kind,id]=k.split(':'); invTake(kind,id,cost[k]); } return true; }
+function costStr(cost){ return Object.keys(cost).map(k=>{ const [kind,id]=k.split(':'); return metaOf(kind,id).em+cost[k]; }).join(' '); }
+function hasCost(cost){ for(const k in cost){ const [kind,id]=k.split(':'); if(invCount(kind,id)<cost[k]) return false; } return true; }
+
 /* ---------- game state ---------- */
 const S = {
   season:0, day:1, time:360,         // minutes from midnight; start 6:00 = 360
@@ -250,6 +287,8 @@ const S = {
   shipped:0,                         // gold pending from shipping bin
   tiles:new Map(),                   // "x,z" -> {tilled, watered, crop:{id,stage,watered}}
   weather:'clear',                   // clear | cloudy | rain
+  heldPlace:null,                    // craftable id when placing
+  inMine:false, mineLevel:0, festival:null,
   sleeping:false, running:false
 };
 const invKey=(kind,id)=>kind+':'+id;
@@ -655,11 +694,13 @@ const keys={};
 addEventListener('keydown',e=>{
   if(e.repeat) return; keys[e.code]=true;
   const k=e.key.toLowerCase();
-  if(k>='1'&&k<='5'){ S.tool=+k-1; S.heldSeed=null; renderHotbar(); }
+  if(k>='1'&&k<='5'){ S.tool=+k-1; S.heldSeed=null; S.heldPlace=null; renderHotbar(); }
   else if(k==='e'){ interact(); }
   else if(k==='b'){ openShop(); }
+  else if(k==='c'){ openCraft(); }
+  else if(k==='f'){ if(fishUI) fishPress(); else tryFish(); }
   else if(k==='tab'){ e.preventDefault(); if($('#inv').classList.contains('hidden')) openInv(); else closeAll(); }
-  else if(k==='escape'){ closeAll(); }
+  else if(k==='escape'){ closeAll(); if(fishUI) endFish(false); }
   if(e.code==='ShiftLeft') S.running=true;
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; if(e.code==='ShiftLeft') S.running=false; });
@@ -688,6 +729,7 @@ const touchMove=new THREE.Vector2();
 const ray=new THREE.Raycaster();
 let targetCell=null;
 function updateTarget(){
+  if(S.inMine){ selector.visible=false; targetCell=null; return; }
   ray.setFromCamera({x:0,y:0}, camera);
   const hit=ray.intersectObject(ground,false)[0];
   if(hit && hit.distance<6.5){
@@ -703,9 +745,12 @@ function updateTarget(){
 /* ============================ ACTIONS ============================ */
 function spendEnergy(n){ S.energy=clamp(S.energy-n,0,S.maxEnergy); if(S.energy<=0) toast(t('noenergy')); renderEnergy(); }
 function useTool(){
+  if(S.inMine){ mineSwing(); return; }
   if(!targetCell){ return; }
   if(S.energy<=0){ toast(t('noenergy')); return; }
   const {x,z}=targetCell; let tl=getTile(x,z);
+  // placing a crafted object
+  if(S.heldPlace){ placeCraftable(x,z); return; }
   // holding a seed -> plant
   if(S.heldSeed){
     if(!tl||!tl.tilled){ toast(t('needsoil')); return; }
@@ -725,9 +770,9 @@ function useTool(){
   } else if(tool===1){ // watering can
     if(tl&&tl.tilled){ tl.watered=true; if(tl.crop) tl.crop.watered=true; refreshTileMesh(x,z); spendEnergy(2); toast('💧 '+t('water')); }
     else toast(t('needtill'));
-  } else if(tool===4){ // scythe: harvest ripe crop or cut
+  } else if(tool===4){ // scythe: harvest ripe crop, else cut grass for fiber
     if(tl&&tl.crop&&tl.crop.stage>=CROPS[tl.crop.id].days){ harvest(x,z); }
-    else { spendEnergy(1); }
+    else { spendEnergy(1); if(Math.random()<0.55){ invAdd('mat','fiber',1); toast('🌿 +'+metaOf('mat','fiber').name); } }
   } else if(tool===2){ // axe
     spendEnergy(3); invAdd('mat','wood',1); toast('🪵 '+t('chop'));
   } else if(tool===3){ // pick
@@ -741,13 +786,17 @@ function harvest(x,z){
 }
 function near(p,d){ return Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<d; }
 function interact(){
+  if(S.inMine) return;
+  for(const n of NPCS){ if(n.mesh && Math.hypot(player.pos.x-n.x,player.pos.z-n.z)<2.6){ openDialogue(n); return; } }
+  if(near(COOP,4)){ openCoop(); return; }
+  if(near(MINE_ENT,3.2)){ enterMine(); return; }
   if(near(BED,2.6)){ sleep(); return; }
   if(near(SHOP,3.2)){ openShop(); return; }
   if(near(BIN,2.6)){ shipCrops(); return; }
 }
 function shipCrops(){
   let total=0, any=false;
-  for(const k in S.inv){ if(k.startsWith('crop:')){ const id=k.slice(5); total+=CROPS[id].price*S.inv[k]; any=true; delete S.inv[k]; } }
+  for(const k in S.inv){ const [kind,id]=k.split(':'); if(SELLABLE.includes(kind)){ total+=metaOf(kind,id).price*S.inv[k]; any=true; delete S.inv[k]; } }
   if(!any){ toast(t('emptyship')); return; }
   S.shipped+=total; toast('📦 '+t('shippedall')+' (+'+total+'g)');
 }
@@ -783,6 +832,7 @@ function rollWeather(){
 
 /* ============================ TIME / DAY ============================ */
 function advanceDay(){
+  if(S.inMine) leaveMine();
   // grow watered crops, wilt out-of-season
   for(const [k,tl] of S.tiles){
     if(tl.crop){
@@ -801,6 +851,9 @@ function advanceDay(){
   S.day++; if(S.day>28){ S.day=1; S.season=(S.season+1)%4; retintGround(); }
   S.time=360; S.energy=S.maxEnergy;
   rollWeather();                     // new day's weather (rain auto-waters)
+  // sprinklers water their 4 neighbours for the new day
+  for(const [k,tl] of S.tiles){ if(tl.sprinkler){ const [x,z]=k.split(',').map(Number); for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nt=getTile(x+dx,z+dz); if(nt&&nt.tilled){ nt.watered=true; if(nt.crop) nt.crop.watered=true; refreshTileMesh(x+dx,z+dz); } } } }
+  animalsProduce(); NPCS.forEach(n=>n.gifted=false); checkFestival();
   renderStatus(); renderEnergy();
   return earned;
 }
@@ -835,17 +888,18 @@ function renderEnergy(){ $('#ebar>i').style.width=(S.energy/S.maxEnergy*100)+'%'
 function renderHotbar(){
   const hot=$('#hot'); hot.innerHTML='';
   const toolE=['⛏️','🪣','🪓','🔨','🌾']; // hoe(dig), can, axe, pick(break), scythe — all widely-rendered
-  for(let i=0;i<5;i++){ const s=document.createElement('div'); s.className='slot'+(S.tool===i&&!S.heldSeed?' on':'');
+  for(let i=0;i<5;i++){ const s=document.createElement('div'); s.className='slot'+(S.tool===i&&!S.heldSeed&&!S.heldPlace?' on':'');
     s.innerHTML='<span class="key">'+(i+1)+'</span><span class="em">'+toolE[i]+'</span><span class="nm">'+t('tools')[i]+'</span>';
-    s.onclick=()=>{S.tool=i;S.heldSeed=null;renderHotbar();}; hot.appendChild(s); }
-  // held seed slot
-  const hs=document.createElement('div'); hs.className='slot'+(S.heldSeed?' on':'');
+    s.onclick=()=>{S.tool=i;S.heldSeed=null;S.heldPlace=null;renderHotbar();}; hot.appendChild(s); }
+  // held item slot (seed or placeable)
+  const hs=document.createElement('div'); hs.className='slot'+((S.heldSeed||S.heldPlace)?' on':'');
   if(S.heldSeed){ hs.innerHTML='<span class="em">'+CROPS[S.heldSeed].em+'</span><span class="nm">'+cropName(S.heldSeed)+'</span><span class="cnt">'+invCount('seed',S.heldSeed)+'</span>'; }
+  else if(S.heldPlace){ const mt=metaOf('craft',S.heldPlace); hs.innerHTML='<span class="em">'+mt.em+'</span><span class="nm">'+mt.name+'</span><span class="cnt">'+invCount('craft',S.heldPlace)+'</span>'; }
   else { hs.innerHTML='<span class="em" style="opacity:.3">🌰</span><span class="nm" style="opacity:.5">'+t('seedsuf')+'</span>'; }
   hs.onclick=openInv; hot.appendChild(hs);
 }
 function toggle(id){ $('#'+id).classList.toggle('hidden'); }
-function closeAll(){ ['shop','inv'].forEach(id=>$('#'+id).classList.add('hidden')); }
+function closeAll(){ document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden')); }
 document.querySelectorAll('.xbtn').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).classList.add('hidden'));
 
 function openShop(){
@@ -862,14 +916,13 @@ function openInv(){
   if(document.pointerLockElement) document.exitPointerLock();
   closeAll(); const g=$('#invg'); g.innerHTML='';
   let any=false;
-  for(const k in S.inv){ const [kind,id]=k.split(':'); const n=S.inv[k]; any=true;
-    let em,nm;
-    if(kind==='seed'){ em=CROPS[id].em; nm=cropName(id)+' '+t('seedsuf'); }
-    else if(kind==='crop'){ em=CROPS[id].em; nm=cropName(id); }
-    else { em=id==='wood'?'🪵':'🪨'; nm=id; }
+  for(const k in S.inv){ const [kind,id]=k.split(':'); const n=S.inv[k]; if(n<=0) continue; any=true;
+    const mt=metaOf(kind,id);
+    const sub = kind==='craft' ? ('×'+n+' · '+t('place')) : (mt.price?('×'+n+' · '+mt.price+'g'):('×'+n));
     const b=document.createElement('div'); b.className='buy';
-    b.innerHTML='<div class="em">'+em+'</div><div class="nm">'+nm+'</div><div class="pr">×'+n+(kind==='crop'?' · '+CROPS[id].price+'g':'')+'</div>';
-    if(kind==='seed'){ b.onclick=()=>{ S.heldSeed=id; renderHotbar(); closeAll(); toast(t('hold')+cropName(id)); }; }
+    b.innerHTML='<div class="em">'+mt.em+'</div><div class="nm">'+mt.name+'</div><div class="pr">'+sub+'</div>';
+    if(kind==='seed'){ b.onclick=()=>{ S.heldSeed=id; S.heldPlace=null; renderHotbar(); closeAll(); toast(t('hold')+cropName(id)); }; }
+    else if(kind==='craft'){ b.onclick=()=>{ S.heldPlace=id; S.heldSeed=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); }; }
     g.appendChild(b); }
   if(!any){ g.innerHTML='<div class="hint" style="grid-column:1/-1">—</div>'; }
   $('#inv').classList.remove('hidden');
@@ -883,6 +936,7 @@ function applyLang(){
   $('#h0').textContent=t('ops'); $('#h1').textContent=t('move'); $('#h2').textContent=t('run');
   $('#h3').textContent=t('mouse'); $('#h4').textContent=t('view'); $('#h5').textContent=t('tool');
   $('#h6').textContent=t('use'); $('#h7').textContent=t('interact'); $('#h8').textContent=t('shopk'); $('#h9').textContent=t('bag');
+  $('#h10').textContent=L('制作','craft'); $('#h11').textContent=L('钓鱼','fish'); $('#h12').textContent=L('鸡舍/矿洞/交谈','coop/mine/talk');
   $('#shopt').textContent=t('shopt'); $('#shoph').textContent=t('shoph');
   $('#invt').textContent=t('invt'); $('#invh').textContent=t('invh');
   renderStatus(); renderHotbar();
@@ -966,7 +1020,8 @@ function frame(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   if(grassUniform) grassUniform.value=now*0.001;
   if(waterMat&&waterMat.normalMap){ waterMat.normalMap.offset.x+=dt*0.025; waterMat.normalMap.offset.y+=dt*0.012; }
-  updateRain(dt); updateCritters(now*0.001);
+  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt);
+  if(S.inMine && mineLight) mineLight.position.set(player.pos.x,4,player.pos.z);
   fCnt++; fAcc+=dt; if(fAcc>=0.5){ const fe=$('#fps'); if(fe) fe.textContent=Math.round(fCnt/fAcc)+' fps'; fCnt=0; fAcc=0; }
 
   // time of day
@@ -992,6 +1047,7 @@ function frame(now){
     player.walkT+=dt*(S.running?15:10);
   }
   player.pos.y=terrainH(player.pos.x,player.pos.z);
+  if(S.inMine){ player.pos.x=clamp(player.pos.x,-14.5,14.5); player.pos.z=clamp(player.pos.z,-14.5,14.5); player.pos.y=0; }
   avatar.position.copy(player.pos);
   avatar.rotation.y = lerpAngle(avatar.rotation.y, player.yaw, 0.2);
   animateWalk(dt);
@@ -1035,6 +1091,7 @@ function animateWalk(dt){
   if(headG) headG.position.y=1.75+bob;
 }
 function dayNight(){
+  if(S.inMine) return;                              // mine has its own dark lighting
   // map 6:00(360)→20:00(1200) daylight arc; dim after
   const tt=clamp((S.time-240)/1080,0,1);           // 4:00..22:00 broad arc
   const ang=tt*Math.PI;                            // 0..PI across sky
@@ -1057,6 +1114,232 @@ function hintProximity(){
     if(inRange && !p._hinted){ p._hinted=true; toast(t(key)); } else if(!inRange){ p._hinted=false; } }
 }
 
+/* ============================ GAMEPLAY DEPTH ============================ */
+T.zh.place='放置'; T.en.place='Place';
+const L=(zh,en)=>LANG==='zh'?zh:en;
+const COOP={x:-9,z:7}, MINE_ENT={x:-40,z:-40};
+function modal(title, fill){
+  if(document.pointerLockElement) document.exitPointerLock();
+  closeAll();
+  let el=document.getElementById('dynmodal');
+  if(!el){ el=document.createElement('div'); el.id='dynmodal'; el.className='panel card'; document.body.appendChild(el); }
+  el.classList.remove('hidden'); el.innerHTML='<span class="xbtn">✕</span><h2></h2><div class="dynbody"></div>';
+  el.querySelector('h2').textContent=title;
+  el.querySelector('.xbtn').onclick=()=>el.classList.add('hidden');
+  fill(el.querySelector('.dynbody'));
+}
+
+/* ---- CRAFTING + placeables ---- */
+const placedGroup=new THREE.Group(); world.add(placedGroup);
+function sprinklerMesh(){ const g=new THREE.Group(); const met=new THREE.MeshStandardMaterial({color:0x8a8f96,metalness:0.6,roughness:0.4});
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.18,0.18,10),met); base.position.y=0.1;
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.22,8),met); neck.position.y=0.3;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.1,10,8), new THREE.MeshStandardMaterial({color:0x5bd1ff,emissive:0x1a4a66,metalness:0.3,roughness:0.3})); head.position.y=0.42;
+  g.add(base,neck,head); g.traverse(o=>o.castShadow=true); return g; }
+function scarecrowMesh(){ const g=new THREE.Group(); const wood=new THREE.MeshStandardMaterial({color:0x7a5230});
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.8,6),wood); pole.position.y=0.9;
+  const arms=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.1,0.1),wood); arms.position.y=1.3;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8), new THREE.MeshStandardMaterial({color:0xcf9a53})); head.position.y=1.7;
+  const hat=new THREE.Mesh(new THREE.ConeGeometry(0.3,0.3,10), new THREE.MeshStandardMaterial({color:0x6b4a2e})); hat.position.y=1.92;
+  g.add(pole,arms,head,hat); g.traverse(o=>o.castShadow=true); return g; }
+function fenceMesh(){ const g=new THREE.Group(); const m=new THREE.MeshStandardMaterial({color:0x8a5a34,roughness:0.9});
+  [-0.4,0.4].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.8,0.1),m); p.position.set(x,0.4,0); g.add(p);});
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(1,0.1,0.08),m); rail.position.y=0.5; g.add(rail);
+  g.traverse(o=>o.castShadow=true); return g; }
+function torchMesh(){ const g=new THREE.Group();
+  const p=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.8,6), new THREE.MeshStandardMaterial({color:0x6b4a2e})); p.position.y=0.4; g.add(p);
+  const f=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6), new THREE.MeshStandardMaterial({color:0xffa030,emissive:0xff6a00,emissiveIntensity:1.4})); f.position.y=0.85; g.add(f);
+  g.add(new THREE.PointLight(0xffa040,5,8).translateY(0.9)); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g; }
+function placeCraftable(x,z){
+  const id=S.heldPlace; if(!invCount('craft',id)){ S.heldPlace=null; renderHotbar(); return; }
+  if(id==='sprinkler'){ const tl=getTile(x,z); if(!tl||!tl.tilled){ toast(L('洒水器要放在松土上','Sprinkler needs tilled soil')); return; } tl.sprinkler=true; }
+  let m = id==='sprinkler'?sprinklerMesh() : id==='scarecrow'?scarecrowMesh() : id==='fence'?fenceMesh() : torchMesh();
+  m.position.set(x, terrainH(x,z), z); m.rotation.y=Math.random()*6; placedGroup.add(m);
+  invTake('craft',id,1); toast(metaOf('craft',id).em+' '+L('已放置','placed'));
+  if(invCount('craft',id)<=0){ S.heldPlace=null; } renderHotbar();
+}
+function openCraft(){ modal(L('🔨 制作','🔨 Crafting'), body=>{
+  body.innerHTML='<div class="hint">'+L('用采集的材料制作。洒水器每天早晨自动浇灌四周的作物。','Craft from gathered materials. Sprinklers auto-water the 4 adjacent tiles each morning.')+'</div><div class="grid" id="craftg"></div>';
+  const g=body.querySelector('#craftg');
+  for(const id in CRAFTABLES){ const c=CRAFTABLES[id]; const ok=hasCost(c.cost);
+    const b=document.createElement('div'); b.className='buy'+(ok?'':' dim');
+    b.innerHTML='<div class="em">'+c.em+'</div><div class="nm">'+metaOf('craft',id).name+'</div><div class="pr">'+costStr(c.cost)+'</div>';
+    b.onclick=()=>{ if(!payCost(c.cost)){ toast(L('材料不足','Not enough materials')); return;} invAdd('craft',id,1); toast('🔨 +'+metaOf('craft',id).name); renderHotbar(); openCraft(); };
+    g.appendChild(b); }
+}); }
+
+/* ---- NPCs + relationships ---- */
+const NPCS=[
+  {id:'mei',nm:{zh:'小梅',en:'Mei'},col:0xff8fb0,home:{x:32,z:-22}},
+  {id:'ken',nm:{zh:'阿健',en:'Ken'},col:0x8ec5ff,home:{x:37,z:-25}},
+  {id:'luna',nm:{zh:'露娜',en:'Luna'},col:0xc9a0ff,home:{x:34,z:-28}},
+  {id:'tom',nm:{zh:'老汤',en:'Tom'},col:0x8fd6a0,home:{x:30,z:-26}}
+];
+const NPC_LINES={
+  low:{zh:['今天天气不错呢。','你是新来的农夫吧？','欢迎来到星星露谷！'],en:['Nice weather today.','You must be the new farmer.','Welcome to StarVale!']},
+  mid:{zh:['你的农场越来越好了！','有空常来聊聊。','谢谢你的礼物~'],en:['Your farm is thriving!','Come chat anytime.','Thanks for the gifts!']},
+  high:{zh:['见到你真高兴！','我们是好朋友啦~','你是小镇的骄傲。'],en:['So glad to see you!',"We're great friends now~","You're the pride of the town."]}
+};
+function makeCottageLike(wallc,roofc){ const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(5,3,4), new THREE.MeshStandardMaterial({color:wallc,roughness:0.85})); base.position.y=1.5;
+  const roof=new THREE.Mesh(new THREE.CylinderGeometry(0.01,3.2,1.8,4), new THREE.MeshStandardMaterial({color:roofc,roughness:0.7})); roof.rotation.y=Math.PI/4; roof.position.y=3.9; roof.scale.z=1.3;
+  g.add(base,roof); g.traverse(o=>o.castShadow=true); return g; }
+function makeVillager(col){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.25,0.45,4,8), new THREE.MeshStandardMaterial({color:col,roughness:0.7})); body.position.y=1.0;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.26,12,10), new THREE.MeshStandardMaterial({color:0xffe0bd,roughness:0.6})); head.position.y=1.55;
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.27,12,8,0,6.28,0,1.8), new THREE.MeshStandardMaterial({color:0x4a3324})); hair.position.y=1.6;
+  g.add(body,head,hair); g.traverse(o=>o.castShadow=true); return g; }
+function buildTown(){
+  const plaza=new THREE.Mesh(new THREE.CircleGeometry(9,32), new THREE.MeshStandardMaterial({color:0xc9b79a,roughness:1})); plaza.rotateX(-Math.PI/2); plaza.position.set(34,0.02,-24); world.add(plaza);
+  for(let i=0;i<3;i++){ const h=makeCottageLike(0xe6d7bf,[0x7a8c5a,0xb7533e,0x5a7a9a][i]); h.position.set(24+i*8,0,-33); world.add(h); }
+}
+function buildNPCs(){ for(const n of NPCS){ n.hearts=0; n.gifted=false; n.mesh=makeVillager(n.col); n.x=n.home.x; n.z=n.home.z; n.tgt={x:n.x,z:n.z}; n.wait=Math.random()*3; n.mesh.position.set(n.x,terrainH(n.x,n.z),n.z); world.add(n.mesh); } }
+function updateNPCs(dt){ if(S.inMine) return;
+  for(const n of NPCS){ if(!n.mesh) continue; const dx=n.tgt.x-n.x, dz=n.tgt.z-n.z, d=Math.hypot(dx,dz);
+    if(d<0.3){ n.wait-=dt; if(n.wait<=0){ n.tgt={x:n.home.x+(Math.random()-.5)*12,z:n.home.z+(Math.random()-.5)*12}; n.wait=2+Math.random()*4; } }
+    else { const sp=1.4*dt/d; n.x+=dx*sp; n.z+=dz*sp; n.mesh.rotation.y=Math.atan2(dx,dz); }
+    n.mesh.position.set(n.x, terrainH(n.x,n.z), n.z); }
+}
+function heartStr(h){ const f=Math.min(10,h); return '❤'.repeat(f)+'🤍'.repeat(10-f); }
+function openDialogue(n){ modal(LANG==='zh'?n.nm.zh:n.nm.en, body=>{
+  const tier=n.hearts>=7?'high':(n.hearts>=3?'mid':'low'); const lines=NPC_LINES[tier][LANG]; const line=lines[Math.floor(Math.random()*lines.length)];
+  body.innerHTML='<div style="font-size:15px;margin:2px 0 8px">“'+line+'”</div><div style="margin-bottom:10px;font-size:13px">'+heartStr(n.hearts)+'</div>';
+  const giftables=Object.keys(S.inv).filter(k=>['crop','fish','product'].includes(k.split(':')[0])&&S.inv[k]>0);
+  if(n.gifted){ const p=document.createElement('div'); p.className='hint'; p.textContent=L('今天已经送过礼物了。','Already gifted today.'); body.appendChild(p); }
+  else if(!giftables.length){ const p=document.createElement('div'); p.className='hint'; p.textContent=L('背包里没有可赠送的物品。','Nothing to gift in your bag.'); body.appendChild(p); }
+  else { const lab=document.createElement('div'); lab.className='hint'; lab.textContent=L('点击赠送（+好感）：','Click to gift (+friendship):'); body.appendChild(lab);
+    const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
+    giftables.forEach(k=>{ const [kind,id]=k.split(':'); const mt=metaOf(kind,id); const b=document.createElement('div'); b.className='buy';
+      b.innerHTML='<div class="em">'+mt.em+'</div><div class="nm">'+mt.name+'</div><div class="pr">×'+S.inv[k]+'</div>';
+      b.onclick=()=>{ invTake(kind,id,1); n.gifted=true; n.hearts=Math.min(10,n.hearts+(Math.random()<0.5?2:1)); toast('❤ '+(LANG==='zh'?n.nm.zh:n.nm.en)+' +'+L('好感','friendship')); openDialogue(n); };
+      g.appendChild(b); }); }
+}); }
+
+/* ---- animals + coop ---- */
+let animals=[], coopStash={egg:0,milk:0};
+function buildCoop(){ const g=makeCottageLike(0xd8c39a,0x9a5a3a); g.scale.set(1.1,0.9,1.1); g.position.set(COOP.x,0,COOP.z); world.add(g);
+  for(let i=0;i<10;i++){ const f=fenceMesh(); const a=i/10*6.28; f.position.set(COOP.x+Math.cos(a)*5,0,COOP.z+6+Math.sin(a)*4); f.rotation.y=a; world.add(f); } }
+function makeChicken(){ const g=new THREE.Group(); const wht=new THREE.MeshStandardMaterial({color:0xf4efe6,roughness:0.7});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.28,12,10),wht); body.position.y=0.3; body.scale.z=1.2;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,8),wht); head.position.set(0,0.55,0.18);
+  const comb=new THREE.Mesh(new THREE.SphereGeometry(0.07,6,6), new THREE.MeshStandardMaterial({color:0xe04040})); comb.position.set(0,0.68,0.18);
+  const beak=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.14,6), new THREE.MeshStandardMaterial({color:0xf0a030})); beak.rotation.x=Math.PI/2; beak.position.set(0,0.54,0.35);
+  g.add(body,head,comb,beak); g.traverse(o=>o.castShadow=true); return g; }
+function makeCow(){ const g=new THREE.Group(); const wht=new THREE.MeshStandardMaterial({color:0xf2efe8,roughness:0.75});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.7,0.6),wht); body.position.y=0.75;
+  for(const sx of [-0.4,0.4]) for(const sz of [-0.2,0.2]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.5,6), new THREE.MeshStandardMaterial({color:0x3a2f28})); leg.position.set(sx,0.25,sz); g.add(leg); }
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),wht); head.position.set(0.6,0.85,0);
+  const spot=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,6), new THREE.MeshStandardMaterial({color:0x2a2622})); spot.position.set(-0.2,1.0,0.2); spot.scale.set(1,0.5,1);
+  g.add(body,head,spot); g.traverse(o=>o.castShadow=true); return g; }
+function spawnAnimal(type){ const m=type==='cow'?makeCow():makeChicken(); const x=COOP.x+(Math.random()-.5)*6, z=COOP.z+6+(Math.random()-.5)*5; m.position.set(x,terrainH(x,z),z); world.add(m);
+  animals.push({type,mesh:m,x,z,tgt:{x,z},wait:Math.random()*3}); }
+function updateAnimals(dt){ if(S.inMine) return;
+  for(const a of animals){ const dx=a.tgt.x-a.x, dz=a.tgt.z-a.z, d=Math.hypot(dx,dz);
+    if(d<0.3){ a.wait-=dt; if(a.wait<=0){ a.tgt={x:COOP.x+(Math.random()-.5)*7,z:COOP.z+6+(Math.random()-.5)*5}; a.wait=2+Math.random()*4; } }
+    else { const sp=(a.type==='cow'?0.8:1.2)*dt/d; a.x+=dx*sp; a.z+=dz*sp; a.mesh.rotation.y=Math.atan2(dx,dz); }
+    a.mesh.position.set(a.x, terrainH(a.x,a.z), a.z); }
+}
+function animalsProduce(){ for(const a of animals){ if(a.type==='cow') coopStash.milk++; else coopStash.egg++; } }
+function openCoop(){ modal(L('🐔 鸡舍 / 牧场','🐔 Coop & Barn'), body=>{
+  body.innerHTML='<div class="hint">'+L('购买动物，每天早晨产出，来这里收取。','Buy animals; they produce each morning. Collect here.')+'</div>';
+  const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
+  const collect=document.createElement('div'); collect.className='buy'+((coopStash.egg+coopStash.milk)?'':' dim');
+  collect.innerHTML='<div class="em">🧺</div><div class="nm">'+L('收取产物','Collect')+'</div><div class="pr">🥚'+coopStash.egg+' 🥛'+coopStash.milk+'</div>';
+  collect.onclick=()=>{ const got=coopStash.egg+coopStash.milk; if(coopStash.egg) invAdd('product','egg',coopStash.egg); if(coopStash.milk) invAdd('product','milk',coopStash.milk); coopStash.egg=0; coopStash.milk=0; if(got) toast('🧺 +'+got); openCoop(); };
+  g.appendChild(collect);
+  const chick=document.createElement('div'); chick.className='buy'+(S.gold>=200?'':' dim');
+  chick.innerHTML='<div class="em">🐔</div><div class="nm">'+L('买鸡','Buy Chicken')+'</div><div class="pr">200g</div>';
+  chick.onclick=()=>{ if(S.gold<200){toast(t('nomoney'));return;} S.gold-=200; spawnAnimal('chicken'); renderStatus(); toast('🐔 +1'); openCoop(); };
+  g.appendChild(chick);
+  const cow=document.createElement('div'); cow.className='buy'+(S.gold>=600?'':' dim');
+  cow.innerHTML='<div class="em">🐄</div><div class="nm">'+L('买牛','Buy Cow')+'</div><div class="pr">600g</div>';
+  cow.onclick=()=>{ if(S.gold<600){toast(t('nomoney'));return;} S.gold-=600; spawnAnimal('cow'); renderStatus(); toast('🐄 +1'); openCoop(); };
+  g.appendChild(cow);
+}); }
+
+/* ---- mining ---- */
+let mineGroup=null, mineNodes=[], mineLight=null, mineBtns=null, mineSavedBg=null;
+function buildMine(){
+  const ent=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.4,8,16,Math.PI), new THREE.MeshStandardMaterial({color:0x6b6f74,roughness:0.9})); frame.position.y=1.6;
+  const dark=new THREE.Mesh(new THREE.CircleGeometry(1.5,20), new THREE.MeshBasicMaterial({color:0x05070a})); dark.position.set(0,1.5,0.05);
+  ent.add(frame,dark); ent.position.set(MINE_ENT.x, terrainH(MINE_ENT.x,MINE_ENT.z), MINE_ENT.z); ent.traverse(o=>{if(o.isMesh)o.castShadow=true;}); world.add(ent);
+  mineGroup=new THREE.Group(); mineGroup.visible=false; scene.add(mineGroup);
+  const floor=new THREE.Mesh(new THREE.CircleGeometry(16,40), new THREE.MeshStandardMaterial({color:0x3a3330,roughness:1})); floor.rotateX(-Math.PI/2); floor.receiveShadow=true; mineGroup.add(floor);
+  const wall=new THREE.Mesh(new THREE.CylinderGeometry(16,16,8,40,1,true), new THREE.MeshStandardMaterial({color:0x2a2420,roughness:1,side:THREE.BackSide})); wall.position.y=4; mineGroup.add(wall);
+  const ceil=new THREE.Mesh(new THREE.CircleGeometry(16,40), new THREE.MeshStandardMaterial({color:0x201c18,roughness:1})); ceil.rotateX(Math.PI/2); ceil.position.y=8; mineGroup.add(ceil);
+  mineLight=new THREE.PointLight(0xffe0b0,14,30); mineLight.position.y=4; mineGroup.add(mineLight);
+  mineGroup.add(new THREE.AmbientLight(0x404854,0.7));
+}
+function spawnMineNodes(){ for(const n of mineNodes){ mineGroup.remove(n.mesh); } mineNodes=[];
+  const cnt=10+Math.floor(Math.random()*4);
+  for(let i=0;i<cnt;i++){ const a=Math.random()*6.28, r=3+Math.random()*11, x=Math.cos(a)*r, z=Math.sin(a)*r, s=0.6+Math.random()*0.5;
+    const mesh=MODELS.rock_01? MODELS.rock_01.scene.clone(true) : new THREE.Mesh(new THREE.IcosahedronGeometry(s,0), new THREE.MeshStandardMaterial({color:0x7a7f85,flatShading:true}));
+    mesh.position.set(x,0,z); mesh.scale.setScalar(s*1.6); mesh.traverse(o=>{if(o.isMesh)o.castShadow=true;}); mineGroup.add(mesh);
+    mineNodes.push({mesh,x,z,hp:2+Math.floor(S.mineLevel/3)}); }
+}
+function enterMine(){ S.inMine=true; S.mineLevel=1; mineSavedBg=scene.background; world.visible=false; mineGroup.visible=true;
+  scene.fog.density=0.022; scene.fog.color.setHex(0x05070a); scene.background=new THREE.Color(0x05070a); if(scene.environmentIntensity!==undefined) scene.environmentIntensity=0.15;
+  sun.intensity=0; hemi.intensity=0; if(rainPts) rainPts.visible=false;
+  player.pos.set(0,0,0); cam.yaw=0; spawnMineNodes(); showMineBtns(true); renderStatus(); toast(L('进入矿洞 · 第 1 层','Entered the mine · Lv 1')); }
+function descendMine(){ S.mineLevel++; player.pos.set(0,0,0); spawnMineNodes(); renderStatus(); toast(L('下到第 '+S.mineLevel+' 层','Descended · Lv '+S.mineLevel)); }
+function leaveMine(){ S.inMine=false; world.visible=true; mineGroup.visible=false; showMineBtns(false);
+  scene.background=mineSavedBg; if(scene.environmentIntensity!==undefined) scene.environmentIntensity=1.0; player.pos.set(MINE_ENT.x,0,MINE_ENT.z+3); toast(L('离开矿洞','Left the mine')); }
+function mineSwing(){ if(S.energy<=0){toast(t('noenergy'));return;}
+  ray.setFromCamera({x:0,y:0},camera); let hit=null,hd=1e9;
+  for(const nd of mineNodes){ const b=new THREE.Box3().setFromObject(nd.mesh); const p=ray.ray.intersectBox(b,new THREE.Vector3()); if(p){ const d=p.distanceTo(camera.position); if(d<hd&&d<7){hd=d;hit=nd;} } }
+  if(!hit){ spendEnergy(1); return; }
+  spendEnergy(2); hit.hp--;
+  if(hit.hp<=0){ mineGroup.remove(hit.mesh); mineNodes=mineNodes.filter(x=>x!==hit);
+    const lv=S.mineLevel, r=Math.random(); invAdd('mat','stone',1+Math.floor(Math.random()*2));
+    if(r<0.03+lv*0.01) invAdd('ore','gem',1);
+    else if(r<0.22) invAdd('ore', lv>=12?'gold_ore':(lv>=6?'iron':'copper'),1);
+    else if(r<0.42) invAdd('ore','coal',1);
+    toast('⛏ '+L('采到矿石','mined ore'));
+    if(mineNodes.length===0) toast(L('矿层清空 · 按 ⬇ 下一层','Cleared · press ⬇'));
+  }
+}
+function showMineBtns(on){ if(!mineBtns){ mineBtns=document.createElement('div'); mineBtns.style.cssText='position:absolute;bottom:92px;right:12px;display:flex;flex-direction:column;gap:8px;pointer-events:auto;z-index:55';
+    const dn=document.createElement('span'); dn.className='pill'; dn.textContent='⬇ '+L('下一层','Descend'); dn.onclick=descendMine;
+    const lv=document.createElement('span'); lv.className='pill'; lv.textContent='🚪 '+L('离开','Leave'); lv.onclick=leaveMine;
+    mineBtns.appendChild(dn); mineBtns.appendChild(lv); $('#hud').appendChild(mineBtns); }
+  mineBtns.style.display=on?'flex':'none';
+}
+
+/* ---- fishing ---- */
+let fishUI=null, fishState=null;
+function nearWater(){ return pondMini && Math.hypot(player.pos.x-pondMini.x,player.pos.z-pondMini.z) < pondMini.r+5; }
+function tryFish(){ if(S.inMine||fishUI) return;
+  if(!nearWater()){ toast(L('到池塘边按 F 钓鱼','Stand by the pond, press F')); return; }
+  if(S.energy<=0){ toast(t('noenergy')); return; }
+  if(document.pointerLockElement) document.exitPointerLock();
+  fishUI=document.createElement('div'); fishUI.style.cssText='position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;pointer-events:none';
+  fishUI.innerHTML='<div class="card" style="padding:18px;text-align:center;pointer-events:auto;width:280px">'
+    +'<div id="fmsg" style="font-size:15px;margin-bottom:12px">'+L('抛竿中…','Casting…')+'</div>'
+    +'<div id="fbarwrap" style="display:none;position:relative;height:22px;border-radius:11px;background:rgba(255,255,255,.12);overflow:hidden">'
+    +'<div id="fzone" style="position:absolute;top:0;bottom:0;background:rgba(91,209,255,.45)"></div>'
+    +'<div id="fcur" style="position:absolute;top:0;bottom:0;width:4px;background:#ffd66b"></div></div>'
+    +'<div class="hint" style="margin-top:10px">'+L('上钩后按 F / 点击，让光标停在蓝区','When it bites, press F / click with the cursor in the blue zone')+'</div></div>';
+  $('#hud').appendChild(fishUI);
+  fishState={phase:'cast',t:0,cur:0,dir:1,zoneL:25+Math.random()*45,zoneW:22,biteAt:0.8+Math.random()*2.2};
+  fishUI.querySelector('.card').onclick=fishPress;
+}
+function updateFish(dt){ if(!fishState) return;
+  if(fishState.phase==='cast'){ fishState.t+=dt; if(fishState.t>=fishState.biteAt){ fishState.phase='bite'; $('#fmsg').textContent='❗ '+L('上钩了！','Bite!'); const w=$('#fbarwrap'); w.style.display='block'; const z=$('#fzone'); z.style.left=fishState.zoneL+'%'; z.style.width=fishState.zoneW+'%'; fishState.t=0; } }
+  else { fishState.cur+=fishState.dir*dt*70; if(fishState.cur>=100){fishState.cur=100;fishState.dir=-1;} if(fishState.cur<=0){fishState.cur=0;fishState.dir=1;} const c=$('#fcur'); if(c) c.style.left=fishState.cur+'%';
+    fishState.t+=dt; if(fishState.t>6) endFish(false); }
+}
+function fishPress(){ if(!fishState) return; if(fishState.phase==='cast'){ endFish(false); return; }
+  endFish(fishState.cur>=fishState.zoneL && fishState.cur<=fishState.zoneL+fishState.zoneW); }
+function endFish(success){ if(!fishUI) return; fishUI.remove(); fishUI=null; fishState=null; spendEnergy(4);
+  if(success){ const pool=Object.keys(FISH).filter(id=>FISH[id].season.includes(S.season)); const id=pool[Math.floor(Math.random()*pool.length)]||'carp'; invAdd('fish',id,1); toast(FISH[id].em+' '+L('钓到 ','Caught ')+metaOf('fish',id).name+'!'); }
+  else toast(L('鱼跑了…','It got away…')); }
+
+/* ---- festivals ---- */
+const FESTIVALS={ '0,13':{zh:'🌸 春之花舞',en:'🌸 Flower Dance'}, '1,11':{zh:'🏖 夏日海滩节',en:'🏖 Summer Luau'}, '2,16':{zh:'🍂 秋之集市',en:'🍂 Fall Fair'}, '3,8':{zh:'❄️ 冬夜集市',en:'❄️ Winter Market'} };
+function checkFestival(){ const f=FESTIVALS[S.season+','+S.day]; S.festival=f?(LANG==='zh'?f.zh:f.en):null;
+  if(f){ NPCS.forEach(n=>{ n.tgt={x:34+(Math.random()-.5)*6,z:-24+(Math.random()-.5)*6}; }); const bonus=200+S.season*50; S.gold+=bonus; renderStatus(); toast('🎉 '+(LANG==='zh'?f.zh:f.en)+' · +'+bonus+'g'); } }
+
 /* ============================ BOOT ============================ */
 function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; }
 async function boot(){
@@ -1065,7 +1348,7 @@ async function boot(){
   $('#loadsub').textContent='加载 3D 资源 · loading assets…';
   await loadModels(); setProgress(42);
   scatterRealProps(); buildPond(); buildGrassField(); buildRain(); buildCritters(); setProgress(55);
-  makeCottage(); makeBed(); makeStall(); makeBin(); setProgress(62);
+  makeCottage(); makeBed(); makeStall(); makeBin(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(62);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(72);
 
   // HDRI environment (CC0 Poly Haven) — image-based lighting + sky
@@ -1081,6 +1364,7 @@ async function boot(){
 
   // starter kit
   invAdd('seed','parsnip',5); invAdd('seed','potato',2);
+  invAdd('mat','wood',8); invAdd('mat','stone',6); invAdd('ore','copper',2);
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn();
   setProgress(100);
