@@ -699,18 +699,33 @@ function updatePetals(dt){
 
 /* farm structures: cottage, bed, shop stall, shipping bin ----------- */
 const BED={x:3,z:-9}, SHOP={x:-6,z:-10}, BIN={x:8,z:-4};
+// proper two-sided gable roof (slanted planes + triangular gable ends)
+function gableRoof(w,d,rh,col){
+  const g=new THREE.Group(), m=new THREE.MeshStandardMaterial({color:col,roughness:0.78,flatShading:true});
+  const ang=Math.atan2(rh,w/2), slope=Math.hypot(w/2,rh)+0.28;
+  const L=new THREE.Mesh(new THREE.BoxGeometry(slope,0.14,d+0.5),m); L.rotation.z=ang;  L.position.set(-w/4,rh/2,0); g.add(L);
+  const R=new THREE.Mesh(new THREE.BoxGeometry(slope,0.14,d+0.5),m); R.rotation.z=-ang; R.position.set( w/4,rh/2,0); g.add(R);
+  const tri=new THREE.BufferGeometry(); tri.setAttribute('position',new THREE.Float32BufferAttribute([-w/2,0,0, w/2,0,0, 0,rh,0],3)); tri.computeVertexNormals();
+  const gm=new THREE.MeshStandardMaterial({color:new THREE.Color(col).multiplyScalar(0.88).getHex(),roughness:0.82,side:THREE.DoubleSide,flatShading:true});
+  [d/2,-d/2].forEach(z=>{ const t=new THREE.Mesh(tri,gm); t.position.z=z; g.add(t); });
+  g.traverse(o=>o.castShadow=true); return g;
+}
 function makeCottage(){
-  const g=new THREE.Group();
-  const wall=new THREE.MeshStandardMaterial({color:0xe9dcc5,roughness:0.85});
-  const base=new THREE.Mesh(new THREE.BoxGeometry(6,3,5),wall); base.position.y=1.5; base.castShadow=true; base.receiveShadow=true; g.add(base);
-  // rounded-ish gable roof
-  const roof=new THREE.Mesh(new THREE.CylinderGeometry(0.01,3.6,2.2,4,1), new THREE.MeshStandardMaterial({color:0xb7533e,roughness:0.7}));
-  roof.rotation.y=Math.PI/4; roof.position.y=4.1; roof.scale.z=1.45; roof.castShadow=true; g.add(roof);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1,1.8,0.1),new THREE.MeshStandardMaterial({color:0x6b4a2e}));
-  door.position.set(0,0.9,2.52); g.add(door);
-  const winMat=new THREE.MeshStandardMaterial({color:0x8fd3ff,emissive:0x234a66,roughness:0.2,metalness:0.1});
-  [-1.8,1.8].forEach(x=>{const w=new THREE.Mesh(new THREE.BoxGeometry(1,1,0.1),winMat); w.position.set(x,1.7,2.52); g.add(w);});
-  g.position.set(0,0,-12); world.add(g);
+  const g=new THREE.Group(), W=6,D=5,WH=3;
+  const wall=new THREE.MeshStandardMaterial({color:0xece0cb,roughness:0.85});
+  const base=new THREE.Mesh(new THREE.BoxGeometry(W,WH,D),wall); base.position.y=WH/2; base.castShadow=base.receiveShadow=true; g.add(base);
+  const roof=gableRoof(W+0.5,D,2.0,0xb7533e); roof.position.y=WH; g.add(roof);
+  const chim=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.5,0.6),new THREE.MeshStandardMaterial({color:0x8a5a4a,roughness:0.9})); chim.position.set(-1.7,WH+1.3,-1); chim.castShadow=true; g.add(chim);
+  const frameM=new THREE.MeshStandardMaterial({color:0x5a3f28,roughness:0.8});
+  const df=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.2,0.12),frameM); df.position.set(0,1.1,D/2+0.01); g.add(df);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.9,0.14),new THREE.MeshStandardMaterial({color:0x7a4a2e,roughness:0.7})); door.position.set(0,0.95,D/2+0.05); g.add(door);
+  const knob=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),new THREE.MeshStandardMaterial({color:0xd8b24a,metalness:0.6,roughness:0.3})); knob.position.set(0.33,0.95,D/2+0.14); g.add(knob);
+  const glow=new THREE.MeshStandardMaterial({color:0xffe3a6,emissive:0xffb24a,emissiveIntensity:0.9,roughness:0.35});
+  const shut=new THREE.MeshStandardMaterial({color:0x5a7a9a,roughness:0.8});
+  [-1.9,1.9].forEach(x=>{ const wf=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.1,0.1),frameM); wf.position.set(x,1.7,D/2+0.02); g.add(wf);
+    const win=new THREE.Mesh(new THREE.BoxGeometry(0.82,0.82,0.12),glow); win.position.set(x,1.7,D/2+0.05); g.add(win);
+    [-0.66,0.66].forEach(sx=>{ const s=new THREE.Mesh(new THREE.BoxGeometry(0.22,1.1,0.08),shut); s.position.set(x+sx,1.7,D/2+0.03); g.add(s); }); });
+  g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); g.position.set(0,0,-12); world.add(g);
 }
 function makeBed(){
   const g=new THREE.Group();
@@ -1438,9 +1453,11 @@ const NPC_LINES={
   high:{zh:['见到你真高兴！','我们是好朋友啦~','你是小镇的骄傲。'],en:['So glad to see you!',"We're great friends now~","You're the pride of the town."]}
 };
 function makeCottageLike(wallc,roofc){ const g=new THREE.Group();
-  const base=new THREE.Mesh(new THREE.BoxGeometry(5,3,4), new THREE.MeshStandardMaterial({color:wallc,roughness:0.85})); base.position.y=1.5;
-  const roof=new THREE.Mesh(new THREE.CylinderGeometry(0.01,3.2,1.8,4), new THREE.MeshStandardMaterial({color:roofc,roughness:0.7})); roof.rotation.y=Math.PI/4; roof.position.y=3.9; roof.scale.z=1.3;
-  g.add(base,roof); g.traverse(o=>o.castShadow=true); return g; }
+  const base=new THREE.Mesh(new THREE.BoxGeometry(5,3,4), new THREE.MeshStandardMaterial({color:wallc,roughness:0.85})); base.position.y=1.5; g.add(base);
+  const roof=gableRoof(5.5,4,1.7,roofc); roof.position.y=3; g.add(roof);
+  const win=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.1), new THREE.MeshStandardMaterial({color:0xffe3a6,emissive:0xffb24a,emissiveIntensity:0.55,roughness:0.4})); win.position.set(0,1.6,2.02); g.add(win);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.7,0.12), new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.8})); door.position.set(-1.4,0.85,2.01); g.add(door);
+  g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g; }
 function makeVillager(col){ const g=new THREE.Group();
   const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.25,0.45,4,8), new THREE.MeshStandardMaterial({color:col,roughness:0.7})); body.position.y=1.0;
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.26,12,10), new THREE.MeshStandardMaterial({color:0xffe0bd,roughness:0.6})); head.position.y=1.55;
@@ -1709,7 +1726,7 @@ async function boot(){
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn();
   setProgress(100);
-  setTimeout(()=>{ $('#load').classList.add('hidden'); $('#hud').classList.remove('hidden'); },250);
+  setTimeout(()=>{ $('#load').classList.add('hidden'); $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); },250); // ensure render targets match the (now-visible) viewport
   requestAnimationFrame(frame);
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); aoPass&&aoPass.setSize(innerWidth,innerHeight); });
