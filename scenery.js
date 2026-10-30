@@ -1,0 +1,561 @@
+/* ======================================================================
+   StarVale scenery — a painted lake valley.
+   Everything outdoors is built like a landscape painting: hand-style sprite
+   sheets and panoramas (tools/paint) store light as data, and this module
+   turns them into colour through ramps and an hour-by-hour palette, so the
+   whole frame changes key together, sunrise to night.
+   ====================================================================== */
+import * as THREE from 'three';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
+function hash2(x,z){ let n=Math.sin(x*127.1+z*311.7)*43758.5453; return n-Math.floor(n); }
+export function vnoise(x,z){
+  const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
+  const u=xf*xf*(3-2*xf), v=zf*zf*(3-2*zf);
+  const a=hash2(xi,zi),b=hash2(xi+1,zi),c=hash2(xi,zi+1),d=hash2(xi+1,zi+1);
+  return lerp(lerp(a,b,u),lerp(c,d,u),v);
+}
+function rng(seed){ let s=seed>>>0; return ()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+/* ---------- land and lake ---------- */
+export const FARM_HALF=13, WATER_Y=-1.15;
+export const ISLANDS=[[-58,104,26,.24],[46,132,34,.3],[120,98,20,.2],[-132,150,30,.26],[8,70,9,.13],[-14,214,24,.2]];
+export function lakeField(x,z){            // > 0 is water
+  const dx=x/312, dz=(z-176)/142;
+  let f=1-Math.hypot(dx,dz);
+  f+=(vnoise(x*.011+3,z*.011+7)-.5)*.3+(vnoise(x*.043,z*.043)-.5)*.05;
+  for(const [ix,iz,ir,ia] of ISLANDS){ const q=((x-ix)*(x-ix)+(z-iz)*(z-iz))/(ir*ir); if(q<9) f-=ia*Math.exp(-q)*(1+.3*vnoise(x*.09,z*.09)); }
+  return Math.min(f,(z-27)/70);
+}
+export function terrainH(x,z){
+  const e=clamp((Math.max(Math.abs(x),Math.abs(z))-FARM_HALF)/18,0,1);
+  let h=((vnoise(x*.035,z*.035)-.5)*8+(vnoise(x*.11,z*.11)-.5)*1.5)*e*e;
+  const r=Math.hypot(x/312,(z-176)/142);
+  h+=smooth(1.2,2.3,r)*46*(.55+.9*vnoise(x*.016+9,z*.016+2));      // the valley walls
+  const f=lakeField(x,z);
+  if(f>-.1){ const s=smooth(-.1,0,f); h=lerp(h,WATER_Y+.25,s); if(f>0) h=WATER_Y+.25-Math.min(5,f*34); }
+  return h;
+}
+export const inWater=(x,z)=>lakeField(x,z)>-.004;
+
+/* walking paths; kept clear of trees and painted into the ground */
+export const PATHS=[
+  [[0,-11],[0,13],[4,20],[14,28],[15,34]],                 // cottage → dock
+  [[3,-13],[14,-16],[26,-22],[34,-24]],                    // farm → town plaza
+  [[-3,-13],[-14,-20],[-28,-30],[-40,-37]],                // farm → mine
+  [[-4,8],[-9,8]]
+];
+function segDist(px,pz,a,b){ const vx=b[0]-a[0],vz=b[1]-a[1],t=clamp(((px-a[0])*vx+(pz-a[1])*vz)/(vx*vx+vz*vz),0,1); return Math.hypot(px-a[0]-vx*t,pz-a[1]-vz*t); }
+function pathDist(x,z){ let d=1e9; for(const p of PATHS) for(let i=0;i<p.length-1;i++) d=Math.min(d,segDist(x,z,p[i],p[i+1])); return d; }
+function keepClear(x,z){
+  if(x>-23&&x<23&&z>-27&&z<25) return true;               // farm + yard
+  if(x>14&&x<54&&z>-44&&z<-10) return true;               // town
+  if(Math.hypot(x+40,z+40)<9) return true;                // mine mouth
+  return pathDist(x,z)<3.2;
+}
+
+/* ---------- colour ---------- */
+const hex=h=>{ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; };
+const mixc=(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)];
+const setC=(c,a)=>c.setRGB(a[0],a[1],a[2],THREE.SRGBColorSpace);
+
+// Each row is one hour of the painted day, sampled from reference palettes. Times are minutes from midnight.
+const F=['top','mid','low','cloudL','cloudS','sun','rockS','rockL','snowS','snowL','forS','forL','haze','mist','water','shade','lit','gS','gM','gH'];
+const N=['mistAmt','gAmt','sunI','ambI','glint','fog','night'];
+const KEYS=[
+ //  t    sky top    mid       low       cloudL    cloudS    sun       rockS     rockL     snowS     snowL     forS      forL      haze      mist      water     shade     lit       gradS     gradM     gradH      mist grade sun  amb  glint fog     night
+ [ 360,'#a884ac','#e0a2ac','#f2cbb8','#f7d9c4','#9a7fb4','#fff2c8','#5d4a84','#9d88c0','#a48ed0','#f6d6d4','#3a2a52','#7a5c80','#cfa6ba','#c4ace0','#d8a0ac','#62508c','#fff0dc','#2c2040','#8a6a96','#f6d4c4', .75,.55,1.2,.9,.8,.0016,.0],
+ [ 460,'#9fa8c8','#c6c6d6','#e4dcd4','#eef0f4','#9aa2b8','#fff4d8','#56607e','#98a4bc','#a8b6d0','#f0f2f6','#2e3c3e','#68785c','#c4ccd8','#d8dce6','#b4bccc','#6c7690','#fff4e4','#1c2228','#7a7e84','#e8ece8', .85,.32,1.9,.95,.8,.0015,.0],
+ [ 600,'#7f9fcc','#a9c0de','#d6e0ea','#f6f8fa','#a4b2cc','#fffbe8','#4c5a78','#94a2bc','#a4b6d6','#ffffff','#22343a','#5c7a4e','#b8cadc','#dfe6ee','#a8c0dc','#66748e','#fff8ea','#14191e','#7e8078','#f0f2ec', .3,.22,2.5,1.0,.8,.0012,.0],
+ [ 780,'#7a9ccc','#a4bedf','#d4dee8','#fbfcfd','#a8b6cf','#ffffff','#4a5874','#98a4b8','#a8bad8','#ffffff','#20343a','#5e7e4e','#b4c8dc','#e6eaf0','#a4bee0','#6c7a94','#fffaf0','#121820','#807f76','#f4f2ea', .12,.2,2.7,1.0,.9,.0010,.0],
+ [ 930,'#54708c','#7c94a4','#c4c0ac','#e8dfc8','#58687c','#fff0c0','#3e4a5e','#8a8c8c','#8c9cb4','#ece4d0','#1c2e30','#58683e','#a8ac9c','#c8c4b0','#6c8496','#4e5c70','#ffeccc','#141c22','#6c6e68','#e8dcbc', .22,.34,2.3,.85,1.,.0012,.0],
+ [1050,'#b08878','#e0b488','#f2d6a0','#f8dcae','#a06e62','#fff0b0','#5c3c40','#b88a70','#c08a84','#fbe0bc','#3c2622','#8c6238','#dcb08c','#eec49c','#d4a074','#684450','#ffdca8','#20100f','#8e5a40','#f6d4a0', .25,.5,2.1,.75,1.,.0013,.0],
+ [1130,'#a86a5c','#de8a5c','#f2c07c','#f4b47c','#8c4a50','#ffe6a0','#4a2c38','#b07464','#a86c74','#f0c0a0','#2e1a1e','#8a4a2a','#d8886a','#e49a78','#c06a4c','#5c3444','#ffc88c','#1a0a0c','#84402e','#f4b47c', .22,.62,1.7,.6,1.,.0014,.0],
+ [1200,'#c48aa8','#e6a8bc','#f0c0c0','#f6ccd0','#8a78a8','#ffe0c8','#3c3862','#7c6c9c','#8a84b8','#e8c4d0','#22243c','#4e4a68','#cc9cb4','#c4a4d0','#dca0b4','#46426c','#f4c8cc','#1e1e38','#6c5c8c','#f0c4cc', .45,.58,.95,.62,.8,.0016,.1],
+ [1275,'#3e3a6c','#6a5a90','#a07ca4','#a488b0','#3a3660','#ffd8c0','#262a50','#4e4c7c','#54588c','#a8a0c8','#161a30','#322f4e','#6a5c8c','#7c70a8','#54527e','#2e2e58','#b8a8c8','#12122a','#3e3a68','#b4a4c8', .4,.62,.5,.55,.8,.0017,.55],
+ [1380,'#1a2150','#2a3468','#46528e','#5a68a4','#1c2450','#f4f0dc','#141c44','#2c3a70','#3c4c8c','#9fb0d8','#0c1228','#232c4c','#2e3a70','#44568c','#2a3468','#1e2a58','#8ea4cc','#080c1e','#28386c','#a4b4d8', .3,.66,.34,.62,.9,.0015,1],
+ [1560,'#10163a','#1c2450','#2e3a70','#3c4a84','#12183c','#f4f0dc','#0e1436','#222e60','#30407c','#8a9cc8','#080e20','#1a2240','#222c5c','#34426e','#1e2852','#182048','#7c90bc','#060a18','#20305c','#94a4cc', .3,.68,.3,.58,.9,.0015,1]
+].map(r=>{ const o={t:r[0]}; F.forEach((k,i)=>o[k]=hex(r[i+1])); N.forEach((k,i)=>o[k]=r[i+1+F.length]); return o; });
+
+function palette(t){
+  let i=0; while(i<KEYS.length-2&&t>=KEYS[i+1].t) i++;
+  const a=KEYS[i], b=KEYS[i+1], f=clamp((t-a.t)/(b.t-a.t),0,1), o={};
+  for(const k of F) o[k]=mixc(a[k],b[k],f);
+  for(const k of N) o[k]=lerp(a[k],b[k],f);
+  return o;
+}
+// overcast / rain: the same hour, drained toward slate
+function weatherize(p,w){
+  if(w==='clear') return p;
+  const q=w==='rain'?.68:.42, g=mixc(p.mid,[.44,.47,.52],.6), o={...p};
+  for(const k of ['top','mid','low','cloudL','haze','water']) o[k]=mixc(p[k],g,q);
+  o.cloudS=mixc(p.cloudS,[.26,.29,.34],q); o.sunI=p.sunI*(1-q*.72); o.mistAmt=Math.min(1,p.mistAmt+q*.5); o.fog=p.fog*(1+q*.9);
+  return o;
+}
+
+/* ramps: one row per painted material, value left to right */
+const RAMP={
+  spruce:['#0a1216','#10232a','#17343a','#234a3f','#3c6444','#6d8144','#a89a4e','#dcc06a'],
+  wood:  ['#17110f','#2c211c','#46362c','#675040','#8c7058'],
+  earth: ['#2a211e','#4a382e','#6e5442','#8e7058','#a88c74'],
+  rock:  ['#26212c','#463a44','#6a5258','#927468','#bc9c88'],
+  snow:  ['#6e78a4','#9aa8cc','#d0d8ec','#f4f6fb','#ffffff'],
+  ice:   ['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']
+};
+const SEASON={
+  broad1:[['#3a1420','#7a2c3a','#c25a58','#ea8f7c','#f6b8a0','#fcdcc8'],['#101f18','#1c3a26','#2e5a30','#4e7c38','#7c9c44','#b4c060'],['#2c0f0f','#5a1a14','#9c2c18','#d24e1a','#ec7c24','#f4a93a','#fbd66a'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
+  broad2:[['#2e2410','#5c5018','#92862a','#c4b03c','#e6d25c','#f6ea94'],['#14241a','#22402a','#386434','#5c8840','#8cac50','#c0cc70'],['#3a2410','#6e4414','#b07a1c','#dca52c','#f2cc4c','#fbe88a'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
+  broad3:[['#2c1a10','#603014','#a65a1c','#dc8a2c','#f2b44c','#fbdc88'],['#121f16','#1e3824','#32562e','#527838','#80a044','#b4bc5c'],['#250a10','#4c1016','#821c1c','#b4301e','#d8542a','#ec8a3e'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
+  larch: [['#1e1a0e','#46401a','#7c7028','#b0a03c','#d8c85c','#f2e690'],['#14241c','#20402a','#34603a','#4e7f44','#7ca04e','#b4c268'],['#1e1410','#4f2c14','#8a5a1e','#c28a2a','#e4b23e','#f6d670','#fff0b0'],['#2a2230','#4a4050','#8080a0','#d4d8e8','#ffffff']],
+  shrub: [['#1c2a16','#3a5022','#648030','#94a844','#c4c868'],['#14241a','#22402a','#3a6434','#608840','#90ac50'],['#250a10','#4c1016','#821c1c','#b4301e','#d8542a','#ec8a3e'],['#3a3044','#5c4c60','#8c7c90','#c8c0d0','#f4f4f8']],
+  tuft:  [['#1a2010','#3c4a1c','#6c7a2c','#a0a040','#d0c464'],['#141e10','#28401c','#4c6c2a','#7c9238','#b0b450'],['#1e1410','#4f2c14','#8a5a1e','#c28a2a','#e4b23e','#f6d670'],['#3c3640','#6a6270','#a8a4b4','#dcdce8','#ffffff']],
+  ground:[['#1e2a18','#34461e','#566a28','#7e8a38','#a8a450'],['#18251a','#2c4220','#4a642a','#6e8434','#969c44'],['#2c2214','#54421c','#826a2a','#ac8e3c','#d0b05c'],['#8c98b8','#b0bcd4','#d8dfec','#f0f3f9','#ffffff']]
+};
+const ROWS=['spruce','wood','earth','rock','snow','ice','broad1','broad2','broad3','larch','shrub','tuft','ground'];
+const rowV=n=>(ROWS.indexOf(n)+.5)/ROWS.length;
+const rampData=new Uint8Array(256*ROWS.length*4);
+const rampTex=new THREE.DataTexture(rampData,256,ROWS.length,THREE.RGBAFormat);
+rampTex.colorSpace=THREE.SRGBColorSpace; rampTex.minFilter=rampTex.magFilter=THREE.LinearFilter; rampTex.wrapS=rampTex.wrapT=THREE.ClampToEdgeWrapping;
+function writeRow(name,stops){
+  const y=ROWS.indexOf(name), pts=stops.map(hex), n=pts.length-1;
+  for(let x=0;x<256;x++){ const u=x/255*n, i=Math.min(n-1,Math.floor(u)), c=mixc(pts[i],pts[i+1],u-i), o=(y*256+x)*4;
+    rampData[o]=c[0]*255; rampData[o+1]=c[1]*255; rampData[o+2]=c[2]*255; rampData[o+3]=255; }
+}
+for(const k in RAMP) writeRow(k,RAMP[k]);
+
+/* ---------- shared uniforms ---------- */
+export const U={
+  uTime:{value:0}, uShade:{value:new THREE.Color()}, uLit:{value:new THREE.Color()}, uFog:{value:new THREE.Color()}, uFogD:{value:.0014},
+  uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uHide:{value:new THREE.Vector3(0,-999,0)}
+};
+const ramp=`vec3 ramp(float v,float row){ return texture2D(uRamps,vec2(clamp(v,.004,.996),row)).rgb; }`;
+
+/* ---------- loading ---------- */
+const load=(url,fn)=>new Promise((res,rej)=>new THREE.TextureLoader().load(url,t=>{ fn&&fn(t); res(t); },undefined,rej));
+const ATLAS={}, TEX={};
+export async function loadScenery(onProgress){
+  const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
+  const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
+  const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
+  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
+    ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
+  await Promise.all(names.map(([n,f],i)=>load('assets/paint/'+n+'.webp',f).then(t=>{ TEX[n]=t; onProgress&&onProgress(i/names.length); })));
+}
+
+/* ---------- sky ---------- */
+const skyU={ uTop:{value:new THREE.Color()},uMid:{value:new THREE.Color()},uLow:{value:new THREE.Color()},uCL:{value:new THREE.Color()},uCS:{value:new THREE.Color()},
+  uSunC:{value:new THREE.Color()}, uSunD:{value:new THREE.Vector3(0,1,0)}, uMoonD:{value:new THREE.Vector3(0,1,0)}, uNight:{value:0}, uCover:{value:.5}, uAurora:{value:0},
+  uClouds:{value:null}, uTime:U.uTime };
+function buildSky(root){
+  skyU.uClouds.value=TEX.clouds;
+  const m=new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, depthTest:false, fog:false, toneMapped:false, uniforms:skyU,
+    vertexShader:`varying vec3 vD; void main(){ vD=position; vec4 p=projectionMatrix*mat4(mat3(viewMatrix))*vec4(position,1.); gl_Position=p.xyww; }`,
+    fragmentShader:`precision highp float;
+      uniform vec3 uTop,uMid,uLow,uCL,uCS,uSunC,uSunD,uMoonD; uniform float uNight,uCover,uAurora,uTime; uniform sampler2D uClouds; varying vec3 vD;
+      float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      void main(){ vec3 d=normalize(vD); float h=max(d.y,0.); float b=pow(h,.62);
+        float q=floor(b*34.+fract(atan(d.x,d.z)*7.)*.4)/34.; q=mix(b,q,.65);                                  // soft banding, as brushed
+        vec3 c=q<.3?mix(uLow,uMid,q/.3):mix(uMid,uTop,clamp((q-.3)/.62,0.,1.));
+        float az=atan(d.x,d.z);
+        if(uNight>.01){                                                                                      // stars: little crosses
+          vec2 g=vec2(az*42.,h*70.), id=floor(g), f=fract(g)-.5; float s=h21(id);
+          if(s>.93&&h>.03){ float w=h21(id+7.)*.34+.1; float k=step(abs(f.x),w)*step(abs(f.y),.045)+step(abs(f.y),w*1.3)*step(abs(f.x),.03);
+            c+=clamp(k,0.,1.)*uNight*(.35+.65*h21(id+3.))*vec3(.92,.94,1.); }
+          float ms=acos(clamp(dot(d,uMoonD),-1.,1.));
+          c+=uNight*(step(ms,.2)*.05+step(ms,.14)*.07)*vec3(.7,.75,1.);
+          vec3 mr=normalize(cross(uMoonD,vec3(0.,1.,0.))); float cres=length(vec2(dot(d-uMoonD,mr)-.022,d.y-uMoonD.y));
+          if(ms<.075&&cres>.055) c=mix(c,vec3(1.,.98,.9),uNight);
+          if(uAurora>.01){ float w=sin(az*3.+uTime*.05)+sin(az*7.3-uTime*.03)*.4; float y=h-(.34+.09*w);
+            float r=exp(-y*y*190.)*(.55+.45*sin(az*44.+uTime*.2+w*3.));
+            c+=uAurora*r*uNight*vec3(.16,.72,.56); }
+        }
+        float sd=acos(clamp(dot(d,uSunD),-1.,1.)); float above=1.-uNight;                                      // sun: hard concentric rings
+        c=mix(c,mix(c,uSunC,.1),step(sd,.26)*above); c=mix(c,mix(c,uSunC,.18),step(sd,.17)*above); c=mix(c,uSunC,step(sd,.075)*above);
+        c+=uSunC*.12*above*exp(-sd*sd*3.);
+        vec2 uv=vec2(az/6.28318*2.+uTime*.00028,clamp(asin(h)/1.5708/.55,0.,1.)); vec3 t=texture2D(uClouds,uv).rgb;
+        float e=mix(.74,.42,uCover), m=smoothstep(e,e+.012,t.g), sm=smoothstep(e-.08,e+.1,t.b)*.72;
+        vec3 cc=mix(uCS,uCL,t.r); c=mix(c,mix(uCS,uCL,.56),sm*(1.-m)); c=mix(c,cc,m);
+        c=mix(c,uLow,smoothstep(.05,.0,h)*.7);
+        gl_FragColor=vec4(c,1.); }` });
+  const dome=new THREE.Mesh(new THREE.SphereGeometry(10,32,20),m); dome.frustumCulled=false; dome.renderOrder=-100; root.add(dome);
+}
+
+/* ---------- painted mountain layers: cylinders that hold their distance, a parallax stack ---------- */
+const mtU={ uRS:{value:new THREE.Color()},uRL:{value:new THREE.Color()},uSS:{value:new THREE.Color()},uSL:{value:new THREE.Color()},uFS:{value:new THREE.Color()},uFL:{value:new THREE.Color()},uHz:{value:new THREE.Color()},uDL:{value:new THREE.Color()},uDS:{value:new THREE.Color()} };
+const layers=[];
+function buildMountains(root){
+  const mk=(tex,R,H,rep,off,base,hz,kind,mist)=>{
+    const g=new THREE.CylinderGeometry(R,R,H,96,1,true);
+    const m=new THREE.ShaderMaterial({ side:THREE.BackSide, fog:false, toneMapped:false,
+      uniforms:{ ...mtU, uMap:{value:tex}, uRep:{value:rep}, uOff:{value:off}, uHazeAmt:{value:hz}, uLowMist:{value:mist}, uKind:{value:kind}, uDecAmt:{value:0}, uSnowK:{value:1} },
+      vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader:`precision highp float;
+        uniform sampler2D uMap; uniform vec3 uRS,uRL,uSS,uSL,uFS,uFL,uHz,uDL,uDS; uniform float uRep,uOff,uHazeAmt,uLowMist,uKind,uDecAmt,uSnowK; varying vec2 vUv;
+        void main(){ vec4 t=texture2D(uMap,vec2(vUv.x*uRep+uOff,vUv.y)); if(t.a<.5) discard; float v=t.r; vec3 c;
+          if(uKind<.5){ vec3 rk=mix(uRS,uRL,v), sn=mix(uSS,uSL,smoothstep(.1,.8,v)); c=mix(rk,sn,t.g*uSnowK); c=mix(c,mix(uFS,uFL,v*1.4),t.b); }
+          else { float w=clamp(v*2.2,0.,1.); c=mix(uFS,uFL,w); c=mix(c,mix(uDS,uDL,w),step(.5,t.g)*uDecAmt); }
+          float low=1.-smoothstep(.0,.42,vUv.y); c=mix(c,uHz,clamp(uHazeAmt+low*low*uLowMist,0.,1.));
+          gl_FragColor=vec4(c,1.); }` });
+    const o=new THREE.Mesh(g,m); o.frustumCulled=false; o.position.y=base+H/2; o.renderOrder=-90; root.add(o);
+    layers.push({o,m,base,H});
+  };
+  mk(TEX.mt_far,  900,300,2,.08,-6,.32,0,.5);
+  mk(TEX.mt_mid,  760,150,2,.37,-6,.16,0,.45);
+  mk(TEX.mt_forest,600,64,3,.21,-4,.05,1,.3);
+}
+
+/* ---------- sprites: instanced camera-facing paintings ---------- */
+function makeSprites(root,sheet,items,opts={}){
+  const n=items.length, geo=new THREE.InstancedBufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-.5,0,0, .5,0,0, .5,1,0, -.5,1,0]),3));
+  geo.setAttribute('uv',new THREE.BufferAttribute(new Float32Array([0,0, 1,0, 1,1, 0,1]),2));
+  geo.setIndex([0,1,2,0,2,3]);
+  const P=new Float32Array(n*3), S=new Float32Array(n*2), R=new Float32Array(n*4), M=new Float32Array(n*4);
+  items.forEach((it,i)=>{ const a=ATLAS[it.name];
+    P.set([it.x,it.y,it.z],i*3); S.set([it.h*a.w/a.h*(it.sx||1),it.h],i*2); R.set([a.u0,a.v0,a.u1,a.v1],i*4);
+    M.set([rowV(it.row),it.tone||0,it.wind===undefined?1:it.wind,it.flip?-1:1],i*4); });
+  geo.setAttribute('iPos',new THREE.InstancedBufferAttribute(P,3));
+  geo.setAttribute('iSize',new THREE.InstancedBufferAttribute(S,2));
+  geo.setAttribute('iRect',new THREE.InstancedBufferAttribute(R,4));
+  geo.setAttribute('iMisc',new THREE.InstancedBufferAttribute(M,4));
+  geo.instanceCount=n;
+  const mat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, alphaToCoverage:true,
+    uniforms:{ ...U, uMap:{value:TEX[sheet]}, uSnowRow:{value:rowV('ice')} },
+    vertexShader:`attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iRect,iMisc;
+      uniform float uTime,uFogD; uniform vec3 uSide;
+      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear;
+      void main(){ vec3 tc=cameraPosition-iPos; tc.y=0.; float d=max(length(tc),.001); tc/=d;
+        vec3 right=vec3(tc.z,0.,-tc.x);
+        float h=position.y*position.y*iMisc.z;
+        float sw=(sin(uTime*1.05+iPos.x*.31+iPos.z*.23)+.5*sin(uTime*2.3+iPos.x*.9))*.018*iSize.y*h;
+        vec3 wp=iPos+right*(position.x*iSize.x+sw)+vec3(0.,position.y*iSize.y,0.);
+        float u=iMisc.w<0.?1.-uv.x:uv.x;
+        vUv=vec2(mix(iRect.x,iRect.z,u),mix(iRect.y,iRect.w,uv.y));
+        vRow=iMisc.x; vTone=iMisc.y; vX=uv.x-.5; vSideL=dot(right,uSide); vFogF=1.-exp(-d*d*uFogD*uFogD); vNear=d;
+        gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
+    fragmentShader:`precision highp float;
+      uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow;
+      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear; ${ramp}
+      void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
+        float v=t.r+(t.g-.5)*.16+vTone+vSideL*vX*.42;
+        vec3 c=ramp(v,vRow);
+        if(uSnow>.01){ float s=uSnow*smoothstep(.1,.6,t.b)*smoothstep(.2,.42,t.r); c=mix(c,ramp(.45+v*.6,uSnowRow),s); }
+        c*=mix(uShade,uLit,smoothstep(.08,.7,v));
+        c=mix(c,uFog,vFogF);
+        float a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
+        gl_FragColor=vec4(c,a); }` });
+  const m=new THREE.Mesh(geo,mat); m.frustumCulled=false; if(opts.mainOnly){ m.layers.set(1); } root.add(m); return m;
+}
+
+/* ---------- ground ---------- */
+const groundU={ uSplat:{value:null}, uTile:{value:null}, uGroundRow:{value:rowV('ground')}, uEarthRow:{value:rowV('earth')}, uRockRow:{value:rowV('rock')}, uIceRow:{value:rowV('ice')} };
+export function splatPixel(x,z){   // zones used by the painted ground and the map
+  const f=lakeField(x,z), y=terrainH(x,z);
+  const dirt=clamp(1-(pathDist(x,z)-1.1+(vnoise(x*.6,z*.6)-.5)*1.2)/.9,0,1);
+  const shore=smooth(-.03,-.004,f);
+  const forest=smooth(.42,.62,vnoise(x*.022+11,z*.022+4));
+  const hi=smooth(9,20,y);
+  return {dirt,shore:Math.max(shore,hi),forest};
+}
+function bakeSplat(){
+  const S=768, R=420, cv=document.createElement('canvas'); cv.width=cv.height=S; const cx=cv.getContext('2d'), im=cx.createImageData(S,S);
+  for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const x=(i+.5)/S*R*2-R, z=(j+.5)/S*R*2-R, s=splatPixel(x,z), o=(j*S+i)*4;
+    im.data[o]=0; im.data[o+1]=s.dirt*255; im.data[o+2]=s.shore*255; im.data[o+3]=255; im.data[o]=s.forest*255; }
+  cx.putImageData(im,0,0);
+  const t=new THREE.CanvasTexture(cv); t.flipY=false; t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.colorSpace=THREE.NoColorSpace;
+  return t;
+}
+function groundMaterial(){
+  const m=new THREE.MeshLambertMaterial({color:0xffffff});
+  groundU.uSplat.value=bakeSplat(); groundU.uTile.value=TEX.ground_tile;
+  m.onBeforeCompile=sh=>{
+    Object.assign(sh.uniforms,groundU,{uRamps:U.uRamps,uSnow:U.uSnow});
+    sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <worldpos_vertex>',
+      '#include <worldpos_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normal;');
+    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow; ${ramp}\n`+
+      sh.fragmentShader.replace('#include <map_fragment>',`
+        vec2 suv=vWP.xz/840.+.5; vec4 sp=texture2D(uSplat,suv);
+        vec3 t1=texture2D(uTile,vWP.xz/9.).rgb, t2=texture2D(uTile,vWP.xz/31.).rgb, t3=texture2D(uTile,vWP.xz/157.).rgb;
+        float g=t1.r*.5+t2.r*.3+t3.r*.42-.14;
+        vec3 grass=ramp(g,uGroundRow);
+        vec3 earth=ramp(t1.g*.6+t2.g*.3+.05,uEarthRow);
+        vec3 rock=ramp(t1.b*.42+t2.b*.42+t3.b*.2,uRockRow);
+        vec3 c=mix(grass,earth,smoothstep(.25,.7,sp.g));
+        float wet=smoothstep(.1,-.55,vWP.y+1.15);
+        float steep=smoothstep(.72,.5,normalize(vWN).y);
+        c=mix(c,rock,clamp(max(sp.b,steep)+t2.b*.3-.15,0.,1.));
+        c*=1.-sp.r*.34;
+        c*=mix(1.,.55,wet);
+        if(uSnow>.01){ c=mix(c,ramp(.62+g*.42,uIceRow),uSnow*smoothstep(.15,.4,g+.3-sp.g*.4)); }
+        diffuseColor.rgb*=c;`);
+  };
+  return m;
+}
+export let groundMesh=null;
+function buildGround(root){
+  const warp=(g,S)=>{ const p=g.attributes.position; for(let i=0;i<p.count;i++){ const u=p.getX(i), v=p.getY(i);
+      const x=Math.sign(u)*Math.pow(Math.abs(u),1.45)*S, z=Math.sign(v)*Math.pow(Math.abs(v),1.45)*S;
+      p.setXYZ(i,x,terrainH(x,z),z); } g.computeVertexNormals(); return g; };
+  const mat=groundMaterial();
+  const hi=warp(new THREE.PlaneGeometry(2,2,260,260),640);
+  groundMesh=new THREE.Mesh(hi,mat); groundMesh.receiveShadow=true; groundMesh.frustumCulled=false; groundMesh.layers.set(1); root.add(groundMesh);
+  const lo=warp(new THREE.PlaneGeometry(2,2,70,70),640);                    // the lake mirror sees a light copy
+  const lm=new THREE.Mesh(lo,mat); lm.frustumCulled=false; lm.layers.set(2); root.add(lm);
+}
+
+/* ---------- lake ---------- */
+export let water=null;
+const waterU={ uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
+function shoreTex(){
+  const S=512, d=new Uint8Array(S*S*4);
+  for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const x=(i+.5)/S*760-380, z=(j+.5)/S*460-50, f=lakeField(x,z), o=(j*S+i)*4; d[o]=clamp(f*16,0,1)*255; d[o+1]=clamp(f*3,0,1)*255; d[o+3]=255; }
+  const t=new THREE.DataTexture(d,S,S,THREE.RGBAFormat); t.minFilter=t.magFilter=THREE.LinearFilter; t.needsUpdate=true; return t;
+}
+function buildLake(root,res){
+  const shader={ name:'PaintedLake',
+    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.14},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null} },
+    vertexShader:`uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW;
+      void main(){ vUv=textureMatrix*vec4(position,1.); vW=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader:`precision highp float;
+      uniform sampler2D tDiffuse,uShore,uNoise; uniform vec3 uTint,uGlint,uFog; uniform float uGlintAmt,uTimeW,uTintAmt,uFogD; varying vec4 vUv; varying vec3 vW;
+      float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      float dash(vec2 p,float dens){ vec2 g=floor(p), f=fract(p); float h=h21(g); if(h<dens) return 0.;
+        float l=.22+.26*fract(h*7.3), c=.5+(fract(h*13.)-.5)*.4; return (1.-smoothstep(l*.7,l,abs(f.x-c)))*(1.-smoothstep(.12,.34,abs(f.y-.5))); }
+      void main(){ vec2 p=vW.xz; float t=uTimeW; float d=length(cameraPosition-vW);
+        vec4 s=texture2D(uShore,vec2((p.x+380.)/760.,(p.y+50.)/460.));
+        float n=texture2D(uNoise,p*vec2(.006,.05)+vec2(t*.004,t*.0025)).b+texture2D(uNoise,p*vec2(.013,.11)-vec2(t*.006,0.)).b-1.;
+        vec4 uv=vUv; uv.x+=n*.012*uv.w; uv.y+=n*.026*uv.w;
+        vec3 c=texture2DProj(tDiffuse,uv).rgb;
+        c=mix(c,uTint,uTintAmt+.1*(1.-s.g));
+        float f1=smoothstep(14.,6.,d), f2=smoothstep(60.,20.,d)*(1.-f1*.6), f3=1.-smoothstep(160.,420.,d)*.4;
+        float g=0.;
+        g+=f1*dash(vec2(p.x*.45+t*.1,p.y*3.2),.82);
+        g+=f2*dash(vec2(p.x*.16-t*.06,p.y*1.3),.84);
+        g+=f3*dash(vec2(p.x*.05+t*.025,p.y*.42),.87)*.9;
+        c=mix(c,uGlint,clamp(g,0.,1.)*uGlintAmt*.72);
+        float foam=smoothstep(.0,.05,s.r)*(1.-smoothstep(.05,.2,s.r+n*.05));
+        c=mix(c,uGlint,foam*.55);
+        c=mix(c,uFog,(1.-exp(-d*d*uFogD*uFogD))*.8);
+        gl_FragColor=vec4(c,1.); }` };
+  const geo=new THREE.PlaneGeometry(760,460); geo.rotateX(-Math.PI/2); geo.translate(0,0,180);
+  water=new Reflector(geo,{ textureWidth:res[0], textureHeight:res[1], shader, multisample:0, clipBias:.002 });
+  water.position.y=WATER_Y; water.frustumCulled=false; water.camera.layers.enable(2); root.add(water);
+  const u=water.material.uniforms;
+  u.uTint.value=waterU.uTint.value; u.uGlint.value=waterU.uGlint.value; u.uFog.value=U.uFog.value; u.uShore.value=shoreTex(); u.uNoise.value=TEX.clouds;
+  waterU.uni=u;
+}
+
+/* ---------- mist: slow additive veils in nested rings ---------- */
+const mistU={ uMistC:{value:new THREE.Color()}, uMistA:{value:.5}, uTime:U.uTime, uN:{value:null} };
+function buildMist(root){
+  mistU.uN.value=TEX.clouds;
+  const rings=[];
+  [[170,20,0],[260,30,.33],[390,44,.71]].forEach(([R,H,off])=>{
+    const m=new THREE.ShaderMaterial({ side:THREE.BackSide, transparent:true, depthWrite:false, fog:false, toneMapped:false, blending:THREE.AdditiveBlending,
+      uniforms:{ ...mistU, uOff:{value:off} },
+      vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader:`precision highp float; uniform vec3 uMistC; uniform float uMistA,uTime,uOff; uniform sampler2D uN; varying vec2 vUv;
+        void main(){ float y=vUv.y; float b=texture2D(uN,vec2(vUv.x*3.+uTime*.0009+uOff,.72+y*.07)).b; float b2=texture2D(uN,vec2(vUv.x*7.-uTime*.0014+uOff*2.,.6+y*.1)).b;
+          float a=smoothstep(.46,.86,b*.7+b2*.5)*smoothstep(.0,.08,y)*(1.-smoothstep(.12,.9,y));
+          gl_FragColor=vec4(uMistC*a*uMistA*.75,1.); }` });
+    const o=new THREE.Mesh(new THREE.CylinderGeometry(R,R,H,64,1,true),m); o.position.y=WATER_Y+H/2-1; o.frustumCulled=false; o.renderOrder=20; o.layers.set(1); root.add(o); rings.push(o);
+  });
+  return rings;
+}
+
+/* ---------- rocks ---------- */
+function vn3(x,y,z){ return (vnoise(x+z*.7,y-z*.4)+vnoise(y*1.3+5,z*1.3-x*.5))*.5; }
+function rockGeo(seed,flat){
+  const g=new THREE.IcosahedronGeometry(1,3), p=g.attributes.position, s=seed*7.3;
+  for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+    const n=1+(vn3(x*1.1+s,y*1.1,z*1.1)-.5)*1.1+(vn3(x*3+s,y*3,z*3)-.5)*.3; let yy=y*n*flat; if(yy<-.2) yy=-.2;
+    p.setXYZ(i,x*n,yy,z*n); }
+  g.computeVertexNormals(); return g;
+}
+const toonGrad=(()=>{ const d=new Uint8Array([70,130,195,255]); const t=new THREE.DataTexture(d,4,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.NearestFilter; t.needsUpdate=true; return t; })();
+export function toonOf(params){ return new THREE.MeshToonMaterial({gradientMap:toonGrad,...params}); }
+function buildRocks(root,obst){
+  const r=rng(77), geos=[rockGeo(1,.72),rockGeo(2,.6),rockGeo(3,.84),rockGeo(4,.5)];
+  const mat=toonOf({color:0xffffff});
+  mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uRockRow:{value:rowV('rock')},uMossRow:{value:rowV('ground')},uIceRow:{value:rowV('ice')},uSnow:U.uSnow});
+    sh.vertexShader='varying vec3 vWN; varying vec3 vWP;\n'+sh.vertexShader.replace('#include <defaultnormal_vertex>',
+      `#include <defaultnormal_vertex>\n mat3 im=mat3(instanceMatrix); vWN=normalize(im*(objectNormal/vec3(dot(im[0],im[0]),dot(im[1],im[1]),dot(im[2],im[2]))));`).replace('#include <project_vertex>',
+      `#include <project_vertex>\n vWP=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;`);
+    sh.fragmentShader=`varying vec3 vWN; varying vec3 vWP; uniform sampler2D uRamps,uTile; uniform float uRockRow,uMossRow,uIceRow,uSnow; ${ramp}\n`+sh.fragmentShader.replace('#include <map_fragment>',`
+      vec3 tb=texture2D(uTile,vWP.xz/4.+vWP.y*.17).rgb, tc=texture2D(uTile,vec2(vWP.x+vWP.z,vWP.y*1.6)/7.).rgb;
+      vec3 nn=normalize(vWN); float side=1.-abs(nn.y);
+      float v=mix(tb.b,tc.b,side)*.62+.16+nn.y*.14;
+      vec3 c=ramp(v,uRockRow);
+      float moss=smoothstep(.56,.84,nn.y+tb.r*.3-.05);
+      c=mix(c,ramp(tb.r*.8+.05,uMossRow),moss*.92);
+      if(uSnow>.01) c=mix(c,ramp(.6+tb.r*.4,uIceRow),uSnow*smoothstep(.3,.62,nn.y));
+      c*=mix(.5,1.,smoothstep(-1.5,.2,vWP.y+1.15));
+      diffuseColor.rgb*=c;`); };
+  const spots=[[],[],[],[]];
+  const add=(x,z,s,sy)=>{ const y=terrainH(x,z); spots[Math.floor(r()*4)].push({x,y:y-.1*s,z,s,sy,ry:r()*6.28}); if(s>1.1) obst.push({x,z,r:s*.82}); };
+  // along the shore, in groups, big ones half in the water
+  for(let i=0;i<5000;i++){ const x=(r()-.5)*640, z=20+r()*340, f=lakeField(x,z); if(Math.abs(f+.006)>.012) continue; if(keepClear(x,z)&&Math.hypot(x-14,z-30)<9) continue;
+    if(vnoise(x*.05+2,z*.05)<.46) continue; add(x,z,.7+r()*r()*5.4,.7+r()*.5); }
+  // scattered in the meadows and woods
+  for(let i=0;i<620;i++){ const x=(r()-.5)*500, z=(r()-.5)*500-50, f=lakeField(x,z); if(f>-.02||keepClear(x,z)) continue; if(vnoise(x*.03,z*.03)<.55) continue; add(x,z,.5+r()*r()*3.4,.65+r()*.4); }
+  // reefs off the shore
+  for(let i=0;i<70;i++){ const x=(r()-.5)*420, z=46+r()*230, f=lakeField(x,z); if(f<.015||f>.16) continue; add(x,z,.5+r()*1.8,.5+r()*.3); }
+  const d=new THREE.Object3D();
+  spots.forEach((list,i)=>{ if(!list.length) return; const im=new THREE.InstancedMesh(geos[i],mat,list.length); const col=new THREE.Color();
+    list.forEach((s,k)=>{ d.position.set(s.x,s.y,s.z); d.rotation.set(0,s.ry,0); d.scale.set(s.s,s.s*s.sy,s.s*(.8+.5*((k*7%10)/10))); d.updateMatrix(); im.setMatrixAt(k,d.matrix); col.setScalar(.82+.3*((k*3%7)/7)); im.setColorAt(k,col); });
+    im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; root.add(im); });
+  return spots.flat();
+}
+
+/* ---------- planting the valley ---------- */
+const pick=(a,r)=>a[Math.floor(r()*a.length)];
+function plant(root,obst){
+  const r=rng(1234), trees=[], plants=[], decals=[], mini=[];
+  const tree=(x,z,kind)=>{
+    const y=terrainH(x,z)-.25;
+    if(kind==='spruce'){ const h=12+r()*13; trees.push({name:pick(['spruce_a','spruce_b','spruce_c','spruce_d'],r),x,y,z,h,row:'spruce',tone:(r()-.5)*.16,flip:r()<.5,wind:.7}); decals.push({x,z,r:h*.18}); obst.push({x,z,r:.75}); mini.push({x,z,c:0}); }
+    else if(kind==='larch'){ const h=11+r()*11; trees.push({name:pick(['larch_a','larch_b'],r),x,y,z,h,row:'larch',tone:(r()-.5)*.14,flip:r()<.5,wind:.8}); decals.push({x,z,r:h*.16}); obst.push({x,z,r:.6}); mini.push({x,z,c:1}); }
+    else if(kind==='broad'){ const h=8.5+r()*6.5; trees.push({name:pick(['broad_a','broad_b','broad_c'],r),x,y,z,h,row:pick(['broad1','broad1','broad2','broad3'],r),tone:(r()-.5)*.1,flip:r()<.5,wind:.5}); decals.push({x,z,r:h*.34}); obst.push({x,z,r:.7}); mini.push({x,z,c:2}); }
+    else if(kind==='snag'){ const h=7+r()*6; trees.push({name:'snag_a',x,y,z,h,row:'wood',tone:.1,flip:r()<.5,wind:.15,sheet:1}); obst.push({x,z,r:.5}); }
+  };
+  // forest: jittered grid thinned by a density field, species in drifts
+  const STEP=6.4;
+  for(let gz=-420;gz<420;gz+=STEP) for(let gx=-470;gx<470;gx+=STEP){
+    const x=gx+(r()-.5)*STEP*.9, z=gz+(r()-.5)*STEP*.9, f=lakeField(x,z);
+    if(f>-.006||keepClear(x,z)) continue;
+    const dist=Math.hypot(x,z), far=dist>210, dens=vnoise(x*.016+1,z*.016+8);
+    const near=clamp(1-(dist-22)/60,0,1);            // leave the meadows around the farm open
+    let p=smooth(.34,.56,dens)*(1-near*.72);
+    if(f>-.05) p=Math.max(p,.42);                    // a tree line along the water
+    if(far) p=Math.max(p,.62);
+    if(r()>p) continue;
+    const sp=vnoise(x*.02+40,z*.02+30), shoreB=f>-.07;
+    const kind=sp>.6?'broad':sp>.47||shoreB&&r()<.5?(r()<.6?'larch':'broad'):'spruce';
+    tree(x,z,kind);
+    if(r()<.012) tree(x+3,z+2,'snag');
+  }
+  // islands: rock cap and a crown of trees
+  for(const [ix,iz,ir] of ISLANDS){ for(let i=0;i<ir*2.2;i++){ const a=r()*6.28, q=Math.sqrt(r())*ir*.85, x=ix+Math.cos(a)*q, z=iz+Math.sin(a)*q; if(lakeField(x,z)>-.012) continue; tree(x,z,r()<.45?'larch':r()<.5?'spruce':'broad'); } }
+  // framing groups by the farm: the view from the yard is composed, not left to chance
+  [[-27,19,'broad'],[-31,23,'broad'],[-24,25,'larch'],[-34,17,'spruce'],[-38,22,'spruce'],[-29,27,'broad'],[29,16,'broad'],[33,22,'larch'],[27,24,'broad'],[36,14,'spruce'],[40,20,'spruce'],[31,29,'broad'],[-44,12,'larch'],[46,8,'broad'],[-50,4,'spruce'],[50,3,'spruce']]
+    .forEach(([x,z,k])=>{ if(lakeField(x,z)<-.008) tree(x,z,k); });
+  // understory
+  for(let i=0;i<9000;i++){ const x=(r()-.5)*420, z=(r()-.5)*300-20, f=lakeField(x,z); if(f>-.004) continue;
+    const y=terrainH(x,z), kp=keepClear(x,z);
+    if(x>-11&&x<11&&z>-11&&z<14) continue;
+    if(pathDist(x,z)<2) continue;
+    const q=r();
+    if(q<.1&&!kp){ const h=1.3+r()*1.5; plants.push({name:pick(['shrub_a','shrub_b','shrub_c'],r),x,y:y-.1,z,h,row:'shrub',tone:(r()-.5)*.12,flip:r()<.5,wind:.5,trees:true}); }
+    else if(q<.2){ plants.push({name:pick(['fern_a','fern_b'],r),x,y:y-.05,z,h:.5+r()*.4,row:'tuft',tone:-.1+r()*.1,flip:r()<.5,wind:1.2}); }
+    else { plants.push({name:pick(['tuft_a','tuft_b','tuft_c'],r),x,y:y-.05,z,h:.45+r()*.6,row:'tuft',tone:(r()-.5)*.2,flip:r()<.5,wind:1.6}); }
+  }
+  // reeds in the shallows
+  for(let i=0;i<7000;i++){ const x=(r()-.5)*520, z=24+r()*300, f=lakeField(x,z); if(f<-.012||f>.012) continue; if(vnoise(x*.09,z*.09)<.5) continue; if(Math.hypot(x-14,z-34)<9) continue;
+    plants.push({name:'reed_a',x,y:terrainH(x,z)-.1,z,h:1+r()*.8,row:'tuft',tone:r()*.1,flip:r()<.5,wind:1}); }
+  // big framing pines
+  [[-36,31],[42,33],[-72,44],[70,40]].forEach(([x,z])=>{ if(lakeField(x,z)<0) trees.push({name:'pine_big',x,y:terrainH(x,z)-.3,z,h:24,row:'spruce',tone:-.02,flip:x>0,wind:.25,sheet:1}); obst.push({x,z,r:1.2}); });
+
+  const onTrees=[...trees.filter(t=>!t.sheet),...plants.filter(p=>p.trees)], onPlants=[...trees.filter(t=>t.sheet),...plants.filter(p=>!p.trees)];
+  makeSprites(root,'sheet_trees',onTrees);
+  makeSprites(root,'sheet_plants',onPlants,{mainOnly:true});
+  // soft contact shadow under each tree
+  const dg=new THREE.CircleGeometry(1,16); dg.rotateX(-Math.PI/2);
+  const dm=new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,color:0x101018,opacity:.28,toneMapped:false,fog:false});
+  dm.onBeforeCompile=sh=>{ sh.vertexShader='varying vec2 vQ;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vQ=position.xz;');
+    sh.fragmentShader='varying vec2 vQ;\n'+sh.fragmentShader.replace('#include <opaque_fragment>','#include <opaque_fragment>\n gl_FragColor.a*=1.-smoothstep(.2,1.,length(vQ));'); };
+  const near=decals.filter(d=>Math.hypot(d.x,d.z)<230);
+  const im=new THREE.InstancedMesh(dg,dm,near.length), o=new THREE.Object3D();
+  near.forEach((d,i)=>{ o.position.set(d.x,terrainH(d.x,d.z)+.08,d.z); o.scale.set(d.r,1,d.r*.8); o.updateMatrix(); im.setMatrixAt(i,o.matrix); });
+  im.frustumCulled=false; im.layers.set(1); root.add(im);
+  return mini;
+}
+
+/* ---------- birds in formation, drifting across the sky ---------- */
+function buildBirds(root){
+  const n=9, g=new THREE.BufferGeometry(), pos=[];
+  for(let i=0;i<n;i++){ const row=Math.ceil(i/2), s=i%2?1:-1, ox=row*s*3.2, oz=-row*3.4;
+    pos.push(ox-.9,0.28,oz, ox,0,oz, ox,0,oz, ox+.9,.28,oz); }
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  const m=new THREE.LineBasicMaterial({color:0x1a1a22,toneMapped:false,fog:false}), o=new THREE.LineSegments(g,m); o.frustumCulled=false; root.add(o);
+  return o;
+}
+
+/* ---------- build + per-frame ---------- */
+export const obstacles=[]; export let miniTrees=[];
+const grid=new Map(); const CELL=8, gkey=(x,z)=>Math.floor(x/CELL)*4096+Math.floor(z/CELL);
+function indexObstacles(){ grid.clear(); for(const o of obstacles){ const k=gkey(o.x,o.z); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(o); } }
+export function addObstacle(x,z,r){ const o={x,z,r}; obstacles.push(o); const k=gkey(x,z); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(o); return o; }
+// push a point out of trunks/rocks/buildings; returns nothing, mutates p
+export function collide(p,rad){
+  const cx=Math.floor(p.x/CELL), cz=Math.floor(p.z/CELL);
+  for(let i=cx-1;i<=cx+1;i++) for(let j=cz-1;j<=cz+1;j++){ const l=grid.get(i*4096+j); if(!l) continue;
+    for(const o of l){ if(o.box){ const dx=p.x-o.x, dz=p.z-o.z, hx=o.hx+rad, hz=o.hz+rad;
+        if(Math.abs(dx)<hx&&Math.abs(dz)<hz){ const qx=hx-Math.abs(dx), qz=hz-Math.abs(dz); if(qx<qz) p.x+=Math.sign(dx||1)*qx; else p.z+=Math.sign(dz||1)*qz; } continue; }
+      const dx=p.x-o.x, dz=p.z-o.z, q=o.r+rad, d=dx*dx+dz*dz;
+      if(d<q*q&&d>1e-6){ const s=Math.sqrt(d), k=(q-s)/s; p.x+=dx*k; p.z+=dz*k; } } }
+}
+export function addBoxObstacle(x,z,hx,hz){ const o={x,z,hx,hz,box:true}; obstacles.push(o); const k=gkey(x,z); [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]].forEach(([a,b])=>{ const kk=gkey(x+a*hx,z+b*hz); if(!grid.has(kk)) grid.set(kk,[]); if(!grid.get(kk).includes(o)) grid.get(kk).push(o); }); return o; }
+
+let mistRings=[], birds=null, birdT=0, root=null;
+export const QUAL_RES={low:[512,320],med:[900,560],high:[1280,800]};
+export function buildScenery(parent,qual){
+  root=new THREE.Group(); parent.add(root);
+  buildSky(root); buildMountains(root); buildGround(root);
+  buildLake(root,QUAL_RES[qual]||QUAL_RES.med);
+  mistRings=buildMist(root);
+  const rocks=buildRocks(root,obstacles);
+  miniTrees=plant(root,obstacles); indexObstacles();
+  birds=buildBirds(root);
+  rampTex.needsUpdate=true;
+  return root;
+}
+export function setSeason(season){
+  for(const k in SEASON) writeRow(k,SEASON[k][season]);
+  rampTex.needsUpdate=true;
+  U.uSnow.value=season===3?1:0;
+  layers.forEach(l=>{ if(l.m.uniforms.uKind.value>.5) l.m.uniforms.uDecAmt.value=[.35,.0,1,.0][season]; l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; });
+}
+
+const sunTmp=new THREE.Vector3();
+// returns the frame's light rig so index.html can drive the directional light and grade
+export const rig={ sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color() };
+export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
+  U.uTime.value=t;
+  const P=weatherize(palette(minutes),weather);
+  // sun crosses the south, so it sets over the lake; moon follows
+  const a=clamp((minutes-330)/(1215-330),0,1)*Math.PI;
+  const sx=Math.cos(a)*.92, sy=Math.sin(a)*.72+.012, sz=.6;
+  rig.sunDir.set(sx,Math.max(sy,.02),sz).normalize();
+  const ma=clamp((minutes-1190)/(1560-1190),0,1)*Math.PI;
+  skyU.uMoonD.value.set(Math.cos(ma)*.75,Math.sin(ma)*.6+.12,.62).normalize();
+  skyU.uSunD.value.copy(rig.sunDir);
+  setC(skyU.uTop.value,P.top); setC(skyU.uMid.value,P.mid); setC(skyU.uLow.value,P.low); setC(skyU.uCL.value,P.cloudL); setC(skyU.uCS.value,P.cloudS); setC(skyU.uSunC.value,P.sun);
+  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.8:.42; skyU.uAurora.value=aurora?1:0;
+  setC(mtU.uRS.value,P.rockS); setC(mtU.uRL.value,P.rockL); setC(mtU.uSS.value,P.snowS); setC(mtU.uSL.value,P.snowL); setC(mtU.uFS.value,P.forS); setC(mtU.uFL.value,P.forL); setC(mtU.uHz.value,P.haze);
+  setC(mtU.uDS.value,mixc(P.forS,[.46,.2,.08],.55)); setC(mtU.uDL.value,mixc(P.forL,[.98,.66,.2],.7));
+  setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;
+  setC(waterU.uTint.value,P.water); setC(waterU.uGlint.value,mixc(P.cloudL,[1,1,1],.4));
+  if(waterU.uni){ waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
+  setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;
+  // the sun side of every sprite, in world XZ
+  U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize();
+  const c=camera.position;
+  layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
+  mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
+  if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }
+  rig.sunI=P.sunI; rig.ambI=P.ambI; setC(rig.sunCol,P.lit); setC(rig.ambCol,P.mid); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value);
+  return rig;
+}
+export function setScenerySun(){ return sunTmp; }
+
+/* tilled soil, painted to sit in the same ground */
+export function paintedSoil(wet){
+  const m=toonOf({color:0xffffff});
+  m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uEarthRow:{value:rowV('earth')},uWet:{value:wet?1:0}});
+    sh.vertexShader='varying vec3 vWP;\n'+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz;');
+    sh.fragmentShader=`varying vec3 vWP; uniform sampler2D uRamps,uTile; uniform float uEarthRow,uWet; ${ramp}\n`+sh.fragmentShader.replace('#include <map_fragment>',`
+      vec3 t=texture2D(uTile,vWP.xz/3.).rgb; float v=t.g*.62+.04; vec3 c=ramp(v,uEarthRow); if(uWet>.5) c*=vec3(.5,.46,.46); else c*=.82; diffuseColor.rgb*=c;`); };
+  return m;
+}

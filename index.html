@@ -166,28 +166,26 @@
     "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/",
     "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/",
-    "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.36.4/build/index.js",
-    "n8ao": "https://cdn.jsdelivr.net/npm/n8ao@1.9.4/dist/N8AO.js"
+    "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.36.4/build/index.js"
   }
 }
 </script>
 
 <script type="module">
 import * as THREE from 'three';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { Reflector } from 'three/addons/objects/Reflector.js';
-import { N8AOPostPass } from 'n8ao';
 import {
-  EffectComposer, RenderPass, EffectPass,
-  BloomEffect, SMAAEffect, VignetteEffect, ToneMappingEffect, ToneMappingMode,
-  DepthOfFieldEffect, BrightnessContrastEffect, HueSaturationEffect, GodRaysEffect, KernelSize, BlendFunction, Effect, EffectAttribute
+  EffectComposer, RenderPass, EffectPass, BloomEffect, SMAAEffect, Effect
 } from 'postprocessing';
+import {
+  FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
+  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, U as sceneryU, paintedSoil, water, QUAL_RES
+} from './scenery.js';
 
 /* ======================================================================
    StarVale · 星星人露谷 — a Stardew-Valley-style farming life sim.
-   Clean modern three.js scene (HDRI-lit PBR, smooth non-blocky props).
+   A painted lake valley: see scenery.js and tools/paint.
    The classic voxel game lives on at /mc.html (switchable, not removed).
    ====================================================================== */
 
@@ -320,9 +318,11 @@ function invAdd(kind,id,n){ const k=invKey(kind,id); S.inv[k]=(S.inv[k]||0)+n; }
 function invCount(kind,id){ return S.inv[invKey(kind,id)]||0; }
 function invTake(kind,id,n){ const k=invKey(kind,id); if((S.inv[k]||0)<n) return false; S.inv[k]-=n; if(S.inv[k]<=0) delete S.inv[k]; return true; }
 
+const DBG=(()=>{ const p=new URLSearchParams(location.search); if(!p.has('shot')) return null; const o={}; for(const [k,v] of p) if(k!=='shot') o[k]=isNaN(+v)?v:+v; return o; })();
+
 /* ============================ RENDERER ============================ */
 const canvas = $('#c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
 renderer.shadowMap.autoUpdate=false;   // throttled manually in the loop (big perf win)
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
 renderer.setSize(innerWidth, innerHeight);
@@ -332,7 +332,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 620);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.15, 1600);
+camera.layers.enable(1);                     // layer 1: seen by the player, skipped by the lake mirror
 scene.fog = new THREE.FogExp2(0xcfe3f0, 0.0052);
 
 /* sun + fill */
@@ -344,145 +345,17 @@ sun.shadow.camera.near = 1; sun.shadow.camera.far = 180;
 const sc = 48; Object.assign(sun.shadow.camera,{left:-sc,right:sc,top:sc,bottom:-sc});
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun); scene.add(sun.target);
-// bright sun disc (god-ray source in 极致; hidden otherwise)
-const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(7,20,16), new THREE.MeshBasicMaterial({color:0xfff4d6}));
-sunMesh.frustumCulled=false; sunMesh.visible=false; scene.add(sunMesh);
 const hemi = new THREE.HemisphereLight(0xbfe0ff, 0x4a6b3a, 0.55);
 scene.add(hemi);
 
-/* ---- gradient sky dome (Cast-n-Chill soft hazy vista) ---- */
-const skyU={ top:{value:new THREE.Color(0x8ea9bd)}, bot:{value:new THREE.Color(0xe6dccb)}, night:{value:0}, moon:{value:new THREE.Vector3(0.35,0.55,-0.4)} };
-const skyDome=new THREE.Mesh(new THREE.SphereGeometry(480,32,20),
-  new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, fog:false, uniforms:skyU,
-    vertexShader:'varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader:
-      'uniform vec3 top; uniform vec3 bot; uniform float night; uniform vec3 moon; varying vec3 vP;'+
-      'float h21(vec3 p){ return fract(sin(dot(floor(p),vec3(12.9898,78.233,37.719)))*43758.5453); }'+
-      'void main(){ vec3 d=normalize(vP); float t=smoothstep(0.28,0.72,d.y*0.5+0.5); vec3 col=mix(bot,top,t);'+
-      '  if(night>0.01 && d.y>0.0){ float s=h21(d*260.0); s=step(0.992,s)*(0.4+0.6*h21(d*131.0)); col+=s*night;'+
-      '    float md=distance(d,normalize(moon)); col+=smoothstep(0.05,0.028,md)*night*vec3(1.0,0.96,0.86)*1.3;'+
-      '    col+=smoothstep(0.18,0.05,md)*night*vec3(0.55,0.6,0.75)*0.22; }'+
-      '  gl_FragColor=vec4(col,1.0); }' }));
-skyDome.frustumCulled=false; scene.add(skyDome);
-
 /* ============================ NOISE ============================ */
 function hash2(x,z){ let n=Math.sin(x*127.1+z*311.7)*43758.5453; return n-Math.floor(n); }
-function vnoise(x,z){
-  const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
-  const u=xf*xf*(3-2*xf), v=zf*zf*(3-2*zf);
-  const a=hash2(xi,zi),b=hash2(xi+1,zi),c=hash2(xi,zi+1),d=hash2(xi+1,zi+1);
-  return lerp(lerp(a,b,u),lerp(c,d,u),v);
-}
-const FARM_HALF = 13;                       // flat farmland |x|,|z| <= 13
-function terrainH(x,z){
-  const edge = Math.max(0, (Math.max(Math.abs(x),Math.abs(z))-FARM_HALF)/18);
-  const roll = (vnoise(x*0.06,z*0.06)-0.5)*5 + (vnoise(x*0.14,z*0.14)-0.5)*1.4;
-  return roll * clamp(edge,0,1)*clamp(edge,0,1);
-}
-
-/* ============================ TEXTURES (CC0 Poly Haven PBR) ============================ */
-const texLoader=new THREE.TextureLoader();
-function loadSet(name,rep){
-  const mk=(file,srgb)=>{ const t=texLoader.load('assets/tex/'+name+'/'+file);
-    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep,rep); t.anisotropy=8;
-    if(srgb) t.colorSpace=THREE.SRGBColorSpace; return t; };
-  return { map:mk('col.jpg',true), normalMap:mk('nor.jpg',false), arm:mk('arm.jpg',false) };
-}
-const TEX={ grass:loadSet('grass',36), bark:loadSet('bark',2), mud:loadSet('mud',1) };
-const barkMat=new THREE.MeshStandardMaterial({map:TEX.bark.map,normalMap:TEX.bark.normalMap,roughnessMap:TEX.bark.arm,metalnessMap:TEX.bark.arm,roughness:1,metalness:1});
-let grassIM=null, grassUniform=null;
-
-/* ---- real CC0 models (Poly Haven, meshopt+webp optimized for the web) ---- */
+/* ============================ MODELS ============================ */
 const gltfLoader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const MODELS={};
-async function loadModels(){
-  const list=['tree_01','tree_02','rock_01','boulder_01','bush_01','bush_02','flower_01','flower_02','stump_01','grass_clump'];
-  await Promise.all(list.map(n=>gltfLoader.loadAsync('assets/models/'+n+'.glb')
-    .then(g=>{ MODELS[n]=g; g.scene.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); })
-    .catch(()=>{})));
-}
-function modelFit(name,targetH){ const g=MODELS[name]; if(!g) return null;
-  const b=new THREE.Box3().setFromObject(g.scene); const s=new THREE.Vector3(); b.getSize(s);
-  return { g, base:targetH/(s.y||1), minY:b.min.y }; }
-function placeModel(name,targetH,spots,varyLight){
-  const fit=modelFit(name,targetH); if(!fit) return false;
-  const meshes=[]; fit.g.scene.updateMatrixWorld(true); fit.g.scene.traverse(o=>{ if(o.isMesh) meshes.push(o); });
-  const grp=new THREE.Group(); world.add(grp); const d=new THREE.Object3D();
-  if(meshes.length===1){
-    const src=meshes[0]; const im=new THREE.InstancedMesh(src.geometry, src.material, spots.length);
-    im.castShadow=true; im.receiveShadow=true; const col=new THREE.Color();
-    spots.forEach((p,i)=>{ const sc=fit.base*(p.s||1); d.position.set(p.x, terrainH(p.x,p.z)-fit.minY*sc, p.z); d.rotation.y=p.ry||0; d.scale.setScalar(sc); d.updateMatrix(); im.setMatrixAt(i,d.matrix);
-      if(varyLight){ col.setScalar(0.78+Math.random()*0.36); im.setColorAt(i,col); } });
-    im.instanceMatrix.needsUpdate=true; if(varyLight&&im.instanceColor) im.instanceColor.needsUpdate=true; grp.add(im);
-  } else {
-    spots.forEach(p=>{ const c=fit.g.scene.clone(true); const sc=fit.base*(p.s||1);
-      c.position.set(p.x, terrainH(p.x,p.z)-fit.minY*sc, p.z); c.rotation.y=p.ry||0; c.scale.setScalar(sc);
-      c.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.receiveShadow=true;} }); grp.add(c); });
-  }
-  return true;
-}
-function ringSpots(n,rMin,rMax,sMin,sMax,clearFarm){
-  const a=[]; for(let i=0;i<n*4 && a.length<n;i++){
-    const ang=Math.random()*Math.PI*2, rad=rMin+Math.random()*(rMax-rMin);
-    const x=Math.cos(ang)*rad, z=Math.sin(ang)*rad; if(Math.abs(x)>95||Math.abs(z)>95) continue;
-    if(clearFarm && Math.abs(x)<FARM_HALF+2 && Math.abs(z)<FARM_HALF+2) continue;
-    a.push({x,z,ry:Math.random()*6.28,s:sMin+Math.random()*(sMax-sMin)});
-  } return a;
-}
-function scatterRealProps(){
-  propMini=[]; const mini=(sp,c,r)=>sp.forEach(s=>propMini.push({x:s.x,z:s.z,c,r}));
-  const t1=ringSpots(10,FARM_HALF+5,78,0.8,1.3,true);  const okt=placeModel('tree_01',5.6,t1,true)||placeModel('tree_02',5.4,t1,true); mini(t1,'#2f6d35',2);
-  const t2=ringSpots(9,FARM_HALF+6,82,0.8,1.3,true);   placeModel('tree_02',4.6,t2,true); mini(t2,'#2f6d35',2);
-  const rk=ringSpots(16,FARM_HALF+3,76,0.6,1.8,false); placeModel('rock_01',1.0,rk,true); mini(rk,'#8d9299',1.1);
-  const bo=ringSpots(6,FARM_HALF+8,80,0.8,1.6,true);   placeModel('boulder_01',2.0,bo,true); mini(bo,'#8d9299',1.6);
-  const b1=ringSpots(16,FARM_HALF+2,68,0.7,1.5,false); placeModel('bush_01',0.85,b1,true); mini(b1,'#4a8540',1);
-  const b2=ringSpots(12,FARM_HALF+2,68,0.7,1.4,false); placeModel('bush_02',0.9,b2,true);
-  placeModel('flower_01',0.5, ringSpots(30,8,FARM_HALF+30,0.7,1.3,false));
-  placeModel('flower_02',0.5, ringSpots(28,8,FARM_HALF+30,0.7,1.3,false));
-  placeModel('stump_01',0.9, ringSpots(4,FARM_HALF+6,68,0.8,1.2,true));
-  placeModel('grass_clump',0.42, ringSpots(30,6,FARM_HALF+22,0.7,1.6,false));
-  if(!okt && !MODELS.rock_01){ scatterProps(); }   // fallback to procedural if models missing
-}
 
 /* ============================ WORLD ============================ */
 const world = new THREE.Group(); scene.add(world);
-
-// ground mesh — real grass PBR, tinted per season
-let ground;
-function buildGround(){
-  const N=140, SZ=200;
-  const geo=new THREE.PlaneGeometry(SZ,SZ,N,N); geo.rotateX(-Math.PI/2);
-  const pos=geo.attributes.position;
-  for(let i=0;i<pos.count;i++){ const x=pos.getX(i), z=pos.getZ(i); pos.setY(i, terrainH(x,z)); }
-  geo.computeVertexNormals();
-  const mat=new THREE.MeshStandardMaterial({ map:TEX.grass.map, normalMap:TEX.grass.normalMap,
-    roughnessMap:TEX.grass.arm, metalnessMap:TEX.grass.arm, roughness:1, metalness:1 });
-  mat.normalScale.set(0.6,0.6);
-  ground=new THREE.Mesh(geo,mat); ground.receiveShadow=true; world.add(ground);
-}
-
-// lush instanced grass field (wind-animated), meadow ring around the farm plot
-function buildGrassField(){
-  // tapered triangle blade (base width ~7cm, tip ~32cm) — reads as fine grass, not flags
-  const blade=new THREE.BufferGeometry();
-  blade.setAttribute('position', new THREE.Float32BufferAttribute([-0.035,0,0, 0.035,0,0, 0,0.36,0],3));
-  blade.setAttribute('normal', new THREE.Float32BufferAttribute([0,0,1, 0,0,1, 0,0,1],3));
-  blade.setAttribute('color', new THREE.Float32BufferAttribute([0.15,0.33,0.10, 0.15,0.33,0.10, 0.5,0.80,0.36],3)); // dark base → bright tip
-  const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.92,metalness:0,side:THREE.DoubleSide});
-  mat.onBeforeCompile=sh=>{ sh.uniforms.uTime={value:0}; grassUniform=sh.uniforms.uTime;
-    sh.vertexShader='uniform float uTime;\n'+sh.vertexShader.replace('#include <begin_vertex>',
-      '#include <begin_vertex>\n float w=sin(uTime*1.7 + instanceMatrix[3][0]*0.5 + instanceMatrix[3][2]*0.5)*0.16*transformed.y;\n transformed.x+=w; transformed.z+=w*0.5;'); };
-  const COUNT=4200; const im=new THREE.InstancedMesh(blade,mat,COUNT); const d=new THREE.Object3D(); let n=0;
-  for(let i=0;i<COUNT*3 && n<COUNT;i++){
-    // clump: pick a clump center, scatter blades tightly around it → denser carpet
-    const cx=(Math.random()-.5)*(FARM_HALF*2+18), cz=(Math.random()-.5)*(FARM_HALF*2+18);
-    const x=cx+(Math.random()-.5)*1.2, z=cz+(Math.random()-.5)*1.2;
-    if(Math.abs(x)<7.5 && Math.abs(z)<7.5) continue;            // keep the central farming plot clear
-    d.position.set(x,terrainH(x,z),z); d.rotation.y=Math.random()*6; d.scale.set(1,0.75+Math.random()*0.7,1);
-    d.updateMatrix(); im.setMatrixAt(n++,d.matrix);
-  }
-  im.count=n; im.instanceMatrix.needsUpdate=true; im.castShadow=false; world.add(im); grassIM=im;
-}
 
 /* ---- animated life: butterflies near the farm + birds gliding overhead ---- */
 let critters=[];
@@ -497,168 +370,17 @@ function buildCritters(){
     b.add(wl,wr); G.add(b);
     critters.push({o:b,wl,wr,bf:true,x:(Math.random()-.5)*26,z:(Math.random()-.5)*26,ph:Math.random()*6.28,sp:0.5+Math.random()*0.5});
   }
-  for(let i=0;i<5;i++){
-    const bird=new THREE.Group(); const bm=new THREE.MeshBasicMaterial({color:0x2c2a28});
-    const wl=new THREE.Mesh(new THREE.PlaneGeometry(1.0,0.16),bm); wl.position.x=-0.5;
-    const wr=new THREE.Mesh(new THREE.PlaneGeometry(1.0,0.16),bm); wr.position.x=0.5;
-    bird.add(wl,wr); G.add(bird);
-    critters.push({o:bird,wl,wr,bf:false,r:28+i*7,ph:i*1.5,sp:0.1+Math.random()*0.05,h:15+i*3});
-  }
 }
 function updateCritters(t){
   for(const c of critters){
-    if(c.bf){ const tt=t*c.sp+c.ph;
-      c.o.position.set(c.x+Math.sin(tt)*3.4, 0.7+Math.abs(Math.sin(tt*2.2))*0.7, c.z+Math.cos(tt*0.8)*3.4);
-      c.o.rotation.y=Math.atan2(Math.cos(tt),-Math.sin(tt*0.8));
-      const f=Math.sin(t*16+c.ph)*0.6+0.4; c.wl.rotation.y=f; c.wr.rotation.y=-f;
-    } else { const a=t*c.sp+c.ph;
-      c.o.position.set(Math.cos(a)*c.r, c.h, Math.sin(a)*c.r); c.o.rotation.y=-a;
-      const f=Math.sin(t*5+c.ph)*0.5; c.wl.rotation.z=f; c.wr.rotation.z=-f; }
+    const tt=t*c.sp+c.ph;
+    c.o.position.set(c.x+Math.sin(tt)*3.4, 0.7+Math.abs(Math.sin(tt*2.2))*0.7, c.z+Math.cos(tt*0.8)*3.4);
+    c.o.rotation.y=Math.atan2(Math.cos(tt),-Math.sin(tt*0.8));
+    const f=Math.sin(t*16+c.ph)*0.6+0.4; c.wl.rotation.y=f; c.wr.rotation.y=-f;
   }
 }
 
-/* smooth props ------------------------------------------------------ */
-function noisedGeo(geo, amp){
-  const p=geo.attributes.position;
-  for(let i=0;i<p.count;i++){
-    const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-    const n=(hash2(x*13+y*7, z*13+y*3)-0.5)*amp;
-    const l=Math.hypot(x,y,z)||1;
-    p.setXYZ(i,x+x/l*n,y+y/l*n,z+z/l*n);
-  }
-  geo.computeVertexNormals(); return geo;
-}
-// tree: tapered trunk + layered rounded canopy (no cubes)
-function makeTree(){
-  const g=new THREE.Group();
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.28,2.1,8), barkMat);
-  trunk.position.y=1.05; trunk.castShadow=true; g.add(trunk);
-  const leafMat=new THREE.MeshStandardMaterial({color:0x3f7d3a,roughness:0.8,flatShading:true});
-  for(let i=0;i<3;i++){
-    const r=1.3-i*0.28;
-    const c=new THREE.Mesh(noisedGeo(new THREE.IcosahedronGeometry(r,1),0.18), leafMat);
-    c.position.y=2.1+i*0.75; c.castShadow=true; c.rotation.y=i*1.3; g.add(c);
-  }
-  return g;
-}
-function makeRock(s){
-  const m=new THREE.Mesh(noisedGeo(new THREE.IcosahedronGeometry(s,1),s*0.4),
-    new THREE.MeshStandardMaterial({color:0x8d9299,roughness:0.95,flatShading:true}));
-  m.position.y=s*0.55; m.castShadow=true; m.receiveShadow=true; return m;
-}
-function makeBush(){
-  const g=new THREE.Group(); const mat=new THREE.MeshStandardMaterial({color:0x47893f,roughness:0.85,flatShading:true});
-  for(let i=0;i<4;i++){ const r=0.4+Math.random()*0.25; const s=new THREE.Mesh(noisedGeo(new THREE.IcosahedronGeometry(r,1),0.12),mat);
-    s.position.set((Math.random()-.5)*0.7,r*0.8,(Math.random()-.5)*0.7); s.castShadow=true; g.add(s);} return g;
-}
-function makeFlower(col){
-  const g=new THREE.Group();
-  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.4,5),new THREE.MeshStandardMaterial({color:0x4a8b3a}));
-  stem.position.y=0.2; g.add(stem);
-  const head=new THREE.Mesh(new THREE.IcosahedronGeometry(0.12,0),new THREE.MeshStandardMaterial({color:col,roughness:0.7,flatShading:true}));
-  head.position.y=0.44; g.add(head); return g;
-}
-
-function scatterProps(){
-  const trees=new THREE.Group(), rocks=new THREE.Group(), bushes=new THREE.Group(), flowers=new THREE.Group();
-  for(let i=0;i<120;i++){
-    const a=Math.random()*Math.PI*2, rad=FARM_HALF+6+Math.random()*78;
-    const x=Math.cos(a)*rad, z=Math.sin(a)*rad; if(Math.abs(x)>96||Math.abs(z)>96) continue;
-    const r=Math.random();
-    if(r<0.5){ const tr=makeTree(); tr.position.set(x,terrainH(x,z),z); tr.scale.setScalar(0.8+Math.random()*0.7); tr.rotation.y=Math.random()*6; trees.add(tr); }
-    else if(r<0.75){ const rk=makeRock(0.5+Math.random()*1.2); rk.position.set(x,terrainH(x,z)+ (0.5+Math.random()*1.2)*0.0,z); rk.position.y=terrainH(x,z); bushes.add(rk); }
-    else { const b=makeBush(); b.position.set(x,terrainH(x,z),z); b.scale.setScalar(0.7+Math.random()); bushes.add(b); }
-  }
-  // decorative rocks + flowers sprinkled near farm edge
-  const fcols=[0xff6b9d,0xffd166,0xe8e8ff,0xff8c42,0x9d6bff];
-  for(let i=0;i<60;i++){
-    const x=(Math.random()-.5)*(FARM_HALF*2+10), z=(Math.random()-.5)*(FARM_HALF*2+10);
-    if(Math.abs(x)<FARM_HALF-1 && Math.abs(z)<FARM_HALF-1) continue; // keep farm clear
-    const f=makeFlower(fcols[i%5]); f.position.set(x,terrainH(x,z),z); f.rotation.y=Math.random()*6; flowers.add(f);
-  }
-  world.add(trees,rocks,bushes,flowers);
-  propMini = []; // record for minimap
-  trees.children.forEach(o=>propMini.push({x:o.position.x,z:o.position.z,c:'#2f6d35',r:2}));
-  bushes.children.forEach(o=>propMini.push({x:o.position.x,z:o.position.z,c:'#6b7178',r:1.3}));
-}
 let propMini=[];
-
-/* pond (glossy PBR water) */
-let pondRefl=null;
-function buildPond(){
-  // real planar reflection of the sky/mountains/trees (Cast-n-Chill). Only renders when you're near the pond.
-  pondRefl=new Reflector(new THREE.CircleGeometry(6,64), { textureWidth:512, textureHeight:512, color:0x5a8498 });
-  pondRefl.rotateX(-Math.PI/2); pondRefl.position.set(-24,0.055,20); world.add(pondRefl);
-  // transparent rippling overlay for shimmer + depth tint
-  const n=texLoader.load('assets/tex/waternormals.jpg'); n.wrapS=n.wrapT=THREE.RepeatWrapping; n.repeat.set(6,6);
-  waterMat=new THREE.MeshStandardMaterial({ color:0x2a5b74, roughness:0.08, metalness:0.1, normalMap:n, envMapIntensity:1.6, transparent:true, opacity:0.4 });
-  waterMat.normalScale.set(0.6,0.6);
-  const pond=new THREE.Mesh(new THREE.CircleGeometry(5.98,64), waterMat);
-  pond.rotateX(-Math.PI/2); pond.position.set(-24,0.07,20); world.add(pond);
-  const foam=new THREE.Mesh(new THREE.RingGeometry(5.68,6.15,64), new THREE.MeshBasicMaterial({color:0xe6f1f6,transparent:true,opacity:0.3,side:THREE.DoubleSide}));
-  foam.rotateX(-Math.PI/2); foam.position.set(-24,0.085,20); world.add(foam);
-  pondMini={x:-24,z:20,r:6};
-}
-let pondMini=null, waterMat=null;
-
-/* ---- Cast-n-Chill scenery: cozy dock + reeds + lily pads + layered distant mountains ---- */
-function buildScenery(){
-  const PX=-24, PZ=20;                               // pond centre
-  // wooden dock reaching into the pond from the near shore
-  const dock=new THREE.Group();
-  const plankMat=new THREE.MeshStandardMaterial({color:0x8a5a34,roughness:0.9});
-  const postMat=new THREE.MeshStandardMaterial({color:0x5a3f28,roughness:0.95});
-  for(let i=0;i<6;i++){ const pl=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,0.5),plankMat); pl.position.set(0,0.2,i*0.56); pl.castShadow=true; pl.receiveShadow=true; dock.add(pl); }
-  [[-1,0],[1,0],[-1,2.8],[1,2.8]].forEach(p=>{ const po=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,1.0,7),postMat); po.position.set(p[0],-0.1,p[1]); po.castShadow=true; dock.add(po); });
-  dock.position.set(PX, 0.0, PZ+6.4); world.add(dock);
-  // a little lantern post at the dock end (cozy)
-  const lamp=new THREE.Group(); const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.3,6),postMat); pole.position.y=0.65; lamp.add(pole);
-  const glow=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,8), new THREE.MeshStandardMaterial({color:0xffd27a,emissive:0xffa028,emissiveIntensity:1.6})); glow.position.y=1.35; lamp.add(glow); lamp.add(new THREE.PointLight(0xffb857,5,9).translateY(1.35));
-  lamp.position.set(PX+1.2,0,PZ+3.8); lamp.traverse(o=>{if(o.isMesh)o.castShadow=true;}); world.add(lamp);
-  // cattail reeds around the shoreline
-  const reedMat=new THREE.MeshStandardMaterial({color:0x5f8f4a,roughness:0.8}), tipMat=new THREE.MeshStandardMaterial({color:0x7a4a28,roughness:0.8});
-  for(let i=0;i<40;i++){ const a=Math.random()*6.28, r=6.0+Math.random()*1.4, x=PX+Math.cos(a)*r, z=PZ+Math.sin(a)*r;
-    const h=0.8+Math.random()*0.7; const st=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.035,h,5),reedMat); st.position.set(x,h/2,z); st.rotation.z=(Math.random()-.5)*0.3; st.castShadow=true; world.add(st);
-    if(Math.random()<0.6){ const tip=new THREE.Mesh(new THREE.CapsuleGeometry(0.05,0.18,3,6),tipMat); tip.position.set(x,h+0.05,z); world.add(tip); } }
-  // lily pads floating on the water
-  const padMat=new THREE.MeshStandardMaterial({color:0x4f9a52,roughness:0.6,side:THREE.DoubleSide});
-  for(let i=0;i<7;i++){ const a=Math.random()*6.28, r=Math.random()*4.2, pad=new THREE.Mesh(new THREE.CircleGeometry(0.35+Math.random()*0.25,12,0.5,5.8),padMat);
-    pad.rotation.x=-Math.PI/2; pad.position.set(PX+Math.cos(a)*r,0.09,PZ+Math.sin(a)*r); world.add(pad);
-    if(Math.random()<0.4){ const fl=new THREE.Mesh(new THREE.IcosahedronGeometry(0.08,0),new THREE.MeshStandardMaterial({color:0xffc0d6,roughness:0.6})); fl.position.set(pad.position.x,0.14,pad.position.z); world.add(fl);} }
-  // layered distant mountain ridges (silhouette depth, like Cast-n-Chill backdrops)
-  // layered mountain ridges — fog gives the atmospheric perspective (distant = hazier, melts into sky)
-  const ridgeMat=new THREE.MeshStandardMaterial({color:0x9aa4a2,roughness:1,metalness:0});
-  [[88,16,2.2],[128,23,2.7],[168,32,3.2]].forEach(([R,H,W],layer)=>{ const n=14;
-    for(let i=0;i<n;i++){ const a=i/n*6.28 + layer*0.4, h=H*(0.6+Math.random()*0.7), rad=H*W*(0.7+Math.random()*0.5);
-      const m=new THREE.Mesh(new THREE.ConeGeometry(rad,h,5,1), ridgeMat); m.scale.z=0.5;
-      m.position.set(Math.cos(a)*R, h/2-8, Math.sin(a)*R); m.rotation.y=-a+Math.PI/2; world.add(m); } });
-  // dark pine silhouettes on the nearer hills (Cast-n-Chill forest line)
-  const pineMat=new THREE.MeshStandardMaterial({color:0x33442f,roughness:0.9});
-  const pineTrunkM=new THREE.MeshStandardMaterial({color:0x4a3626,roughness:0.95});
-  for(let i=0;i<88;i++){ const a=Math.random()*6.28, R=46+Math.random()*40, x=Math.cos(a)*R, z=Math.sin(a)*R;
-    if(Math.abs(x)<FARM_HALF+18&&Math.abs(z)<FARM_HALF+18) continue;
-    const ph=2.4+Math.random()*2.8, g=new THREE.Group();   // layered fir: 3 stacked tiers + trunk
-    const tk=new THREE.Mesh(new THREE.CylinderGeometry(ph*0.05,ph*0.07,ph*0.3,6),pineTrunkM); tk.position.y=ph*0.12; g.add(tk);
-    for(let j=0;j<3;j++){ const t=new THREE.Mesh(new THREE.ConeGeometry(ph*(0.34-j*0.08),ph*0.5,7), pineMat); t.position.y=ph*(0.3+j*0.26); t.castShadow=true; g.add(t); }
-    g.position.set(x, terrainH(x,z), z); world.add(g); }
-  // pink blossom trees — fuller rounded canopy (Cast-n-Chill)
-  const trunkM=new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.9}), bcols=[0xffb3d1,0xffd0e0,0xf59ac0];
-  for(let i=0;i<30;i++){ const a=Math.random()*6.28, R=FARM_HALF+9+Math.random()*46, x=Math.cos(a)*R, z=Math.sin(a)*R;
-    if(Math.abs(x)>95||Math.abs(z)>95) continue; const g=new THREE.Group(), h=2.2+Math.random()*1.2;
-    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.2,h,7),trunkM); tr.position.y=h/2; tr.castShadow=true; g.add(tr);
-    const bm=new THREE.MeshStandardMaterial({color:bcols[i%3],roughness:0.85});
-    for(let j=0;j<7;j++){ const r=0.55+Math.random()*0.35, c=new THREE.Mesh(new THREE.IcosahedronGeometry(r,2),bm);
-      const ang=j/7*6.28, rad=(j===0?0:0.55); c.position.set(Math.cos(ang)*rad,(h+0.5)+(j===0?0.35:0)+(Math.random()-.5)*0.3,Math.sin(ang)*rad); c.castShadow=true; g.add(c); }
-    g.position.set(x,terrainH(x,z),z); world.add(g); }
-  // soft drifting clouds
-  cloudGroup=new THREE.Group(); world.add(cloudGroup);
-  const cmat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,transparent:true,opacity:0.7,depthWrite:false});
-  for(let i=0;i<9;i++){ const c=new THREE.Group(); const n=3+Math.floor(Math.random()*3);
-    for(let j=0;j<n;j++){ const b=new THREE.Mesh(new THREE.IcosahedronGeometry(6+Math.random()*5,1),cmat); b.position.set((Math.random()-.5)*16,(Math.random()-.5)*2,(Math.random()-.5)*8); b.scale.y=0.45; c.add(b); }
-    c.position.set((Math.random()-.5)*200, 44+Math.random()*18, (Math.random()-.5)*200); c.userData.sp=0.4+Math.random()*0.5; cloudGroup.add(c); }
-}
-let cloudGroup=null;
-function updateClouds(dt){ if(!cloudGroup) return; for(const c of cloudGroup.children){ c.position.x+=c.userData.sp*dt; if(c.position.x>130) c.position.x=-130; } }
 
 /* ---- fireflies at dusk/night (cozy ambiance) ---- */
 let fireflies=null, ffMat=null;
@@ -672,7 +394,7 @@ function buildFireflies(){
 function updateFireflies(t){
   if(!fireflies) return;
   if(S.inMine){ ffMat.opacity=0; return; }
-  const night=skyU.night.value; ffMat.opacity=night*0.95; if(night<0.02) return;
+  const night=lastRig?lastRig.night:0; ffMat.opacity=night*0.95; if(night<0.02) return;
   const p=fireflies.geometry.attributes.position, base=fireflies.geometry.userData.base, ph=fireflies.geometry.userData.ph;
   for(let i=0;i<p.count;i++){ p.setXYZ(i, base[i*3]+Math.sin(t*0.6+ph[i])*1.6, base[i*3+1]+Math.sin(t*0.9+ph[i]*2)*0.6, base[i*3+2]+Math.cos(t*0.5+ph[i])*1.6); }
   p.needsUpdate=true; fireflies.position.set(player.pos.x,0,player.pos.z);
@@ -753,8 +475,7 @@ function makeBin(){
 /* ============================ FARM TILES ============================ */
 const tileGroup=new THREE.Group(); world.add(tileGroup);
 const cropGroup=new THREE.Group(); world.add(cropGroup);
-const soilMat=new THREE.MeshStandardMaterial({map:TEX.mud.map,normalMap:TEX.mud.normalMap,roughnessMap:TEX.mud.arm,color:0xb39776,roughness:1,metalness:0});
-const wetMat =new THREE.MeshStandardMaterial({map:TEX.mud.map,normalMap:TEX.mud.normalMap,roughnessMap:TEX.mud.arm,color:0x6a5238,roughness:1,metalness:0});
+const soilMat=paintedSoil(false), wetMat=paintedSoil(true);
 const tileGeo=new THREE.BoxGeometry(0.92,0.12,0.92);
 function tkey(x,z){ return x+','+z; }
 function getTile(x,z){ return S.tiles.get(tkey(x,z)); }
@@ -944,9 +665,10 @@ let targetCell=null;
 function updateTarget(){
   if(S.inMine){ selector.visible=false; targetCell=null; return; }
   ray.setFromCamera({x:0,y:0}, camera);
-  const hit=ray.intersectObject(ground,false)[0];
-  if(hit && hit.distance<6.5){
-    const x=Math.round(hit.point.x), z=Math.round(hit.point.z);
+  const ro=ray.ray.origin, rd=ray.ray.direction; let hit=null;
+  for(let d=2;d<14;d+=.2){ const px=ro.x+rd.x*d, py=ro.y+rd.y*d, pz=ro.z+rd.z*d; if(py<=terrainH(px,pz)){ hit={x:px,z:pz}; break; } }
+  if(hit && Math.hypot(hit.x-player.pos.x,hit.z-player.pos.z)<6.5){
+    const x=Math.round(hit.x), z=Math.round(hit.z);
     // only farmable on flat farmland
     if(Math.abs(x)<=FARM_HALF && Math.abs(z)<=FARM_HALF){
       targetCell={x,z}; selector.position.set(x,0.14,z); selector.visible=true; return;
@@ -1085,16 +807,7 @@ function sleep(){
     setTimeout(()=>{ $('#fade').classList.remove('on'); S.sleeping=false; },1100);
   },700);
 }
-let seasonWarm=0.5, warmGradeFx=null;
-function retintGround(){ // seasonal tint multiplies the grass texture
-  const tint=[0xb9e39a,0xcfe79a,0xe3b878,0xe2edf3][S.season]; // spring, summer, fall golden, winter frost
-  if(ground) ground.material.color.setHex(tint);
-  if(grassIM) grassIM.material.color.setHex([0x5fae4e,0x5aa048,0xc08f3a,0xd4e2ea][S.season]);
-  const hueB=[0.26,0.24,0.12,0.28][S.season];
-  hemi.groundColor.setHSL(hueB,0.3,[0.3,0.28,0.26,0.5][S.season]);
-  seasonWarm=[0.52,0.62,0.9,0.26][S.season];   // fall = warm autumn, winter = cool
-  if(warmGradeFx) warmGradeFx.uniforms.get('warm').value=seasonWarm;
-}
+function retintGround(){ setSeason(S.season); }
 
 /* ============================ UI ============================ */
 function toast(msg){ const el=document.createElement('div'); el.className='toast card'; el.textContent=msg; $('#toasts').appendChild(el); setTimeout(()=>el.remove(),2600); }
@@ -1172,21 +885,38 @@ $('#resetbtn').onclick=()=>{ if(confirm(LANG==='zh'?'开始新游戏？当前存
 
 /* ============================ MINIMAP ============================ */
 const mm=$('#mmc'), mx=mm.getContext('2d');
-const MM_RANGE=48;                       // world units shown radius
+const MM_RANGE=70;                       // world units shown radius
+// parchment map, drawn once: lake, forest, paths
+let mapBase=null; const MAP_R=240;
+function bakeMap(){
+  const c=document.createElement('canvas'); c.width=c.height=720; const g=c.getContext('2d'), im=g.createImageData(720,720);
+  for(let j=0;j<720;j++) for(let i=0;i<720;i++){ const x=(i/720-.5)*MAP_R*2, z=(j/720-.5)*MAP_R*2, f=lakeField(x,z), o=(j*720+i)*4;
+    const a=vnoise(x*.12,z*.12)*14-7; let r=214+a,gg=197+a,b=156+a;
+    if(f>0){ r=148+a*.4; gg=163+a*.4; b=128+a*.4; if(f<.012){ r=102; gg=120; b=92; } }
+    else if(f>-.008){ r=176; gg=156; b=112; }
+    im.data[o]=r; im.data[o+1]=gg; im.data[o+2]=b; im.data[o+3]=255; }
+  g.putImageData(im,0,0);
+  const px=(x,z)=>[(x/(MAP_R*2)+.5)*720,(z/(MAP_R*2)+.5)*720];
+  g.strokeStyle='rgba(124,92,58,.75)'; g.lineWidth=2.6; g.setLineDash([7,4]); g.lineCap='round';
+  for(const p of PATHS){ g.beginPath(); p.forEach((q,i)=>{ const a=px(q[0],q[1]); i?g.lineTo(a[0],a[1]):g.moveTo(a[0],a[1]); }); g.stroke(); }
+  g.setLineDash([]);
+  const cols=['#5b6e4c','#b08a3c','#a8603a'];
+  miniTrees.forEach((t,i)=>{ if(i%2) return; const a=px(t.x,t.z); if(a[0]<0||a[0]>720||a[1]<0||a[1]>720) return; g.fillStyle=cols[t.c]; g.beginPath(); g.moveTo(a[0],a[1]-5); g.lineTo(a[0]+3,a[1]+2); g.lineTo(a[0]-3,a[1]+2); g.closePath(); g.fill(); });
+  mapBase=c;
+}
 function drawMini(){
   const W=mm.width,H=mm.height, cx=W/2, cy=H/2, sc=W/(MM_RANGE*2);
   mx.clearRect(0,0,W,H);
   // ground tint by season
-  mx.fillStyle=['#2f5e38','#2c6a40','#5a4a2a','#7f93a0'][S.season]; mx.fillRect(0,0,W,H);
+  mx.fillStyle='#d6c59c'; mx.fillRect(0,0,W,H);
   const wx=player.pos.x, wz=player.pos.z;
   const toPx=(x,z)=>[cx+(x-wx)*sc, cy+(z-wz)*sc];
   // farm boundary
   mx.strokeStyle='rgba(255,255,255,.25)'; mx.lineWidth=1;
-  let a=toPx(-FARM_HALF,-FARM_HALF), b=toPx(FARM_HALF,FARM_HALF); mx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);
+  mx.strokeStyle='rgba(90,60,30,.5)'; let a=toPx(-FARM_HALF,-FARM_HALF), b=toPx(FARM_HALF,FARM_HALF); mx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);
   // pond
-  if(pondMini){ const p=toPx(pondMini.x,pondMini.z); mx.fillStyle='#3f8fd0'; mx.beginPath(); mx.arc(p[0],p[1],pondMini.r*sc,0,7); mx.fill(); }
+  if(mapBase) mx.drawImage(mapBase,cx-(wx+MAP_R)*sc,cy-(wz+MAP_R)*sc,MAP_R*2*sc,MAP_R*2*sc);
   // props
-  for(const o of propMini){ const p=toPx(o.x,o.z); if(p[0]<-4||p[0]>W+4||p[1]<-4||p[1]>H+4) continue; mx.fillStyle=o.c; mx.beginPath(); mx.arc(p[0],p[1],o.r*sc*0.5+0.6,0,7); mx.fill(); }
   // tilled + crops
   for(const [k,tl] of S.tiles){ if(!tl.tilled) continue; const [x,z]=k.split(',').map(Number); const p=toPx(x,z);
     mx.fillStyle=tl.crop?(tl.crop.stage>=CROPS[tl.crop.id].days?'#ffd66b':'#8fe39a'):(tl.watered?'#4a3322':'#6a4a30');
@@ -1201,75 +931,42 @@ function drawMini(){
 }
 
 /* ============================ LOOP ============================ */
-let composer, aoPass, dofEffect;
-// CozyGrade — cinematic Cast-n-Chill grade: muted colours, olive greens, cool shadows +
-// warm highlights (split-tone), soft lifted contrast, warm neutral wash, cozy vignette.
-class WarmGrade extends Effect {
-  constructor(){ super('CozyGrade',
-    'uniform float warm;\n'+
-    'void mainImage(const in vec4 c, const in vec2 uv, out vec4 o){\n'+
-    '  vec3 col=max(c.rgb,0.0);\n'+
-    '  col=clamp(((col-0.5)*1.08+0.5)*1.14,0.0,1.0);\n'+             // gentle contrast + brighten (airy, not crushed)
-    '  float l=dot(col,vec3(0.2126,0.7152,0.0722));\n'+
-    '  col=clamp(mix(vec3(l),col,1.38),0.0,1.0);\n'+                  // STRONG saturation (rich Cast-n-Chill tone)
-    '  float sm=1.0-smoothstep(0.0,0.5,l), hm=smoothstep(0.5,1.0,l);\n'+
-    '  col += vec3(-0.012,0.004,0.028)*sm;\n'+                        // subtle cool shadows
-    '  col += vec3(0.045,0.022,-0.02)*(0.4+0.9*warm)*hm;\n'+          // warm highlights
-    '  col*=vec3(1.0+warm*0.05,1.0,1.0-warm*0.04);\n'+              // seasonal warm wash
-    '  float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.12;\n'+         // light vignette
-    '  o=vec4(clamp(col,0.0,1.0),c.a);\n'+
-    '}',
-    { uniforms:new Map([['warm',new THREE.Uniform(0.5)]]) }); }
-}
-// depth-edge outline → hand-drawn / toon silhouettes
-class ToonOutline extends Effect {
-  constructor(){ super('ToonOutline',
-    'uniform float thickness; uniform vec3 lineColor; uniform float strength;\n'+
-    'void mainImage(const in vec4 c, const in vec2 uv, const in float depth, out vec4 o){\n'+
-    '  vec2 tx=thickness/resolution; float z=getViewZ(depth); float e=0.0;\n'+
-    '  e+=abs(z-getViewZ(readDepth(uv+vec2(tx.x,0.0))));\n'+
-    '  e+=abs(z-getViewZ(readDepth(uv-vec2(tx.x,0.0))));\n'+
-    '  e+=abs(z-getViewZ(readDepth(uv+vec2(0.0,tx.y))));\n'+
-    '  e+=abs(z-getViewZ(readDepth(uv-vec2(0.0,tx.y))));\n'+
-    '  float line=smoothstep(0.35,0.9,e/max(1.0,-z));\n'+   // high threshold → only big silhouettes, not grass
-    '  o=vec4(mix(c.rgb, lineColor, line*strength), c.a);\n'+
-    '}',
-    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['thickness',new THREE.Uniform(1.2)],['lineColor',new THREE.Uniform(new THREE.Color(0x2b2d2a))],['strength',new THREE.Uniform(0.5)]]) }); }
+let composer=null, gradeFx=null, lastRig=null;
+// the hour's three-colour key: every value in the frame is pulled toward it, so the picture stays in one harmony
+class HourGrade extends Effect {
+  constructor(){ super('HourGrade',
+    `uniform vec3 gS,gM,gH; uniform float amt;
+     void mainImage(const in vec4 c, const in vec2 uv, out vec4 o){
+       vec3 col=pow(max(c.rgb,0.0),vec3(1.0/2.2));
+       vec3 s=pow(gS,vec3(1.0/2.2)), m=pow(gM,vec3(1.0/2.2)), h=pow(gH,vec3(1.0/2.2));
+       float l=dot(col,vec3(0.2126,0.7152,0.0722));
+       vec3 g=l<0.5?mix(s,m,l*2.0):mix(m,h,(l-0.5)*2.0);
+       col=mix(col,g+(col-vec3(l))*1.15,amt);
+       col=clamp(col,0.0,1.0); col=mix(col,col*col*(3.0-2.0*col),0.3);
+       float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.32;
+       o=vec4(pow(col,vec3(2.2)),c.a);
+     }`,
+    { uniforms:new Map([['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)]]) }); }
 }
 let QUAL = localStorage.getItem('sv_qual')||'med';
-// low = fast path (no post, max fps). med = cinematic post (bloom+grade+vignette, no AO).
-// high = + N8AO contact shadows + volumetric god rays.
-const QSET={ low:{dpr:0.9,shadow:1024,post:false,ao:false,god:false},
-            med:{dpr:1.35,shadow:1536,post:true,ao:false,god:false},
-            high:{dpr:1.3,shadow:2048,post:true,ao:true,god:true} };
+const QSET={ low:{dpr:0.9,shadow:1024,bloom:false,msaa:0,smaa:false},
+            med:{dpr:1.25,shadow:1536,bloom:true,msaa:0,smaa:true},
+            high:{dpr:1.6,shadow:2048,bloom:true,msaa:4,smaa:false} };
 function setupPost(){
   const q=QSET[QUAL]||QSET.med;
   renderer.setPixelRatio(Math.min(devicePixelRatio,q.dpr));
   sun.shadow.mapSize.set(q.shadow,q.shadow); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
   renderer.shadowMap.needsUpdate=true;
-  if(sunMesh) sunMesh.visible=!!q.god;
   if(composer){ composer.dispose(); composer=null; }
-  if(!q.post){
-    // FAST PATH: no composer — native AgX tonemap + MSAA.
-    aoPass=null; dofEffect=null;
-    renderer.toneMapping=THREE.AgXToneMapping; renderer.toneMappingExposure=1.0;
-    return;
-  }
-  // CINEMATIC PATH
   renderer.toneMapping=THREE.NoToneMapping;
-  composer=new EffectComposer(renderer,{ frameBufferType:THREE.HalfFloatType });
+  composer=new EffectComposer(renderer,{ frameBufferType:THREE.HalfFloatType, multisampling:q.msaa });
   composer.addPass(new RenderPass(scene,camera));
-  if(q.ao){ aoPass=new N8AOPostPass(scene,camera,innerWidth,innerHeight);
-    aoPass.configuration.aoRadius=1.3; aoPass.configuration.distanceFalloff=1.0; aoPass.configuration.intensity=2.4; aoPass.configuration.halfRes=true;
-    try{ aoPass.setQualityMode('Medium'); }catch(e){} composer.addPass(aoPass); } else aoPass=null;
-  const fx=[ new ToonOutline(), new BloomEffect({ intensity:0.36, luminanceThreshold:0.82, luminanceSmoothing:0.25, mipmapBlur:true, radius:0.4 }) ];
-  if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
-  fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
-  warmGradeFx=new WarmGrade(); warmGradeFx.uniforms.get('warm').value=seasonWarm; fx.push(warmGradeFx);  // grade AFTER tonemap (display-referred)
-  fx.push(new VignetteEffect({ eskil:false, offset:0.3, darkness:0.42 }));
-  fx.push(new SMAAEffect());
-  dofEffect=null;
+  const fx=[];
+  if(q.bloom) fx.push(new BloomEffect({ intensity:0.32, luminanceThreshold:0.86, luminanceSmoothing:0.2, mipmapBlur:true, radius:0.5 }));
+  gradeFx=new HourGrade(); fx.push(gradeFx);
+  if(q.smaa) fx.push(new SMAAEffect());
   composer.addPass(new EffectPass(camera, ...fx));
+  composer.setSize(innerWidth,innerHeight);
 }
 function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); }
 function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:'流畅',med:'均衡',high:'极致'}[QUAL]||QUAL); }
@@ -1278,20 +975,16 @@ const cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.
 let last=performance.now(), miniT=0, fCnt=0, fAcc=0, sTick=0;
 function frame(now){
   requestAnimationFrame(frame);
-  const dt=Math.min(0.05,(now-last)/1000); last=now;
-  if(grassUniform) grassUniform.value=now*0.001;
-  if(waterMat&&waterMat.normalMap){ waterMat.normalMap.offset.x+=dt*0.025; waterMat.normalMap.offset.y+=dt*0.012; }
-  if(pondRefl) pondRefl.visible = !S.inMine && Math.hypot(player.pos.x+24,player.pos.z-20)<26;   // reflect only when at the pond
-  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt); updateClouds(dt); updateFireflies(now*0.001); updatePetals(dt);
+  const raw=(now-last)/1000, dt=Math.min(0.05,raw); last=now;
+  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt); updateFireflies(now*0.001); updatePetals(dt);
   if(S.inMine && mineLight) mineLight.position.set(player.pos.x,4,player.pos.z);
-  fCnt++; fAcc+=dt; if(fAcc>=0.5){ const fe=$('#fps'); if(fe) fe.textContent=Math.round(fCnt/fAcc)+' fps'; fCnt=0; fAcc=0; }
+  fCnt++; fAcc+=raw; if(fAcc>=0.5){ const fe=$('#fps'), v=Math.round(fCnt/fAcc); if(fe) fe.textContent=v+' fps'; window.__fps=v; fCnt=0; fAcc=0; }
 
   // time of day
-  if(!S.sleeping){ S.time += dt*0.7; // ~0.7 min/sec → a full 6:00→2:00 day ≈ ~20 min real
+  if(!S.sleeping&&!DBG){ S.time += dt*0.7; // ~0.7 min/sec → a full 6:00→2:00 day ≈ ~20 min real
     if(S.time>=1560){ sleep(); }      // 26:00 = pass out at 2AM
   }
-  // day/night sun
-  dayNight();
+  dayNight(now*0.001,dt);
 
   // movement (camera-relative)
   cForward.set(Math.sin(cam.yaw),0,Math.cos(cam.yaw));
@@ -1303,12 +996,19 @@ function frame(now){
   player.moving=moveV.lengthSq()>0.001;
   if(player.moving){
     moveV.normalize(); const spd=(S.running&&S.energy>0?7.2:4.2)*(S.energy>0?1:0.45);
+    const ox=player.pos.x, oz=player.pos.z;
     player.pos.addScaledVector(moveV, spd*dt);
-    player.pos.x=clamp(player.pos.x,-95,95); player.pos.z=clamp(player.pos.z,-95,95);
+    if(!S.inMine){
+      collide(player.pos,.45);
+      if(inWater(player.pos.x,player.pos.z)){            // slide along the shore rather than stop dead
+        if(!inWater(player.pos.x,oz)) player.pos.z=oz; else if(!inWater(ox,player.pos.z)) player.pos.x=ox; else { player.pos.x=ox; player.pos.z=oz; }
+      }
+      player.pos.x=clamp(player.pos.x,-210,210); player.pos.z=clamp(player.pos.z,-190,120);
+    }
     player.yaw=Math.atan2(moveV.x,moveV.z);
     player.walkT+=dt*(S.running?15:10);
   }
-  player.pos.y=terrainH(player.pos.x,player.pos.z);
+  player.pos.y=S.inMine?0:terrainH(player.pos.x,player.pos.z);
   if(S.inMine){ player.pos.x=clamp(player.pos.x,-14.5,14.5); player.pos.z=clamp(player.pos.z,-14.5,14.5); player.pos.y=0; }
   avatar.position.copy(player.pos);
   avatar.rotation.y = lerpAngle(avatar.rotation.y, player.yaw, 0.2);
@@ -1320,8 +1020,9 @@ function frame(now){
     player.pos.x - Math.sin(cam.yaw)*cam.dist*cs,
     player.pos.y + cam.height + Math.sin(cam.pitch)*cam.dist,
     player.pos.z - Math.cos(cam.yaw)*cam.dist*cs);
-  camera.position.lerp(camPos,0.18);
-  camera.lookAt(player.pos.x, player.pos.y+1.5, player.pos.z);
+  if(!S.inMine){ const gy=terrainH(camPos.x,camPos.z)+.7; if(camPos.y<gy) camPos.y=gy; }   // never dip under a slope
+  camera.position.lerp(camPos,DBG?1:0.18);
+  camera.lookAt(player.pos.x, player.pos.y+(cam.look||1.5), player.pos.z);
 
   updateTarget();
   // selector pulse
@@ -1334,7 +1035,8 @@ function frame(now){
   miniT+=dt; if(miniT>0.12){ drawMini(); miniT=0; }
 
   if((sTick++ % 3)===0) renderer.shadowMap.needsUpdate=true;   // throttle shadow pass to ~20Hz
-  if(composer) composer.render(); else renderer.render(scene,camera);
+  composer.render();
+  if(DBG){ DBG.frames=(DBG.frames||0)+1; if(DBG.frames===8) document.body.dataset.ready='1'; }
 }
 function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI; if(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
 function animateWalk(dt){
@@ -1352,28 +1054,17 @@ function animateWalk(dt){
   const bob=player.moving?Math.abs(c)*0.08:Math.sin(performance.now()*0.002)*0.03;
   if(headG) headG.position.y=1.75+bob;
 }
-function dayNight(){
-  if(S.inMine) return;                              // mine has its own dark lighting
-  // map 6:00(360)→20:00(1200) daylight arc; dim after
-  const tt=clamp((S.time-240)/1080,0,1);           // 4:00..22:00 broad arc
-  const ang=tt*Math.PI;                            // 0..PI across sky
-  sun.position.set(player.pos.x+Math.cos(ang)*55, Math.max(14,Math.sin(ang)*82), player.pos.z+28);
+const sunDirL=new THREE.Vector3();
+function dayNight(t,dt){
+  if(S.inMine) return;                              // the mine keeps its own dark lighting
+  const R=updateScenery(t,dt,S.time,S.weather,camera,player,S.day%9===4); lastRig=R;
+  sunDirL.copy(R.sunDir); sunDirL.y=Math.max(sunDirL.y,.42); sunDirL.normalize();
+  sun.position.copy(player.pos).addScaledVector(sunDirL,120);
   sun.target.position.copy(player.pos); sun.target.updateMatrixWorld();
-  if(sunMesh.visible){ const dir=sun.position.clone().sub(player.pos).normalize(); sunMesh.position.copy(player.pos).addScaledVector(dir,360).setY(Math.max(30,player.pos.y+dir.y*360)); }
-  const noon=Math.sin(ang);
-  const dusk=clamp(1.0-Math.abs(tt-0.5)*2.3,0,1);   // 0 midday → 1 near dawn/dusk
-  // Cast-n-Chill: soft MUTED painterly palette, strong atmospheric haze
-  sun.intensity=clamp(noon*1.7+0.75,0.7,2.3)*weatherDim;   // brighter floor so dawn isn't dark
-  sun.color.setHSL(lerp(0.045,0.1,noon),0.55*weatherDim+0.06,0.62);
-  // gradient sky dome: pale warm hazy horizon, soft muted blue-grey zenith (warmer+lower at dawn/dusk)
-  const horizon=new THREE.Color().setHSL(lerp(0.1,0.07,seasonWarm), lerp(0.14,0.4,dusk)*(0.6+seasonWarm*0.6), clamp((lerp(0.86,0.64,dusk))*(0.5+0.5*noon)+0.18,0.2,0.9));
-  const zenith =new THREE.Color().setHSL(0.58, lerp(0.2,0.3,dusk), clamp(lerp(0.58,0.26,1-noon),0.18,0.6));
-  skyU.bot.value.copy(horizon); skyU.top.value.copy(zenith); skyU.night.value=clamp(0.8-noon*2.2,0,1); skyDome.position.copy(camera.position);
-  hemi.color.copy(horizon);
-  hemi.intensity=clamp(noon*0.35+0.85,0.85,1.35)*(0.65+0.35*weatherDim);   // bright ambient fill (airy)
-  scene.fog.color.copy(horizon);                    // ridges melt into the sky
-  scene.fog.density = 0.0016*(S.weather==='rain'?1.8:(S.weather==='cloudy'?1.4:1.0));   // crisp, only distant ridges haze
-  if(scene.environmentIntensity!==undefined) scene.environmentIntensity=lerp(0.35,0.82,clamp(noon,0.1,1));
+  sun.intensity=R.sunI; sun.color.copy(R.sunCol);
+  hemi.color.copy(R.ambCol); hemi.intensity=R.ambI;
+  scene.fog.color.copy(R.fogCol); scene.fog.density=R.fog;
+  if(gradeFx){ const u=gradeFx.uniforms; u.get('gS').value.copy(R.gS); u.get('gM').value.copy(R.gM); u.get('gH').value.copy(R.gH); u.get('amt').value=R.gAmt; }
 }
 function hintProximity(){
   // show a one-shot toast when first approaching a landmark
@@ -1553,12 +1244,12 @@ function spawnMineNodes(){ for(const n of mineNodes){ mineGroup.remove(n.mesh); 
     mineNodes.push({mesh,x,z,hp:2+Math.floor(S.mineLevel/3)}); }
 }
 function enterMine(){ S.inMine=true; S.mineLevel=1; mineSavedBg=scene.background; world.visible=false; mineGroup.visible=true;
-  scene.fog.density=0.022; scene.fog.color.setHex(0x05070a); scene.background=new THREE.Color(0x05070a); if(scene.environmentIntensity!==undefined) scene.environmentIntensity=0.15;
-  sun.intensity=0; hemi.intensity=0; if(rainPts) rainPts.visible=false; skyDome.visible=false;
+  scene.fog.density=0.022; scene.fog.color.setHex(0x05070a); scene.background=new THREE.Color(0x05070a);
+  sun.intensity=0; hemi.intensity=0; if(rainPts) rainPts.visible=false; if(gradeFx) gradeFx.uniforms.get('amt').value=0;
   player.pos.set(0,0,0); cam.yaw=0; spawnMineNodes(); showMineBtns(true); renderStatus(); toast(L('进入矿洞 · 第 1 层','Entered the mine · Lv 1')); }
 function descendMine(){ S.mineLevel++; player.pos.set(0,0,0); spawnMineNodes(); renderStatus(); toast(L('下到第 '+S.mineLevel+' 层','Descended · Lv '+S.mineLevel)); }
-function leaveMine(){ S.inMine=false; world.visible=true; mineGroup.visible=false; showMineBtns(false); skyDome.visible=true;
-  scene.background=mineSavedBg; if(scene.environmentIntensity!==undefined) scene.environmentIntensity=1.0; player.pos.set(MINE_ENT.x,0,MINE_ENT.z+3); toast(L('离开矿洞','Left the mine')); }
+function leaveMine(){ S.inMine=false; world.visible=true; mineGroup.visible=false; showMineBtns(false); applyWeather();
+  scene.background=mineSavedBg; player.pos.set(MINE_ENT.x,0,MINE_ENT.z+3); toast(L('离开矿洞','Left the mine')); }
 function mineSwing(){ if(S.energy<=0){toast(t('noenergy'));return;}
   ray.setFromCamera({x:0,y:0},camera); let hit=null,hd=1e9;
   for(const nd of mineNodes){ const b=new THREE.Box3().setFromObject(nd.mesh); const p=ray.ray.intersectBox(b,new THREE.Vector3()); if(p){ const d=p.distanceTo(camera.position); if(d<hd&&d<7){hd=d;hit=nd;} } }
@@ -1582,9 +1273,9 @@ function showMineBtns(on){ if(!mineBtns){ mineBtns=document.createElement('div')
 
 /* ---- fishing ---- */
 let fishUI=null, fishState=null;
-function nearWater(){ return pondMini && Math.hypot(player.pos.x-pondMini.x,player.pos.z-pondMini.z) < pondMini.r+5; }
+function nearWater(){ for(let a=0;a<6.3;a+=.8) if(lakeField(player.pos.x+Math.sin(a)*4.5,player.pos.z+Math.cos(a)*4.5)>0) return true; return false; }
 function tryFish(){ if(S.inMine||fishUI) return;
-  if(!nearWater()){ toast(L('到池塘边按 F 钓鱼','Stand by the pond, press F')); return; }
+  if(!nearWater()){ toast(L('到湖边按 F 钓鱼','Stand by the lake, press F')); return; }
   if(S.energy<=0){ toast(t('noenergy')); return; }
   if(document.pointerLockElement) document.exitPointerLock();
   fishUI=document.createElement('div'); fishUI.style.cssText='position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;pointer-events:none';
@@ -1699,37 +1390,36 @@ function resetSave(){ try{ localStorage.removeItem('sv_save'); }catch(e){} locat
 function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; }
 async function boot(){
   $('#loadsub').textContent=t('gen');
-  buildGround(); setProgress(18);
-  $('#loadsub').textContent='加载 3D 资源 · loading assets…';
-  await loadModels(); setProgress(42);
-  scatterRealProps(); buildPond(); buildScenery(); buildGrassField(); buildRain(); buildCritters(); buildFireflies(); buildPetals(); setProgress(55);
-  makeCottage(); makeBed(); makeStall(); makeBin(); buildAnvil(); buildStove(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(62);
-  buildAvatar(); await loadTwinkle(); setupPost(); setProgress(72);
-
-  // HDRI environment (CC0 Poly Haven) — image-based lighting + sky
-  try{
-    const hdr=await new RGBELoader().loadAsync('assets/sky.hdr');
-    hdr.mapping=THREE.EquirectangularReflectionMapping;
-    const pmrem=new THREE.PMREMGenerator(renderer);
-    const env=pmrem.fromEquirectangular(hdr).texture;
-    scene.environment=env; scene.background=null; scene.environmentIntensity=1.0;   // gradient dome is the visible sky; HDRI only lights reflections
-    hdr.dispose(); pmrem.dispose();
-  }catch(e){ scene.background=new THREE.Color(0x9fc9e8); }
+  $('#loadsub').textContent='正在铺开湖谷 · painting the valley…';
+  await loadScenery(p=>setProgress(5+p*35)); setProgress(42);
+  buildScenery(world,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
+  buildRain(); buildCritters(); buildFireflies(); buildPetals();
+  makeCottage(); makeBed(); makeStall(); makeBin(); buildAnvil(); buildStove(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(70);
+  buildAvatar(); await loadTwinkle(); setupPost(); setProgress(84);
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
   setProgress(90);
 
   // starter kit
   invAdd('seed','parsnip',5); invAdd('seed','potato',2);
   invAdd('mat','wood',8); invAdd('mat','stone',6); invAdd('ore','copper',2);
-  if(loadGame()) toast(L('存档已读取','Save loaded'));   // restore progress if present
-  addEventListener('beforeunload', saveGame);
+  if(!DBG&&loadGame()) toast(L('存档已读取','Save loaded'));   // restore progress if present
+  if(!DBG) addEventListener('beforeunload', saveGame);
+  if(DBG) applyDebugShot();
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn();
   setProgress(100);
-  setTimeout(()=>{ $('#load').classList.add('hidden'); $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); },250); // ensure render targets match the (now-visible) viewport
+  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); },250); // ensure render targets match the (now-visible) viewport
   requestAnimationFrame(frame);
 }
-addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); aoPass&&aoPass.setSize(innerWidth,innerHeight); });
+// ?shot&t=1130&season=2&x=0&z=20&yaw=0&pitch=.1 freezes the clock on one composed view, for comparing frames
+function applyDebugShot(){ const q=DBG;
+  if(q.t) S.time=q.t; if(q.season!==undefined) S.season=q.season; if(q.w) S.weather=q.w;
+  if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
+  if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
+  if(q.q) QUAL=q.q, setupPost();
+  window.__sv={S,player,cam,camera,renderer,setSeason};
+}
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); });
 boot();
 </script>
 </body>
