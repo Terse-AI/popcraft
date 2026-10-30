@@ -420,36 +420,52 @@ function rebuildCrop(x,z){
 
 /* ---- render each crop's 3D model to a transparent icon (shop/inventory/hotbar) ---- */
 const ICONS={};
-function renderIcons(){
-  const SZ=160, rt=new THREE.WebGLRenderTarget(SZ,SZ);   // no MSAA: readRenderTargetPixels must resolve per-crop
-  const isc=new THREE.Scene(); isc.environment=scene.environment;
-  const icam=new THREE.PerspectiveCamera(32,1,0.05,30);
-  const key=new THREE.DirectionalLight(0xfff2dc,3.4); key.position.set(2.5,4,3); isc.add(key);
-  isc.add(new THREE.HemisphereLight(0xffffff,0x8a8a70,2.2));
-  const cv=document.createElement('canvas'); cv.width=cv.height=SZ; const ctx=cv.getContext('2d');
-  const buf=new Uint8Array(SZ*SZ*4);
-  const prevRT=renderer.getRenderTarget(), prevA=renderer.getClearAlpha(), prevCC=new THREE.Color(); renderer.getClearColor(prevCC);
-  const prevTM=renderer.toneMapping, prevExp=renderer.toneMappingExposure;
-  renderer.toneMapping=THREE.NoToneMapping;
-  const gam=new Uint8Array(256); for(let i=0;i<256;i++) gam[i]=Math.round(Math.pow(i/255,1/2.2)*255);   // the target holds linear light
-  renderer.setClearColor(0x000000,0); renderer.setRenderTarget(rt);
-  for(const id in CROPS){
-    const m=cropMesh(id,CROPS[id].days,CROPS[id].days);
-    const box=new THREE.Box3().setFromObject(m), ctr=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
-    m.position.sub(ctr); isc.add(m);
-    const rad=Math.max(sz.x,sz.y,sz.z)||0.5, d=rad*1.75;
-    icam.position.set(d*0.55,d*0.45,d); icam.lookAt(0,0,0);
-    renderer.clear(); renderer.render(isc,icam);
-    renderer.readRenderTargetPixels(rt,0,0,SZ,SZ,buf);
-    const img=ctx.createImageData(SZ,SZ);
-    for(let y=0;y<SZ;y++){ const sy=SZ-1-y; for(let x=0;x<SZ;x++){ const si=(sy*SZ+x)*4,di=(y*SZ+x)*4; img.data[di]=gam[buf[si]];img.data[di+1]=gam[buf[si+1]];img.data[di+2]=gam[buf[si+2]];img.data[di+3]=buf[si+3]; } }
-    ctx.clearRect(0,0,SZ,SZ); ctx.putImageData(img,0,0); ICONS[id]=cv.toDataURL('image/png'); isc.remove(m);
-  }
-  renderer.setRenderTarget(prevRT); renderer.setClearColor(prevCC,prevA); renderer.toneMapping=prevTM; renderer.toneMappingExposure=prevExp; rt.dispose();
-}
-function itemIcon(kind,id,px){ px=px||28;
-  if((kind==='seed'||kind==='crop')&&ICONS[id]) return '<img src="'+ICONS[id]+'" style="width:'+px+'px;height:'+px+'px;object-fit:contain;display:inline-block;vertical-align:middle">';
-  return metaOf(kind,id).em; }
+let iconRig=null;
+function iconSetup(){ const SZ=160, rt=new THREE.WebGLRenderTarget(SZ,SZ), isc=new THREE.Scene(), icam=new THREE.PerspectiveCamera(32,1,.05,30);
+  const key=new THREE.DirectionalLight(0xfff2dc,3.4); key.position.set(2.5,4,3); isc.add(key); isc.add(new THREE.HemisphereLight(0xffffff,0x8a8a70,2.2));
+  const cv=document.createElement('canvas'); cv.width=cv.height=SZ; const gam=new Uint8Array(256); for(let i=0;i<256;i++) gam[i]=Math.round(Math.pow(i/255,1/2.2)*255);
+  iconRig={SZ,rt,isc,icam,cv,ctx:cv.getContext('2d'),buf:new Uint8Array(SZ*SZ*4),gam}; }
+// every item is a small 3D object photographed once, so the shop and bag show real things
+function shoot(m){ if(!iconRig) iconSetup(); const {SZ,rt,isc,icam,cv,ctx,buf,gam}=iconRig, prevRT=renderer.getRenderTarget(), prevA=renderer.getClearAlpha(), prevCC=new THREE.Color(); renderer.getClearColor(prevCC);
+  const prevTM=renderer.toneMapping; renderer.toneMapping=THREE.NoToneMapping; renderer.setClearColor(0x000000,0); renderer.setRenderTarget(rt);
+  const box=new THREE.Box3().setFromObject(m), ctr=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3()); m.position.sub(ctr); isc.add(m);
+  const rad=Math.max(sz.x,sz.y,sz.z)||.5, d=rad*1.75; icam.position.set(d*.55,d*.45,d); icam.lookAt(0,0,0); renderer.clear(); renderer.render(isc,icam); renderer.readRenderTargetPixels(rt,0,0,SZ,SZ,buf);
+  const img=ctx.createImageData(SZ,SZ); for(let y=0;y<SZ;y++){ const sy=SZ-1-y; for(let x=0;x<SZ;x++){ const si=(sy*SZ+x)*4, di=(y*SZ+x)*4; img.data[di]=gam[buf[si]]; img.data[di+1]=gam[buf[si+1]]; img.data[di+2]=gam[buf[si+2]]; img.data[di+3]=buf[si+3]; } }
+  ctx.clearRect(0,0,SZ,SZ); ctx.putImageData(img,0,0); const url=cv.toDataURL('image/png'); isc.remove(m); renderer.setRenderTarget(prevRT); renderer.setClearColor(prevCC,prevA); renderer.toneMapping=prevTM; return url; }
+const hashCol=s=>{ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))&0xffff; return new THREE.Color().setHSL((h%360)/360,.5,.55).getHex(); };
+const GEMC={quartz:0xe8f0f8,amethyst:0x9a60d8,topaz:0xf0c040,aquamarine:0x60d0e0,jade:0x50b070,ruby:0xd83040,emerald:0x30b868,gem:0xc8f0ff};
+const BARC={copper_bar:0xd8843a,iron_bar:0xc8ccd4,gold_bar:0xf0c63a,iridium_bar:0xa060e0,refined_quartz:0xeaf2fa};
+const OREC={coal:0x24201e,copper:0xd8843a,iron:0xc8ccd4,gold_ore:0xf0c63a,iridium:0xa060e0};
+function iconModel(kind,id){ const g=new THREE.Group(), add=(ge,c,x=0,y=0,z=0,o={})=>{ const m=new THREE.Mesh(ge,new THREE.MeshStandardMaterial({color:c,roughness:o.r??.6,metalness:o.m??0,transparent:!!o.op,opacity:o.op||1})); m.position.set(x,y,z); if(o.rx) m.rotation.x=o.rx; if(o.rz) m.rotation.z=o.rz; if(o.s) m.scale.set(...o.s); g.add(m); return m; };
+  const rock=c=>{ add(new THREE.DodecahedronGeometry(.42,1),c,0,0,0,{s:[1,.8,1],r:.9}); };
+  if(kind==='fish'){ const F=makeFish((DB.fish[id]||{}).col||0x8a9a6a,0xe8e0c8,1); F.root.rotation.y=Math.PI/2; g.add(F.root); }
+  else if(kind==='bar'){ add(new THREE.BoxGeometry(.8,.26,.36),BARC[id]||0xcccccc,0,0,0,{m:.7,r:.3}); add(new THREE.BoxGeometry(.62,.1,.26),BARC[id]||0xcccccc,0,.17,0,{m:.7,r:.3}); }
+  else if(kind==='gem'||id==='gem'){ add(new THREE.OctahedronGeometry(.4,0),GEMC[id]||0xffffff,0,0,0,{r:.1,m:.1,s:[1,1.3,1]}); }
+  else if(kind==='ore'){ rock(0x6e6660); for(let i=0;i<6;i++){ const a=i*1.1; add(new THREE.IcosahedronGeometry(.09,0),OREC[id]||0xaaaaaa,Math.cos(a)*.34,.12+Math.sin(i)*.16,Math.sin(a)*.3,{m:.5,r:.3}); } }
+  else if(kind==='product'&&/egg/.test(id)){ add(new THREE.SphereGeometry(.28,16,12),id==='duck_egg'?0xd8e8e0:0xf0e4d0,0,0,0,{s:[1,1.3,1]}); }
+  else if(kind==='product'&&/milk/.test(id)){ add(new THREE.CylinderGeometry(.2,.26,.7,12),0xf4f0e6); add(new THREE.CylinderGeometry(.1,.18,.2,12),0xf4f0e6,0,.44); add(new THREE.CylinderGeometry(.12,.12,.08,12),0x4a78c0,0,.57); }
+  else if(id==='wool'||id==='cloth'){ for(let i=0;i<9;i++) add(new THREE.SphereGeometry(.22,10,8),0xf0e8da,Math.cos(i)*.24,Math.sin(i*2)*.14,Math.sin(i)*.24); }
+  else if(id==='truffle'){ add(new THREE.IcosahedronGeometry(.34,1),0x3a2a22,0,0,0,{r:1}); }
+  else if(kind==='artisan'){ const glass=/wine|ale|beer|juice/.test(id), c=hashCol(id); if(glass){ add(new THREE.CylinderGeometry(.2,.22,.72,12),/wine/.test(id)?0x5a1a30:c,0,0,0,{r:.2}); add(new THREE.CylinderGeometry(.07,.16,.3,10),0x3a3a30,0,.5); } else if(/cheese/.test(id)){ add(new THREE.CylinderGeometry(.4,.4,.3,6,1,false,0,4.6),0xf0c84a); } else { add(new THREE.CylinderGeometry(.27,.27,.56,14),/mayo/.test(id)?0xf4ecc8:/honey/.test(id)?0xe0a020:c,0,0,0,{r:.25}); add(new THREE.CylinderGeometry(.29,.29,.1,14),0x9a7a4a,0,.33); } }
+  else if(kind==='food'){ add(new THREE.CylinderGeometry(.46,.36,.08,18),0xf0ece2); add(new THREE.SphereGeometry(.28,12,8),hashCol(id),0,.14,0,{s:[1,.62,1],r:.5}); add(new THREE.SphereGeometry(.1,8,6),0x7fae5b,.12,.28,.06); }
+  else if(kind==='forage'){ add(new THREE.CylinderGeometry(.03,.05,.5,6),0x5a8a3a,0,-.1); add(new THREE.IcosahedronGeometry(.24,1),hashCol(id),0,.24); for(let i=0;i<3;i++) add(new THREE.SphereGeometry(.15,8,6),0x6aa04a,Math.cos(i*2.1)*.17,-.22,Math.sin(i*2.1)*.17,{s:[1,.3,.6]}); }
+  else if(kind==='artifact'){ add(new THREE.CylinderGeometry(.18,.3,.5,10),0xb08a5a); add(new THREE.CylinderGeometry(.1,.18,.24,10),0xb08a5a,0,.36); add(new THREE.TorusGeometry(.13,.03,6,12),0xb08a5a,.26,.22,0); }
+  else if(id==='wood'||id==='hardwood'){ for(let i=0;i<3;i++) add(new THREE.CylinderGeometry(.14,.14,.8,10),id==='hardwood'?0x5a3a24:0x8a6444,i===2?0:(i?.15:-.15),i===2?.24:0,0,{rz:1.57}); }
+  else if(id==='stone'||id==='clay'||/geode/.test(id)) rock(id==='clay'?0xa8704a:id==='frozen_geode'?0x8ab8d8:id==='magma_geode'?0x8a3a2a:0x8a8078);
+  else { add(new THREE.IcosahedronGeometry(.3,1),hashCol(id)); }
+  return g; }
+function toolModel(i){ const g=new THREE.Group(), add=(ge,c,x=0,y=0,z=0,rz=0,m=0)=>{ const o=new THREE.Mesh(ge,new THREE.MeshStandardMaterial({color:c,roughness:.45,metalness:m})); o.position.set(x,y,z); o.rotation.z=rz; g.add(o); return o; }, wood=0x8a6444, steel=0xaab0b8, h=new THREE.CylinderGeometry(.045,.05,1.1,8);
+  if(i===1){ add(new THREE.CylinderGeometry(.3,.36,.5,14),0x7a9ab0,0,0,0,0,.4); add(new THREE.CylinderGeometry(.04,.08,.6,8),0x7a9ab0,.42,.14,0,-1,.4); add(new THREE.TorusGeometry(.2,.03,6,14),0x5a7a90,0,.34); return g; }
+  add(h,wood,0,0,0,-.5);
+  if(i===0){ add(new THREE.BoxGeometry(.44,.1,.3),steel,.3,.46,0,.1,.5); } if(i===2){ add(new THREE.BoxGeometry(.3,.34,.08),steel,.36,.4,0,-.5,.5); } if(i===3){ add(new THREE.TorusGeometry(.42,.05,6,16,2.2),steel,.1,.1,0,.7,.5); } if(i===4){ add(new THREE.TorusGeometry(.42,.035,6,16,1.7),steel,.0,.1,0,1.4,.5); } if(i===5){ g.clear(); add(new THREE.BoxGeometry(.1,1,.04),steel,0,.2,0,0,.6); add(new THREE.BoxGeometry(.34,.06,.08),0x6a4a30,0,-.32); add(new THREE.CylinderGeometry(.035,.035,.26,8),wood,0,-.48); g.rotation.z=-.7; }
+  return g; }
+const TOOL_ICON=[];
+function toolIcon(i,px){ if(!TOOL_ICON[i]) TOOL_ICON[i]=shoot(toolModel(i)); return '<img src="'+TOOL_ICON[i]+'" style="width:'+px+'px;height:'+px+'px;object-fit:contain">'; }
+function renderIcons(){ for(const id in CROPS) ICONS['crop:'+id]=shoot(cropMesh(id,CROPS[id].days,CROPS[id].days)); }
+function itemIcon(kind,id,px){ px=px||28; const base=id.split('~')[0], k=(kind==='seed'?'crop':kind)+':'+base;
+  if(!ICONS[k]) { if(kind==='craft'||kind==='trash') return metaOf(kind,id).em; try{ ICONS[k]=shoot(iconModel(kind,base)); }catch(e){ return metaOf(kind,id).em; } }
+  const q=(id.split('~')[1]|0), star=q?'<span style="position:absolute;margin-left:-10px;margin-top:'+(px-13)+'px;font-size:11px">'+['','⭐','🌟','💫'][q]+'</span>':'';
+  return '<img src="'+ICONS[k]+'" style="width:'+px+'px;height:'+px+'px;object-fit:contain;display:inline-block;vertical-align:middle">'+star; }
 
 /* ============================ CHARACTER ============================ */
 const player={ pos:new THREE.Vector3(0,0,4), yaw:0, vel:new THREE.Vector3(), moving:false, walkT:0, speed:0 };
@@ -727,7 +743,7 @@ function renderHotbar(){
   const tierAb=['','Cu','Fe','Au','Ir'];
   for(let i=0;i<6;i++){ const s=document.createElement('div'); s.className='slot'+(S.tool===i&&!S.heldSeed&&!S.heldPlace&&!S.heldFert?' on':'');
     const lvl=i<5?S.toolLvl[i]:0, away=S.toolAway&&S.toolAway.i===i;
-    s.innerHTML='<span class="key">'+(i+1)+'</span><span class="em"'+(away?' style="opacity:.25"':'')+'>'+TOOL_EM[i]+'</span><span class="nm">'+t('tools')[i]+'</span>'+(lvl?'<span class="cnt" style="color:#e8c070">'+tierAb[lvl]+'</span>':'')+(i===1?'<span class="cnt" style="left:30px;right:auto;color:#8ecdff">'+S.can+'</span>':'');
+    s.innerHTML='<span class="key">'+(i+1)+'</span><span class="em"'+(away?' style="opacity:.25"':'')+'>'+toolIcon(i,30)+'</span><span class="nm">'+t('tools')[i]+'</span>'+(lvl?'<span class="cnt" style="color:#e8c070">'+tierAb[lvl]+'</span>':'')+(i===1?'<span class="cnt" style="left:30px;right:auto;color:#8ecdff">'+S.can+'</span>':'');
     s.onclick=()=>{ S.tool=i;S.heldSeed=null;S.heldPlace=null;S.heldFert=null;renderHotbar(); }; hot.appendChild(s); }
   const hs=document.createElement('div'); hs.className='slot'+((S.heldSeed||S.heldPlace||S.heldFert)?' on':'');
   if(S.heldSeed){ hs.innerHTML='<span class="em">'+itemIcon('seed',S.heldSeed,28)+'</span><span class="nm">'+cropName(S.heldSeed)+'</span><span class="cnt">'+G.invCount('seed',S.heldSeed)+'</span>'; }
@@ -1105,7 +1121,7 @@ const jellyBase=[]; G.jellies=()=>{ if(!jellies){ const n=240, g=new THREE.Buffe
 function resetSave(){ try{ localStorage.removeItem('sv_save'); }catch(e){} location.reload(); }
 function setupValley(){
   Object.assign(G,{L,$,toast,modal,camera,scene,renderer,world,player,itemIcon,renderHotbar,renderStatus,renderEnergy,getTile,tkey,refreshTileMesh,rebuildCrop,aoe,spawnPlacement,spawnAnimal,rebuildDebris,rebuildForage,rebuildDigs,onMine,fadeMsg,floatText,
-    spend:spendEnergy, target:()=>targetCell, toolNames:()=>t('tools'), toolEm:()=>TOOL_EM, seasonName:i=>t('season')[i], MINE_ENT, ANIMALS:null,
+    spend:spendEnergy, target:()=>targetCell, toolNames:()=>t('tools'), toolEm:()=>[0,1,2,3,4,5].map(i=>toolIcon(i,34)), seasonName:i=>t('season')[i], MINE_ENT, ANIMALS:null,
     chips:(x,z)=>burst(x,1,z,0xc8a878), dust:(x,z)=>burst(x,.2,z,0x6a4a30,6), splash:(x,z)=>burst(x,.3,z,0x9ad0f0,8), fall:it=>{ refreshFlora(); burst(it.x,3,it.z,0x9a7a4a,14); }, shake:v=>{ shakeT=v; } });
   makeValley(G); G.ANIMALS=ANIMALS;
 }
