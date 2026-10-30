@@ -1124,6 +1124,7 @@ function animateWalk(dt){
   armL.rotation.x=lerp(armL.rotation.x,-s*0.6*amt,0.3); armR.rotation.x=lerp(armR.rotation.x, s*0.6*amt,0.3);
   if(headG) headG.position.y=1.75+(player.moving?Math.abs(c)*0.08:Math.sin(performance.now()*0.002)*0.03);
 }
+const sunDirL=new THREE.Vector3();
 function dayNight(t,dt){
   if(S.inMine) return;                              // the mine keeps its own dark lighting
   const R=updateScenery(t,dt,S.time,S.weather,camera,player,S.day%9===4); lastRig=R;
