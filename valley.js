@@ -80,7 +80,8 @@ export function makeValley(G){
       if(S.tool===1&&G.nearAnyWater()){ S.can=canCapacity(); toast('💧 '+L('水壶装满了','Can refilled')); G.spend(1); return; }
       if(S.tool===5) return;
     }
-    const c=G.target(); if(!c) return; const {x,z}=c; let tl=G.getTile(x,z); const ck=G.tkey(x,z), deb=S.debris.get(ck);
+    if(S.heldPlace==='crab_pot'){ if(!G.nearAnyWater()){ toast(L('蟹笼要放在水边','Set a crab pot by the water')); return; } const p=player.pos; S.crabs.push({x:+p.x.toFixed(1),z:+p.z.toFixed(1),out:null}); G.invTake('craft','crab_pot',1); toast('🦀 '+L('蟹笼放好了,记得放鱼饵','Pot set; keep bait in your bag')); if(!G.invCount('craft','crab_pot')) S.heldPlace=null; G.renderHotbar(); return; }
+    let c=G.target(); if(!c&&S.heldPlace){ const f=player.yaw; c={x:Math.round(player.pos.x+Math.sin(f)*1.6),z:Math.round(player.pos.z+Math.cos(f)*1.6)}; } if(!c) return; const {x,z}=c; let tl=G.getTile(x,z); const ck=G.tkey(x,z), deb=S.debris.get(ck);
     if(S.heldPlace) return placeCraft(x,z);
     if(S.heldFert){ if(!tl||!tl.tilled){ toast(L('肥料要撒在松土上','Fertilizer goes on tilled soil')); return; } if(tl.fert){ toast(L('这里已经施过肥','Already fertilized')); return; } if(G.invTake('craft',S.heldFert,1)){ tl.fert=CRAFTABLES[S.heldFert].fert; toast(L('施肥了','Fertilized')); if(!G.invCount('craft',S.heldFert)) S.heldFert=null; G.renderHotbar(); } return; }
     if(S.heldSeed){ if(!tl||!tl.tilled){ toast(L('要种在犁过的土上','Plant on tilled soil')); return; } if(tl.crop){ toast(L('这里已经种了','Already planted here')); return; }
@@ -332,7 +333,7 @@ export function makeValley(G){
       const dx=p.tx-p.x, dz=p.tz-p.z, d=Math.hypot(dx,dz); let want=0; if(d>.4){ want=d>30?3.2:1.9; p.yaw=angDamp(p.yaw,Math.atan2(dx,dz),6,dt); } else { p.wait-=dt; if(p.wait<0){ p.wait=rnd(5,14); if(place){ p.tx=place.x+rnd(-4,4); p.tz=place.z+rnd(-4,4); } } }
       if(Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<2.6){ want=0; p.yaw=angDamp(p.yaw,Math.atan2(player.pos.x-p.x,player.pos.z-p.z),6,dt); }
       p.speed=damp(p.speed,want,8,dt); p.x+=Math.sin(p.yaw)*p.speed*dt; p.z+=Math.cos(p.yaw)*p.speed*dt; const q={x:p.x,z:p.z}; collide(q,.4); p.x=q.x; p.z=q.z; p.ph+=p.speed*dt*3.1; const s=Math.sin(p.ph), l=p.mesh.userData.limbs, a=Math.min(1,p.speed/1.6); if(l){ l.legL.rotation.x=s*.55*a; l.legR.rotation.x=-s*.55*a; l.armL.rotation.x=-s*.42*a; l.armR.rotation.x=s*.42*a; l.torso.rotation.z=s*.03*a; }
-      p.mesh.position.set(p.x,walkH(p.x,p.z)+Math.abs(s)*.035*a,p.z); p.mesh.rotation.y=p.yaw; } };
+      p.mesh.visible=!(S.time>=1320&&d<1.6)||S.spouse===p.n.id; p.mesh.position.set(p.x,walkH(p.x,p.z)+Math.abs(s)*.035*a,p.z); p.mesh.rotation.y=p.yaw; } };
   G.nearPerson=()=>{ let b=null,d=2.6; for(const p of people){ const q=Math.hypot(player.pos.x-p.x,player.pos.z-p.z); if(q<d){ d=q; b=p; } } return b; };
 
   /* ---------- festivals ---------- */
