@@ -175,7 +175,7 @@ export async function loadScenery(onProgress){
   const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
-  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_ring',pano],['clouds',pano],['mt_height',null,'png'],
+  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_ring',pano],['mt_mask',pano],['clouds',pano],['mt_height',null,'png'],
     ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],['surf_fur'],
     ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
   let done=0; await Promise.all(names.map(([n,f,ext])=>load('assets/paint/'+n+'.'+(ext||'webp'),f).then(t=>{ TEX[n]=t; onProgress&&onProgress(++done/names.length); })));
@@ -252,15 +252,17 @@ function buildRing(root){
       P.set([CX+Math.cos(ang)*rad,hh*Top*edge+(1-edge)*18-4,CZ+Math.sin(ang)*rad],o*3); UV.set([u,v],o*2); }
   for(let a=0;a<N;a++) for(let r=0;r<M;r++){ const p=a*(M+1)+r, q=p+M+1; I.push(p,p+1,q,q,p+1,q+1); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setAttribute('uv',new THREE.BufferAttribute(UV,2)); g.setIndex(I); g.computeVertexNormals();
-  ringMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...mtU, uMap:{value:TEX.mt_ring}, uSun:U.uSunDirW, uSnowK:{value:1}, uFogD:U.uFogD, uDecAmt:{value:0}, uTile:{value:TEX.ground_tile} },
-    vertexShader:`varying vec2 vUv; varying vec3 vN,vW; void main(){ vUv=uv; vN=normal; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader:`precision highp float; uniform sampler2D uMap,uTile; uniform vec3 uRS,uRL,uSS,uSL,uFS,uFL,uHz,uDL,uDS,uSun; uniform float uSnowK,uDecAmt; varying vec2 vUv; varying vec3 vN,vW;
-      void main(){ vec4 t=texture2D(uMap,vUv); vec3 n=normalize(vN); float crease=t.r-.5;
-        float lam=clamp(dot(n,normalize(uSun+vec3(0.,.25,0.)))*.95+.14,0.,1.);
-        float brush=texture2D(uTile,vW.xz*.012).b-.5; float v=clamp(lam*.9+crease*.75+brush*.16,0.,1.); v=floor(v*8.+.5)/8.;
-        vec3 rock=mix(uRS,uRL,v), sn=mix(uSS,uSL,smoothstep(.12,.8,v)); float steep=smoothstep(.34,.2,n.y); vec3 c=mix(rock,sn,t.g*uSnowK*(1.-steep*.8));
-        float w=clamp(v*1.5,0.,1.); vec3 fo=mix(uFS,uFL,w); float dec=step(.5,fract(sin(dot(floor(vW.xz*.03),vec2(12.9,78.2)))*43758.5))*uDecAmt; fo=mix(fo,mix(uDS,uDL,w),dec); c=mix(c,fo,t.b);
-        float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(280.,1250.,d)*.62; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz,clamp(hz+low*low*.3,0.,1.));
+  ringMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...mtU, uMap:{value:TEX.mt_ring}, uMask:{value:TEX.mt_mask}, uSun:U.uSunDirW, uLine:{value:.45}, uDecAmt:{value:0}, uTile:{value:TEX.ground_tile} },
+    vertexShader:`varying vec2 vUv; varying vec3 vW; void main(){ vUv=uv; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
+    fragmentShader:`precision highp float; uniform sampler2D uMap,uMask,uTile; uniform vec3 uRS,uRL,uSS,uSL,uFS,uFL,uHz,uDL,uDS,uSun; uniform float uLine,uDecAmt; varying vec2 vUv; varying vec3 vW;
+      void main(){ vec4 t=texture2D(uMap,vUv), mk=texture2D(uMask,vUv); float a=vUv.x*6.28318; vec2 q=t.rg*2.-1.; float crease=t.b-.5;
+        vec3 U=vec3(-sin(a),0.,cos(a)), V=vec3(cos(a),0.,sin(a)), n=normalize(U*q.x+V*q.y+vec3(0.,1.,0.)*sqrt(max(.02,1.-dot(q,q))));
+        float lam=clamp(dot(n,normalize(uSun+vec3(0.,.32,0.)))*1.1+.1,0.,1.);
+        float brush=texture2D(uTile,vW.xz*.016).b-.5; float v=clamp(lam*.86+crease*.5+brush*.14,0.,1.); v=floor(v*9.+.5)/9.;
+        vec3 rock=mix(uRS,uRL,v), sn=mix(uSS,uSL,smoothstep(.1,.72,v));
+        float steep=smoothstep(.62,.36,n.y), snow=smoothstep(uLine,uLine+.035,mk.r+crease*.05)*(1.-steep*.72); vec3 c=mix(rock,sn,snow);
+        float w=clamp(v*1.5,0.,1.); vec3 fo=mix(uFS,uFL,w); float dec=step(.5,fract(sin(dot(floor(vW.xz*.03),vec2(12.9,78.2)))*43758.5))*uDecAmt; fo=mix(fo,mix(uDS,uDL,w),dec); c=mix(c,fo,mk.g);
+        float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(300.,1300.,d)*.55; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz,clamp(hz+low*low*.3,0.,1.));
         gl_FragColor=vec4(c,1.); }` });
   const o=new THREE.Mesh(g,ringMat); o.frustumCulled=false; root.add(o);
 }
@@ -378,6 +380,8 @@ function buildGround(root){
 /* ---------- lake ---------- */
 export let water=null; let mirrorEvery=1;
 export const setMirrorEvery=n=>{ mirrorEvery=n; };
+let aboveWater=[];
+export const setUnderwater=on=>{ for(const o of aboveWater) o.visible=!on; };
 const waterU={ uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
 function shoreTex(){
   const S=512, d=new Uint8Array(S*S*4);
@@ -402,7 +406,7 @@ function buildLake(root,res){
         c=mix(c,uTint,uTintAmt+.1*(1.-s.g));
         float f1=smoothstep(14.,6.,d), f2=smoothstep(60.,20.,d)*(1.-f1*.6), f3=1.-smoothstep(160.,420.,d)*.4;
         float g=0.;
-        g+=f1*dash(vec2(p.x*1.1+t*.1,p.y*6.),.9);
+        g+=f1*dash(vec2(p.x*1.9+t*.1,p.y*11.),.92)*.6;
         g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),.91);
         g+=f3*dash(vec2(p.x*.13+t*.025,p.y*.9),.92);
         c=mix(c,uGlint,clamp(g,0.,1.)*uGlintAmt*.6);
@@ -559,7 +563,7 @@ function plant(root,obst,qual){
     if(r()<.012) tree(x+3,z+2,'snag');
   }
   // islands: rock cap and a crown of trees
-  for(const [ix,iz,ir] of ISLANDS){ for(let i=0;i<ir*2.2;i++){ const a=r()*6.28, q=Math.sqrt(r())*ir*.85, x=ix+Math.cos(a)*q, z=iz+Math.sin(a)*q; if(lakeField(x,z)>-.012) continue; tall=.72; tree(x,z,r()<.45?'larch':r()<.5?'spruce':'broad'); tall=1; } }
+  for(const [ix,iz,ir] of ISLANDS){ for(let i=0;i<ir*2.2;i++){ const a=r()*6.28, q=Math.sqrt(r())*ir*.85, x=ix+Math.cos(a)*q, z=iz+Math.sin(a)*q; if(lakeField(x,z)>-.012||Math.hypot(x-138,z-86)<15) continue; tall=.72; tree(x,z,r()<.45?'larch':r()<.5?'spruce':'broad'); tall=1; } }
   // framing groups by the farm: the view from the yard is composed, not left to chance
   [[-27,19,'broad'],[-31,23,'broad'],[-24,25,'larch'],[-34,17,'spruce'],[-38,22,'spruce'],[-29,27,'broad'],[29,16,'broad'],[33,22,'larch'],[27,24,'broad'],[36,14,'spruce'],[40,20,'spruce'],[31,29,'broad'],[-44,12,'larch'],[46,8,'broad'],[-50,4,'spruce'],[50,3,'spruce']]
     .forEach(([x,z,k])=>{ if(lakeField(x,z)<-.008) tree(x,z,k); });
@@ -638,7 +642,7 @@ let mistRings=[], birds=null, birdT=0, root=null;
 export const QUAL_RES={low:[512,320],med:[900,560],high:[1280,800]};
 export function buildScenery(parent,qual){
   root=new THREE.Group(); parent.add(root);
-  bakeFields(); buildSky(root); buildMountains(root); buildGround(root);
+  bakeFields(); const before=root.children.length; buildSky(root); buildMountains(root); aboveWater=root.children.slice(before); buildGround(root);
   buildLake(root,QUAL_RES[qual]||QUAL_RES.med);
   mistRings=buildMist(root); buildCreek(root);
   const rocks=buildRocks(root,obstacles);
@@ -651,7 +655,7 @@ export function setSeason(season){
   for(const k in SEASON) writeRow(k,SEASON[k][season]);
   rampTex.needsUpdate=true;
   U.uSnow.value=season===3?1:0;
-  layers.forEach(l=>{ l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; }); if(ringMat){ ringMat.uniforms.uDecAmt.value=[.3,0,1,0][season]; ringMat.uniforms.uSnowK.value=[.9,.55,1,1][season]; }
+  layers.forEach(l=>{ l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; }); if(ringMat){ ringMat.uniforms.uDecAmt.value=[.3,0,1,0][season]; ringMat.uniforms.uLine.value=[.4,.54,.44,.2][season]; }
 }
 
 // returns the frame's light rig so index.html can drive the directional light and grade
