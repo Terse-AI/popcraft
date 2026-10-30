@@ -139,7 +139,7 @@ for(const k in RAMP) writeRow(k,RAMP[k]);
 /* ---------- shared uniforms ---------- */
 export const U={
   uTime:{value:0}, uShade:{value:new THREE.Color()}, uLit:{value:new THREE.Color()}, uFog:{value:new THREE.Color()}, uFogD:{value:.0014},
-  uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uHide:{value:new THREE.Vector3(0,-999,0)}
+  uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uReveal:{value:new THREE.Vector4(.5,.5,10,1)}, uRes:{value:new THREE.Vector2(1,1)}
 };
 const ramp=`vec3 ramp(float v,float row){ return texture2D(uRamps,vec2(clamp(v,.004,.996),row)).rgb; }`;
 
@@ -250,10 +250,10 @@ export function makeSprites(root,sheet,items,opts={}){
         vRow=iMisc.x; vTone=iMisc.y; vX=uv.x-.5; vSideL=dot(right,uSide); vFogF=1.-exp(-d*d*uFogD*uFogD); vNear=d;
         gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
     fragmentShader:`precision highp float;
-      uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow;
+      uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear; ${ramp}
       void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
-        if(vNear<6.){ vec2 q=floor(gl_FragCoord.xy*.5); if(fract(q.x*.5+q.y*.5)*2.>vNear/6.+.0&&mod(q.x+q.y,2.)<1.) discard; }
+        if(vNear<uReveal.z&&cameraPosition.y>-1.){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.3){ vec2 q=mod(floor(gl_FragCoord.xy*.5),3.); if(q.x+q.y>rr/.3*3.2-.2) discard; } }
         #ifdef COLORED
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
         #else
@@ -327,7 +327,8 @@ function buildGround(root){
 }
 
 /* ---------- lake ---------- */
-export let water=null;
+export let water=null; let mirrorEvery=1;
+export const setMirrorEvery=n=>{ mirrorEvery=n; };
 const waterU={ uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
 function shoreTex(){
   const S=512, d=new Uint8Array(S*S*4);
@@ -363,6 +364,8 @@ function buildLake(root,res){
   const geo=new THREE.PlaneGeometry(760,460);
   water=new Reflector(geo,{ textureWidth:res[0], textureHeight:res[1], shader, multisample:0, clipBias:.002 });
   water.rotation.x=-Math.PI/2; water.position.set(0,WATER_Y,180); water.frustumCulled=false; water.camera.layers.enable(2); root.add(water);
+  const mirror=water.onBeforeRender; let tick=0;       // the reflection may refresh every 2nd or 3rd frame on slower machines
+  water.onBeforeRender=function(r,sc,cam){ if(cam.isPerspectiveCamera&&(tick++%mirrorEvery)===0) mirror.call(this,r,sc,cam); };
   const u=water.material.uniforms;
   u.uTint.value=waterU.uTint.value; u.uGlint.value=waterU.uGlint.value; u.uFog.value=U.uFog.value; u.uShore.value=shoreTex(); u.uNoise.value=TEX.clouds;
   waterU.uni=u;
@@ -388,8 +391,8 @@ function buildMist(root){
 
 /* ---------- rocks ---------- */
 function vn3(x,y,z){ return (vnoise(x+z*.7,y-z*.4)+vnoise(y*1.3+5,z*1.3-x*.5))*.5; }
-function rockGeo(seed,flat){
-  const g=new THREE.IcosahedronGeometry(1,2), p=g.attributes.position, s=seed*7.3;
+function rockGeo(seed,flat,detail=2){
+  const g=new THREE.IcosahedronGeometry(1,detail), p=g.attributes.position, s=seed*7.3;
   for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
     const n=1+(vn3(x*1.1+s,y*1.1,z*1.1)-.5)*1.1+(vn3(x*3+s,y*3,z*3)-.5)*.3; let yy=y*n*flat; if(yy<-.2) yy=-.2;
     p.setXYZ(i,x*n,yy,z*n); }
@@ -398,7 +401,7 @@ function rockGeo(seed,flat){
 const toonGrad=(()=>{ const d=new Uint8Array([70,130,195,255]); const t=new THREE.DataTexture(d,4,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.NearestFilter; t.needsUpdate=true; return t; })();
 export function toonOf(params){ return new THREE.MeshToonMaterial({gradientMap:toonGrad,...params}); }
 function buildRocks(root,obst){
-  const r=rng(77), geos=[rockGeo(1,.72),rockGeo(2,.6),rockGeo(3,.84),rockGeo(4,.5)];
+  const r=rng(77), geos=[rockGeo(1,.72),rockGeo(2,.6),rockGeo(3,.84),rockGeo(4,.5),rockGeo(5,.7,1),rockGeo(6,.56,1),rockGeo(7,.8,1),rockGeo(8,.5,1)];
   const mat=toonOf({color:0xffffff});
   mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uRockRow:{value:rowV('rock')},uMossRow:{value:rowV('ground')},uIceRow:{value:rowV('ice')},uSnow:U.uSnow});
     sh.vertexShader='varying vec3 vWN; varying vec3 vWP;\n'+sh.vertexShader.replace('#include <defaultnormal_vertex>',
@@ -414,8 +417,8 @@ function buildRocks(root,obst){
       if(uSnow>.01) c=mix(c,ramp(.6+tb.r*.4,uIceRow),uSnow*smoothstep(.3,.62,nn.y));
       c*=mix(.5,1.,smoothstep(-1.5,.2,vWP.y+1.15));
       diffuseColor.rgb*=c;`); };
-  const spots=[[],[],[],[]];
-  const add=(x,z,s,sy)=>{ const y=terrainH(x,z); spots[Math.floor(r()*4)].push({x,y:y-.1*s,z,s,sy,ry:r()*6.28}); if(s>1.1) obst.push({x,z,r:s*.82,kind:'rock'}); };
+  const spots=[[],[],[],[],[],[],[],[]];
+  const add=(x,z,s,sy)=>{ const y=terrainH(x,z); spots[Math.floor(r()*4)+(s<1.7?4:0)].push({x,y:y-.1*s,z,s,sy,ry:r()*6.28}); if(s>1.1) obst.push({x,z,r:s*.82,kind:'rock'}); };
   // along the shore, in groups, big ones half in the water
   for(let i=0;i<40000;i++){ const x=(r()-.5)*560, z=24+r()*250, f=lakeField(x,z); if(f<-.016||f>.01) continue; if(Math.hypot(x-15,z-34)<8) continue;
     if(vnoise(x*.06+2,z*.06)<.44) continue; add(x,z,.5+r()*r()*r()*6.5,.62+r()*.5); }
@@ -426,13 +429,14 @@ function buildRocks(root,obst){
   const d=new THREE.Object3D();
   spots.forEach((list,i)=>{ if(!list.length) return; const im=new THREE.InstancedMesh(geos[i],mat,list.length); const col=new THREE.Color();
     list.forEach((s,k)=>{ d.position.set(s.x,s.y,s.z); d.rotation.set(0,s.ry,0); d.scale.set(s.s,s.s*s.sy,s.s*(.8+.5*((k*7%10)/10))); d.updateMatrix(); im.setMatrixAt(k,d.matrix); col.setScalar(.82+.3*((k*3%7)/7)); im.setColorAt(k,col); });
-    im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; root.add(im); });
+    im.receiveShadow=true; im.frustumCulled=false; root.add(im); });
   return spots.flat();
 }
 
 /* ---------- planting the valley ---------- */
 const pick=(a,r)=>a[Math.floor(r()*a.length)];
-function plant(root,obst){
+function plant(root,obst,qual){
+  const plantCount={low:9000,med:17000,high:26000}[qual]||17000;
   const r=rng(1234), trees=[], plants=[], decals=[], mini=[]; let tall=1;
   const tree=(x,z,kind)=>{
     const y=terrainH(x,z)-.25;
@@ -463,7 +467,7 @@ function plant(root,obst){
   [[-27,19,'broad'],[-31,23,'broad'],[-24,25,'larch'],[-34,17,'spruce'],[-38,22,'spruce'],[-29,27,'broad'],[29,16,'broad'],[33,22,'larch'],[27,24,'broad'],[36,14,'spruce'],[40,20,'spruce'],[31,29,'broad'],[-44,12,'larch'],[46,8,'broad'],[-50,4,'spruce'],[50,3,'spruce']]
     .forEach(([x,z,k])=>{ if(lakeField(x,z)<-.008) tree(x,z,k); });
   // understory
-  for(let i=0;i<26000;i++){ const nearby=i<16000, a=r()*6.28, qr=nearby?16+r()*r()*84:0, x=nearby?Math.cos(a)*qr*1.3:(r()-.5)*420, z=nearby?12+Math.sin(a)*qr:(r()-.5)*300-20, f=lakeField(x,z); if(f>-.004) continue;
+  for(let i=0;i<plantCount;i++){ const nearby=i<plantCount*.62, a=r()*6.28, qr=nearby?16+r()*r()*84:0, x=nearby?Math.cos(a)*qr*1.3:(r()-.5)*420, z=nearby?12+Math.sin(a)*qr:(r()-.5)*300-20, f=lakeField(x,z); if(f>-.004) continue;
     const y=terrainH(x,z), kp=keepClear(x,z);
     if(x>-11&&x<11&&z>-11&&z<14) continue;
     if(pathDist(x,z)<2) continue;
@@ -530,7 +534,7 @@ export function buildScenery(parent,qual){
   buildLake(root,QUAL_RES[qual]||QUAL_RES.med);
   mistRings=buildMist(root);
   const rocks=buildRocks(root,obstacles);
-  miniTrees=plant(root,obstacles); indexObstacles();
+  miniTrees=plant(root,obstacles,qual); indexObstacles();
   birds=buildBirds(root);
   rampTex.needsUpdate=true;
   return root;
@@ -543,6 +547,7 @@ export function setSeason(season){
 }
 
 // returns the frame's light rig so index.html can drive the directional light and grade
+const revealV=new THREE.Vector3();
 export const rig={ sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color() };
 export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   U.uTime.value=t;
@@ -565,6 +570,8 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   // the sun side of every sprite, in world XZ
   U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize();
   const c=camera.position;
+  revealV.copy(player.pos); revealV.y+=1; revealV.project(camera);
+  U.uReveal.value.set(revealV.x*.5+.5,revealV.y*.5+.5,c.distanceTo(player.pos)-.8,camera.aspect);
   layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
   mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
   if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }

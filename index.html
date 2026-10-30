@@ -180,7 +180,7 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, animalPool, nearestOf
+  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, animalPool, nearestOf, setMirrorEvery, U as paintU
 } from './scenery.js';
 import { logHouse, marketStall, shippingBin, anvilBlock, hearth, fenceRun, mineMouth, buildDock, makeVillager, buildSmoke, addSmoke, updateBuildings } from './buildings.js';
 
@@ -706,7 +706,8 @@ function updateBeasts(dt,now){ if(!beasts||S.inMine) return; const t=now*.001;
   for(const h of herons){ h.t+=dt; const bow=(h.t%11)>8; beasts.set(i++,bow?'heron_b':'heron_a',h.x,walkH(h.x,h.z)-.06,h.z,2.1,h.x<0); }
   for(const d of ducks){ const a=t*d.sp+d.ph, x=d.cx+Math.cos(a*6.28)*d.r, z=d.cz+Math.sin(a*6.28)*d.r*.6; beasts.set(i++,'duck_a',x,WATER_Y-.08,z,.62,Math.sin(a*6.28)>0); }
   bear.t+=dt; bear.x+=bear.dir*dt*.9; if(bear.x<58||bear.x>128) bear.dir*=-1; bear.w+=dt*2.6;
-  const bz=shoreZ(bear.x)-6; beasts.set(i++,['bear_0','bear_1','bear_0','bear_2'][Math.floor(bear.w)%4],bear.x,walkH(bear.x,bz)-.1,bz,2.3,bear.dir<0);
+  if(bear.t>1||!bear.zc){ bear.t=0; bear.zc=shoreZ(bear.x)-6; }
+  const bz=bear.zc; beasts.set(i++,['bear_0','bear_1','bear_0','bear_2'][Math.floor(bear.w)%4],bear.x,walkH(bear.x,bz)-.1,bz,2.3,bear.dir<0);
   beasts.set(i++,'deer_a',deer.x,walkH(deer.x,deer.z)-.08,deer.z,2.6,(Math.sin(t*.04)>0));
   beasts.commit();
 }
@@ -953,7 +954,7 @@ class HourGrade extends Effect {
     { uniforms:new Map([['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)]]) }); }
 }
 let QUAL = localStorage.getItem('sv_qual')||'med';
-const QSET={ low:{dpr:0.9,shadow:1024,bloom:false,msaa:0,smaa:false},
+const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false},
             med:{dpr:1.25,shadow:1536,bloom:true,msaa:0,smaa:true},
             high:{dpr:1.6,shadow:2048,bloom:true,msaa:4,smaa:false} };
 function setupPost(){
@@ -970,13 +971,23 @@ function setupPost(){
   gradeFx=new HourGrade(); fx.push(gradeFx);
   if(q.smaa) fx.push(new SMAAEffect());
   composer.addPass(new EffectPass(camera, ...fx));
-  composer.setSize(innerWidth,innerHeight);
+  composer.setSize(innerWidth,innerHeight); syncRes();
 }
 function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); }
 function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:'流畅',med:'均衡',high:'极致'}[QUAL]||QUAL); }
 
 const cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.Vector3();
-let last=performance.now(), miniT=0, fCnt=0, fAcc=0, sTick=0;
+let last=performance.now(), miniT=0, statusT=0, fCnt=0, fAcc=0, sTick=0;
+// frame governor: if a machine cannot hold its tier, step resolution and mirror rate down, quietly and for this session
+let govT=0, govN=0, govStep=0, govScale=1;
+function governor(raw){ if(DBG&&!DBG.gov) return;
+  govT+=raw; govN++; if(govT<2.5) return;
+  const fps=govN/govT; govT=0; govN=0;
+  if(fps<42&&govStep<3&&!document.hidden){ govStep++; govScale=[1,.82,.68,.56][govStep];
+    setMirrorEvery(Math.min(3,1+govStep)); sun.shadow.autoUpdate=false;
+    renderer.setPixelRatio(Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr)*govScale); composer.setSize(innerWidth,innerHeight); syncRes(); }
+}
+function syncRes(){ renderer.getDrawingBufferSize(paintU.uRes.value); }
 function frame(now){
   requestAnimationFrame(frame);
   const raw=(now-last)/1000, dt=Math.min(0.05,raw); last=now;
@@ -1031,17 +1042,18 @@ function frame(now){
   camera.position.lerp(camPos,DBG?1:1-Math.pow(.0001,dt));
   camera.lookAt(player.pos.x, player.pos.y+(cam.look||1.5), player.pos.z);
 
-  updateTarget();
+  if((sTick&1)===0) updateTarget();
   // selector pulse
   selector.material.opacity=0.5+Math.sin(now*0.006)*0.35;
 
   // proximity hints
   hintProximity();
 
-  renderStatus();
-  miniT+=dt; if(miniT>0.12){ drawMini(); miniT=0; }
+  statusT+=dt; if(statusT>.3){ renderStatus(); statusT=0; }
+  miniT+=dt; if(miniT>0.25){ drawMini(); miniT=0; }
+  governor(raw);
 
-  if((sTick++ % 3)===0) renderer.shadowMap.needsUpdate=true;   // throttle shadow pass to ~20Hz
+  if((sTick++ % 4)===0) renderer.shadowMap.needsUpdate=true;   // throttle shadow pass to ~15Hz
   composer.render();
   if(DBG){ DBG.frames=(DBG.frames||0)+1; if(DBG.frames===8) document.body.dataset.ready='1'; }
 }
@@ -1406,7 +1418,7 @@ function applyDebugShot(){ const q=DBG;
   if(q.q) QUAL=q.q, setupPost();
   window.__sv={S,player,cam,camera,renderer,setSeason,keys,NPCS,interact,useTool,toggleBoat,tryFish,fishPress,saveGame,loadGame,sleep,enterMine,leaveMine,mineSwing,descendMine,openShop,openCraft,openCoop,openCook,openBlacksmith,openDialogue,advanceDay,placeCraftable,harvest,invAdd,invCount,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH};
 }
-addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); });
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
 boot();
 </script>
 </body>
