@@ -103,6 +103,10 @@ export const makeBear=()=>quadruped({len:1.5,girth:.46,legLen:.62,legR:.13,fatLe
 export const makeDeer=()=>quadruped({len:1.1,girth:.2,legLen:.92,legR:.042,back:0x9a7448,belly:0xc8a878,foot:0x2a1e16,legCol:0xa88258,neckLen:.56,neckUp:1.0,headR:.13,muzzle:.15,muzzleR:.055,muzzleCol:0xdcc8a4,ear:'long',earSize:.2,earCol:0xa88258,tail:'stub',tailLen:.16,tailTip:0xf0e8d8,antlers:true,stride:1.6});
 export const makeCow=()=>quadruped({len:1.3,girth:.34,legLen:.7,legR:.08,back:0xf2efe8,belly:0xe6e0d4,foot:0x2a2622,neckLen:.3,neckUp:.34,headR:.2,muzzle:.15,muzzleR:.1,muzzleCol:0xe8b8a8,ear:'long',earSize:.16,earCol:0x3a322c,tail:'thin',tailLen:.6,tailTip:0x2a2622,horns:true,stride:1.3,tailLift:-1.2,patches:true});
 
+export const makeSheep=()=>quadruped({len:.9,girth:.36,legLen:.4,legR:.05,back:0xeee6d8,belly:0xe4dac8,foot:0x2a2622,legCol:0x4a4038,neckLen:.2,neckUp:.7,headR:.15,muzzle:.12,muzzleR:.07,muzzleCol:0x4a4038,ear:'flop',earSize:.13,earCol:0x4a4038,tail:'stub',tailLen:.14,stride:.9});
+export const makeGoat=()=>quadruped({len:.9,girth:.22,legLen:.56,legR:.05,back:0xd8cdb8,belly:0xeae0cc,foot:0x3a3028,neckLen:.3,neckUp:.86,headR:.13,muzzle:.14,muzzleR:.06,ear:'long',earSize:.15,tail:'stub',tailLen:.14,horns:true,stride:1});
+export const makePig=()=>quadruped({len:1,girth:.32,legLen:.36,legR:.07,back:0xeaaea0,belly:0xf0bcae,foot:0x8a5a50,neckLen:.14,neckUp:.3,headR:.2,muzzle:.1,muzzleR:.1,muzzleCol:0xe09a8c,ear:'long',earSize:.12,tail:'thin',tailLen:.16,stride:.8,tailLift:1.1});
+
 /* ---------- birds ---------- */
 export function bird(o){
   mats();
@@ -138,6 +142,7 @@ export function poseBird(B,dt,{speed=0,peck=0,flap=0}={}){
 export const makeHeron=()=>bird({bodyL:.7,bodyR:.2,col:0x7c8ca0,wing:0x566478,neckCol:0xc4d0d8,headCol:0xe8eef0,legLen:.92,legCol:0x4e4034,thighCol:0x6c7c90,neck:[[0,.2,.14],[0,.42,.02],[0,.66,.13],[0,.82,.26]],neckR:.04,headR:.06,beakL:.26,beakCol:0xe0a030,plume:0x1e1a1e,tailUp:-.08,stride:.7});
 export const makeDuck=()=>bird({bodyL:.42,bodyR:.15,col:0xa89a8a,wing:0x6e6054,neckCol:0x18543e,headCol:0x186048,neck:[[0,.08,.1],[0,.18,.1]],neckR:.05,headR:.07,beakL:.1,beakCol:0xe0a838,float:true,tailUp:.12});
 export const makeChicken=()=>bird({bodyL:.34,bodyR:.17,col:0xf2ece0,wing:0xdcd2c0,neck:[[0,.1,.1],[0,.2,.13]],neckR:.06,headR:.07,beakL:.07,beakCol:0xe8a030,comb:0xd83838,wattle:true,legLen:.2,legCol:0xe0a030,tailUp:.22,stride:.3,scale:.92});
+export const makeWalkDuck=()=>bird({bodyL:.4,bodyR:.16,col:0xf4f0e6,wing:0xe0dacc,neck:[[0,.1,.1],[0,.2,.12]],neckR:.055,headR:.07,beakL:.1,beakCol:0xe8a838,legLen:.16,legCol:0xe8a030,tailUp:.14,stride:.3});
 export function makeFish(col=0x8a9a6a,belly=0xd8d4b0,L=.6){
   mats(); const G=new THREE.Group(), tail=new THREE.Group();
   G.add(mesh(loft([[0,0,L*.5,.008,.012,belly],[0,0,L*.34,L*.1,L*.13,col],[0,.008,L*.02,L*.12,L*.18,col],[0,0,-L*.26,L*.07,L*.11,col],[0,0,-L*.42,L*.016,L*.04,col]],8)));

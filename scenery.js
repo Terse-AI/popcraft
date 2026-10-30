@@ -32,6 +32,17 @@ export function lakeField(x,z){            // > 0 is water
   for(const [ix,iz,ir] of ISLANDS){ const d=Math.hypot(x-ix,z-iz); if(d<ir*3) f=Math.min(f,(d/(ir*(.75+.5*vnoise(x*.07+5,z*.07)))-1)*.16); }
   return Math.min(f,(z-27)/70);
 }
+/* Mist Creek: from the north-west highland over the falls, down the rapids and into the lake.
+   x,z,water height,half width,foam */
+export const RIVER=[[-268,-16,34,3.2,.1],[-244,4,31,3.4,.15],[-226,20,28.4,3.8,.35],[-214,31,26.6,4.2,.6],[-210.5,34.5,9.2,4.6,1],[-203,41,7.4,5,.9],[-192,47,5,5.2,.8],[-180,52,2.6,5.6,.7],[-168,56,.2,6.5,.5],[-156,60,-1.15,8,.25]];
+const FALLS={x:-212,z:33,top:26.6,bot:9.2};
+export function riverAt(x,z){              // nearest point on the creek: distance, water height, half width
+  if(x>-130||z<-40||z>90) return null;
+  let best=1e9, by=0, bw=4, bs=0;
+  for(let i=0;i<RIVER.length-1;i++){ const a=RIVER[i], b=RIVER[i+1], vx=b[0]-a[0], vz=b[1]-a[1], t=clamp(((x-a[0])*vx+(z-a[1])*vz)/(vx*vx+vz*vz),0,1), d=Math.hypot(x-a[0]-vx*t,z-a[1]-vz*t);
+    if(d<best){ best=d; by=lerp(a[2],b[2],t); bw=lerp(a[3],b[3],t); bs=i+t; } }
+  return {d:best,y:by,w:bw,s:bs};
+}
 export function terrainH(x,z){
   const e=clamp((Math.max(Math.abs(x),Math.abs(z))-FARM_HALF)/18,0,1);
   let h=((vnoise(x*.035,z*.035)-.5)*8+(vnoise(x*.11,z*.11)-.5)*1.5)*e*e;
@@ -39,6 +50,9 @@ export function terrainH(x,z){
   h+=smooth(1.02,1.75,r)*78*(.45+1.1*vnoise(x*.012+9,z*.012+2))*smooth(60,170,Math.hypot(x,z))*lerp(.2,1,smooth(90,250,Math.abs(x)));   // valley walls: high at the sides, low at the far end so the peaks show
   h+=smooth(70,210,Math.hypot(x,z+6))*34*vnoise(x*.014+3,z*.014)*smooth(40,-30,z);          // wooded ridges behind the farm
   for(const [ix,iz,ir] of ISLANDS){ const d=Math.hypot(x-ix,z-iz); if(d<ir*1.4) h=Math.max(h,WATER_Y+(1-d/(ir*1.2))*ir*.34); }
+  { const px=Math.max(0,Math.abs(x+38.5)-9), pz=Math.max(0,Math.abs(z+14)-8), pd=Math.hypot(px,pz); if(pd<10) h=lerp(0,h,smooth(0,10,pd)); }   // the greenhouse sits on a level pad
+  const rv=riverAt(x,z);
+  if(rv&&rv.d<46){ const bank=rv.y+1.1+Math.max(0,rv.d-rv.w)*.34; h=lerp(bank,h,smooth(16,46,rv.d)); if(rv.d<rv.w+3) h=lerp(rv.y-.9,h,smooth(rv.w-.6,rv.w+3,rv.d)); }
   const f=lakeField(x,z);
   if(f>-.07){ const s=smooth(-.07,0,f); h=lerp(h,WATER_Y+.25,s); if(f>0) h=WATER_Y+.25-Math.min(5,f*34); }
   return h;
@@ -47,23 +61,31 @@ export function terrainH(x,z){
 export const DOCK={x:15,z0:0,z1:0,w:2.5,y:.02};
 (()=>{ let z=20; while(lakeField(DOCK.x,z)<-.012&&z<60) z+=.4; DOCK.z0=z-3; DOCK.z1=z+15; })();
 export const onDock=(x,z)=>(Math.abs(x-DOCK.x)<DOCK.w/2+.15&&z>DOCK.z0&&z<DOCK.z1+2)||(Math.abs(x-DOCK.x)<DOCK.w/2+1.6&&z>DOCK.z1-.3&&z<DOCK.z1+2.1);
-export const inWater=(x,z)=>lakeField(x,z)>-.004&&!onDock(x,z);
+export const inWater=(x,z)=>(lakeField(x,z)>-.004&&!onDock(x,z))||inRiver(x,z);
+export function inRiver(x,z,m=.9){ const r=riverAt(x,z); return !!r&&r.d<r.w*m; }
 export const walkH=(x,z)=>onDock(x,z)?Math.max(DOCK.y+.05,terrainH(x,z)):terrainH(x,z);
 
 /* walking paths; kept clear of trees and painted into the ground */
 export const PATHS=[
   [[0,-9.5],[1,-2],[0,13],[4,20],[14,25],[15,31]],         // cabin → dock
   [[4,-9],[14,-13],[26,-20],[34,-24]],                     // farm → town plaza
+  [[34,-24],[50,-24],[66,-24],[84,-24]],[[34,-24],[22,-30]],[[36,-24],[36,-34]],[[50,-24],[50,-30]],[[64,-24],[64,-28]],[[62,-24],[64,-14]],[[50,-24],[54,-4]],[[26,-20],[20,-4]],
+  [[4,20],[24,24]],
   [[-4,-9],[-16,-18],[-28,-30],[-40,-37]],                 // farm → mine
   [[-2,-8.5],[-13,-6]],                                    // → market stall
-  [[-1,3],[-13,4]]                                         // → coop
+  [[-1,3],[-13,4]],                                        // → coop
+  [[-13,4],[-60,14],[-112,26],[-150,38],[-178,40]]         // → the creek and the falls
 ];
 function segDist(px,pz,a,b){ const vx=b[0]-a[0],vz=b[1]-a[1],t=clamp(((px-a[0])*vx+(pz-a[1])*vz)/(vx*vx+vz*vz),0,1); return Math.hypot(px-a[0]-vx*t,pz-a[1]-vz*t); }
 function pathDist(x,z){ let d=1e9; for(const p of PATHS) for(let i=0;i<p.length-1;i++) d=Math.min(d,segDist(x,z,p[i],p[i+1])); return d; }
 function keepClear(x,z){
   if(x>-28&&x<23&&z>-27&&z<25) return true;               // farm + yard
-  if(x>14&&x<54&&z>-44&&z<-10) return true;               // town
+  if(x>14&&x<96&&z>-56&&z<8) return true;                 // town
+  if(x>-50&&x<-27&&z>-24&&z<-4) return true;              // greenhouse
+  if(x>19&&x<38&&z>-4&&z<30) return true;                 // barn, fish shop
+  if(Math.hypot(x-138,z-86)<14) return true;              // lighthouse keeper's yard
   if(Math.hypot(x+40,z+40)<9) return true;                // mine mouth
+  const rv=riverAt(x,z); if(rv&&rv.d<rv.w+3.5) return true;
   return pathDist(x,z)<3.2;
 }
 
@@ -376,6 +398,39 @@ function buildLake(root,res){
   waterU.uni=u;
 }
 
+/* ---------- the creek: flowing ribbon, white over the falls and rapids ---------- */
+const creekU={ uTint:{value:new THREE.Color()}, uFoam:{value:new THREE.Color()}, uTime:U.uTime, uN:{value:null}, uFog:U.uFog, uFogD:U.uFogD };
+function buildCreek(root){
+  creekU.uN.value=TEX.clouds;
+  const pts=RIVER.map(p=>new THREE.Vector3(p[0],p[2],p[1])), curve=new THREE.CatmullRomCurve3(pts,false,'catmullrom',.12), N=160, P=[],UV=[],F=[],I=[];
+  let run=0, prev=null;
+  for(let i=0;i<=N;i++){ const t=i/N, p=curve.getPoint(t), d=curve.getTangent(t), r=riverAt(p.x,p.z)||{w:5}, w=r.w*1.15, nx=-d.z, nz=d.x, l=Math.hypot(nx,nz)||1, slope=Math.min(1,Math.abs(d.y)*2.2+.0);
+    if(prev) run+=prev.distanceTo(p); prev=p.clone();
+    const foam=Math.max(slope,lerp(.1,1,0)*0);
+    P.push(p.x+nx/l*w,p.y+.02,p.z+nz/l*w, p.x-nx/l*w,p.y+.02,p.z-nz/l*w); UV.push(0,run,1,run); F.push(foam,foam);
+    if(i<N){ const a=i*2; I.push(a,a+1,a+2,a+1,a+3,a+2); } }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2)); g.setAttribute('aF',new THREE.Float32BufferAttribute(F,1)); g.setIndex(I);
+  const m=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:creekU,
+    vertexShader:`attribute float aF; varying vec2 vUv; varying float vF; varying float vD; void main(){ vUv=uv; vF=aF; vec4 w=modelMatrix*vec4(position,1.); vD=length(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w; }`,
+    fragmentShader:`precision highp float; uniform sampler2D uN; uniform vec3 uTint,uFoam,uFog; uniform float uTime,uFogD; varying vec2 vUv; varying float vF,vD;
+      void main(){ float sp=1.6+vF*3.4; vec2 q=vec2(vUv.x*.42,vUv.y*.026-uTime*sp*.012), q2=vec2(vUv.x*.9+.3,vUv.y*.06-uTime*sp*.021);
+        float a=texture2D(uN,q).b, b=texture2D(uN,q2).b, e=abs(vUv.x-.5)*2.;
+        float streak=smoothstep(.62-vF*.5,.86-vF*.42,a*.66+b*.56+e*e*.2);
+        vec3 c=mix(uTint,uTint*.62,b); c=mix(c,uFoam,clamp(streak+vF*.26,0.,1.));
+        c=mix(c,uFog,1.-exp(-vD*vD*uFogD*uFogD));
+        gl_FragColor=vec4(c,1.); }` });
+  const o=new THREE.Mesh(g,m); o.frustumCulled=false; root.add(o);
+  // spray at the foot of the falls
+  const n=70, sg=new THREE.BufferGeometry(), sp=new Float32Array(n*3); sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+  const c=document.createElement('canvas'); c.width=c.height=48; const x=c.getContext('2d'), rg=x.createRadialGradient(24,24,2,24,24,23); rg.addColorStop(0,'rgba(255,255,255,.8)'); rg.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=rg; x.fillRect(0,0,48,48);
+  const spray=new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:2.6,map:new THREE.CanvasTexture(c),transparent:true,opacity:.42,depthWrite:false,toneMapped:false})); spray.frustumCulled=false; root.add(spray);
+  spray.userData.t=Array.from({length:n},(_,i)=>[i/n,Math.random()*6.28,Math.random()]); sprayFx=spray;
+}
+let sprayFx=null;
+function updateSpray(dt){ if(!sprayFx) return; const p=sprayFx.geometry.attributes.position, T=sprayFx.userData.t;
+  for(let i=0;i<T.length;i++){ const t=T[i]; t[0]+=dt*(.34+t[2]*.3); if(t[0]>1) t[0]-=1; const q=t[0], r=1+q*5.5*(.4+t[2]); p.setXYZ(i,FALLS.x+Math.cos(t[1])*r+2,FALLS.bot+.3+Math.sin(q*3.1)*3.2*(.5+t[2]),FALLS.z+Math.sin(t[1])*r+3); }
+  p.needsUpdate=true; }
+
 /* ---------- mist: slow additive veils in nested rings ---------- */
 const mistU={ uMistC:{value:new THREE.Color()}, uMistA:{value:.5}, uTime:U.uTime, uN:{value:null} };
 function buildMist(root){
@@ -423,17 +478,19 @@ function buildRocks(root,obst){
       c*=mix(.5,1.,smoothstep(-1.5,.2,vWP.y+1.15));
       diffuseColor.rgb*=c;`); };
   const spots=[[],[],[],[],[],[],[],[]];
-  const add=(x,z,s,sy)=>{ const y=terrainH(x,z); spots[Math.floor(r()*4)+(s<1.7?4:0)].push({x,y:y-.1*s,z,s,sy,ry:r()*6.28}); if(s>1.1) obst.push({x,z,r:s*.82,kind:'rock'}); };
+  const add=(x,z,s,sy)=>{ const y=terrainH(x,z), sp={x,y:y-.1*s,z,s,sy,ry:r()*6.28}; spots[Math.floor(r()*4)+(s<1.7?4:0)].push(sp); sp.ob=s>1.1?{x,z,r:s*.82,kind:'rock'}:null; if(sp.ob) obst.push(sp.ob); return; };
   // along the shore, in groups, big ones half in the water
   for(let i=0;i<40000;i++){ const x=(r()-.5)*560, z=24+r()*250, f=lakeField(x,z); if(f<-.016||f>.01) continue; if(Math.hypot(x-15,z-34)<8) continue;
     if(vnoise(x*.06+2,z*.06)<.44) continue; add(x,z,.5+r()*r()*r()*6.5,.62+r()*.5); }
   // scattered in the meadows and woods
   for(let i=0;i<620;i++){ const x=(r()-.5)*500, z=(r()-.5)*500-50, f=lakeField(x,z); if(f>-.02||keepClear(x,z)) continue; if(vnoise(x*.03,z*.03)<.55) continue; add(x,z,.5+r()*r()*3.4,.65+r()*.4); }
+  // boulders in and along the creek, stacked at the falls
+  for(let i=0;i<600;i++){ const k=r()*(RIVER.length-1), a=RIVER[Math.floor(k)], b=RIVER[Math.ceil(k)], q=k%1, cx=lerp(a[0],b[0],q), cz=lerp(a[1],b[1],q), w=lerp(a[3],b[3],q), ang=r()*6.28, rad=w*(.6+r()*1.7), x=cx+Math.cos(ang)*rad, z=cz+Math.sin(ang)*rad, rv=riverAt(x,z); if(!rv) continue; const inside=rv.d<rv.w*.7; if(inside&&r()<.72) continue; const yy=terrainH(x,z), s=(.6+r()*r()*3)*(Math.abs(k-3.5)<1.2?1.7:1); spots[Math.floor(r()*4)+(s<1.7?4:0)].push({x,y:yy-.1*s,z,s,sy:.7+r()*.5,ry:r()*6.28}); if(!inside&&s>1.2) obst.push({x,z,r:s*.8,kind:'rock'}); }
   // reefs off the shore
   for(let i=0;i<70;i++){ const x=(r()-.5)*420, z=46+r()*230, f=lakeField(x,z); if(f<.015||f>.16) continue; add(x,z,.5+r()*1.8,.5+r()*.3); }
-  const d=new THREE.Object3D();
+  const d=new THREE.Object3D(); rockGeos=geos;
   spots.forEach((list,i)=>{ if(!list.length) return; const im=new THREE.InstancedMesh(geos[i],mat,list.length); const col=new THREE.Color();
-    list.forEach((s,k)=>{ d.position.set(s.x,s.y,s.z); d.rotation.set(0,s.ry,0); d.scale.set(s.s,s.s*s.sy,s.s*(.8+.5*((k*7%10)/10))); d.updateMatrix(); im.setMatrixAt(k,d.matrix); col.setScalar(.82+.3*((k*3%7)/7)); im.setColorAt(k,col); });
+    list.forEach((s,k)=>{ d.position.set(s.x,s.y,s.z); d.rotation.set(0,s.ry,0); d.scale.set(s.s,s.s*s.sy,s.s*(.8+.5*((k*7%10)/10))); d.updateMatrix(); im.setMatrixAt(k,d.matrix); const ri=rockInst.length; rockInst.push({im,k,m:d.matrix.clone(),ob:s.ob}); if(s.ob) s.ob.ri=ri; col.setScalar(.82+.3*((k*3%7)/7)); im.setColorAt(k,col); });
     im.receiveShadow=true; im.frustumCulled=false; root.add(im); });
   return spots.flat();
 }
@@ -453,11 +510,12 @@ function bakeFields(){
 function plant(root,obst,qual){
   const plantCount={low:9000,med:17000,high:26000}[qual]||17000;
   const r=rng(1234), trees=[], plants=[], decals=[], mini=[]; let tall=1;
+  const link=o=>{ const t=trees[trees.length-1]; t.ob=o; o.tree=t; t.idx=trees.length-1; obst.push(o); };
   const tree=(x,z,kind)=>{
     const y=terrainH(x,z)-.25;
-    if(kind==='spruce'){ const h=(12+r()*13)*tall; trees.push({name:pick(['spruce_a','spruce_b','spruce_c','spruce_d'],r),x,y,z,h,row:'spruce',tone:(r()-.5)*.16,flip:r()<.5,wind:.7}); decals.push({x,z,r:h*.18}); obst.push({x,z,r:.75,kind:'tree'}); mini.push({x,z,c:0}); }
-    else if(kind==='larch'){ const h=(11+r()*11)*tall; trees.push({name:pick(['larch_a','larch_b'],r),x,y,z,h,row:'larch',tone:(r()-.5)*.14,flip:r()<.5,wind:.8}); decals.push({x,z,r:h*.16}); obst.push({x,z,r:.6,kind:'tree'}); mini.push({x,z,c:1}); }
-    else if(kind==='broad'){ const h=(7+r()*5.5)*tall; trees.push({name:pick(['broad_a','broad_b','broad_c'],r),x,y,z,h,row:pick(['broad1','broad1','broad2','broad3'],r),tone:(r()-.5)*.1,flip:r()<.5,wind:.5}); decals.push({x,z,r:h*.34}); obst.push({x,z,r:.7,kind:'tree'}); mini.push({x,z,c:2}); }
+    if(kind==='spruce'){ const h=(12+r()*13)*tall; trees.push({name:pick(['spruce_a','spruce_b','spruce_c','spruce_d'],r),x,y,z,h,row:'spruce',tone:(r()-.5)*.16,flip:r()<.5,wind:.7}); decals.push({x,z,r:h*.18}); link({x,z,r:.75,kind:'tree'}); mini.push({x,z,c:0}); }
+    else if(kind==='larch'){ const h=(11+r()*11)*tall; trees.push({name:pick(['larch_a','larch_b'],r),x,y,z,h,row:'larch',tone:(r()-.5)*.14,flip:r()<.5,wind:.8}); decals.push({x,z,r:h*.16}); link({x,z,r:.6,kind:'tree'}); mini.push({x,z,c:1}); }
+    else if(kind==='broad'){ const h=(7+r()*5.5)*tall; trees.push({name:pick(['broad_a','broad_b','broad_c'],r),x,y,z,h,row:pick(['broad1','broad1','broad2','broad3'],r),tone:(r()-.5)*.1,flip:r()<.5,wind:.5}); decals.push({x,z,r:h*.34}); link({x,z,r:.7,kind:'tree'}); mini.push({x,z,c:2}); }
     else if(kind==='snag'){ const h=7+r()*6; trees.push({name:'snag_a',x,y,z,h,row:'wood',tone:.1,flip:r()<.5,wind:.15,sheet:1}); obst.push({x,z,r:.5}); }
   };
   // forest: jittered grid thinned by a density field, species in drifts
@@ -499,7 +557,8 @@ function plant(root,obst,qual){
 
   plantedTrees=trees; plantedPlants=plants;
   const onTrees=[...trees.filter(t=>!t.sheet),...plants.filter(p=>p.trees)], onPlants=[...trees.filter(t=>t.sheet),...plants.filter(p=>!p.trees)];
-  makeSprites(root,'sheet_trees',onTrees);
+  spriteTrees=makeSprites(root,'sheet_trees',onTrees);
+  onTrees.forEach((t,i)=>{ const a=ATLAS[t.name]; t.bi=i; t.h0=t.h; t.w0=t.h*a.w/a.h*(t.sx||1); });
   makeSprites(root,'sheet_plants',onPlants,{mainOnly:true});
   // soft contact shadow under each tree
   const dg=new THREE.CircleGeometry(1,16); dg.rotateX(-Math.PI/2);
@@ -512,6 +571,15 @@ function plant(root,obst,qual){
   im.frustumCulled=false; im.layers.set(1); root.add(im);
   return mini;
 }
+
+/* felling and breaking change the world, and regrow on schedule */
+let spriteTrees=null, rockInst=[];
+function setSpriteH(it,on){ if(it.bi===undefined||!spriteTrees) return; const a=spriteTrees.geometry.attributes.iSize, m=it; a.setXY(it.bi,on?m.w0:0,on?m.h0:0); a.needsUpdate=true; }
+export function removeTree(o,i){ const t=o?o.tree:plantedTrees[i]; if(!t) return; t.gone=true; setSpriteH(t,false); if(!o) o=t.ob; if(o){ o.r=0; o.kind='felled'; } }
+export function breakRock(o,i){ const k=o?o.ri:i, R=rockInst[k]; if(!R) return; const m=new THREE.Matrix4().makeScale(0,0,0); R.im.setMatrixAt(R.k,m); R.im.instanceMatrix.needsUpdate=true; if(!o) o=R.ob; if(o){ o.saved=o.r; o.r=0; o.kind='gone'; } }
+export function restoreWorld(kind,i){ if(kind==='tree'){ const t=plantedTrees[i]; if(!t) return; t.gone=false; setSpriteH(t,true); if(t.ob){ t.ob.r=.7; t.ob.kind='tree'; t.ob.hp=undefined; } } else { const R=rockInst[i]; if(!R) return; R.im.setMatrixAt(R.k,R.m); R.im.instanceMatrix.needsUpdate=true; if(R.ob){ R.ob.r=R.ob.saved; R.ob.kind='rock'; R.ob.hp=undefined; } } }
+let rockGeos=[];
+export const rockGeoFor=i=>rockGeos[i%rockGeos.length];
 
 /* ---------- birds in formation, drifting across the sky ---------- */
 function buildBirds(root){
@@ -548,7 +616,7 @@ export function buildScenery(parent,qual){
   root=new THREE.Group(); parent.add(root);
   bakeFields(); buildSky(root); buildMountains(root); buildGround(root);
   buildLake(root,QUAL_RES[qual]||QUAL_RES.med);
-  mistRings=buildMist(root);
+  mistRings=buildMist(root); buildCreek(root);
   const rocks=buildRocks(root,obstacles);
   miniTrees=plant(root,obstacles,qual); indexObstacles();
   birds=buildBirds(root);
@@ -564,9 +632,10 @@ export function setSeason(season){
 
 // returns the frame's light rig so index.html can drive the directional light and grade
 const revealV=new THREE.Vector3();
-export const rig={ sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color() };
-export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
+export const rig={ water:new THREE.Color(), rain:0, sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color() };
+export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   U.uTime.value=t;
+  const weather=weather0==='storm'?'rain':weather0==='snow'?'cloudy':weather0;
   const P=weatherize(palette(minutes),weather);
   // sun crosses the south, so it sets over the lake; moon follows
   const a=clamp((minutes-330)/(1215-330),0,1)*Math.PI;
@@ -580,7 +649,8 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   setC(mtU.uRS.value,P.rockS); setC(mtU.uRL.value,P.rockL); setC(mtU.uSS.value,P.snowS); setC(mtU.uSL.value,P.snowL); setC(mtU.uFS.value,P.forS); setC(mtU.uFL.value,P.forL); setC(mtU.uHz.value,P.haze);
   setC(mtU.uDS.value,mixc(P.forS,[.46,.2,.08],.55)); setC(mtU.uDL.value,mixc(P.forL,[.98,.66,.2],.7));
   setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;
-  setC(waterU.uTint.value,P.water); setC(waterU.uGlint.value,mixc(P.cloudL,[1,1,1],.4));
+  setC(waterU.uTint.value,P.water); setC(waterU.uGlint.value,mixc(P.cloudL,[1,1,1],.4)); setC(creekU.uTint.value,mixc(P.water,P.forS,.42)); setC(creekU.uFoam.value,mixc(P.cloudL,[1,1,1],.5)); updateSpray(dt);
+  rig.water.copy(waterU.uTint.value); rig.rain=weather==='rain'?1:0;
   if(waterU.uni){ waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
   setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;
   // the sun side of every sprite, in world XZ

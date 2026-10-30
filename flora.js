@@ -200,12 +200,13 @@ export function setupFlora(root,trees,plants,qual){
   const co=new THREE.Mesh(cg,bladeMaterial('CARPET')); co.frustumCulled=false; co.layers.set(1); co.receiveShadow=true; root.add(co);
   for(const list of [trees,plants]) for(const it of list){ it.v=pickVar(it); if(!it.v) continue; if(it.trueH===undefined) it.trueH=it.h; const k=key(it.x,it.z); if(!cells.has(k)) cells.set(k,[]); cells.get(k).push(it); }
 }
+export const refreshFlora=()=>{ lastX=1e9; };
 export function updateFlora(cam){
   const cx=cam.x, cz=cam.z; if(Math.hypot(cx-lastX,cz-lastZ)<2.6) return; lastX=cx; lastZ=cz;
   for(const k in VAR) VAR[k].n=0;
   const Rc=Math.ceil(radT/CELL), mx=Math.floor(cx/CELL), mz=Math.floor(cz/CELL);
   for(let i=mx-Rc;i<=mx+Rc;i++) for(let j=mz-Rc;j<=mz+Rc;j++){ const l=cells.get(i*8192+j); if(!l) continue;
-    for(const it of l){ const V=VAR[it.v], lim=V.kind==='blade'||it.v==='shr'||it.v==='fer'?radP:radT, dx=it.x-cx, dz=it.z-cz; if(dx*dx+dz*dz>lim*lim||V.n>=V.cap) continue; const n=V.n++;
+    for(const it of l){ if(it.gone) continue; const V=VAR[it.v], lim=V.kind==='blade'||it.v==='shr'||it.v==='fer'?radP:radT, dx=it.x-cx, dz=it.z-cz; if(dx*dx+dz*dz>lim*lim||V.n>=V.cap) continue; const n=V.n++;
       if(V.kind==='flora'){ V.a.setXYZ(n,it.x,it.y,it.z); V.b.setXYZW(n,it.v==='shr'?it.trueH*1.1:it.v==='fer'?it.trueH*1.5:it.trueH,rowV(it.row),it.tone||0,(it.x*7.3+it.z*3.1)%6.28); }
       else { V.a.setXYZW(n,it.x,it.y,it.z,0); V.b.setXYZW(n,it.trueH*1.05,(it.x*7.3+it.z*3.1)%6.28,it.tone||0,0); } } }
   for(const k in VAR){ const V=VAR[k]; V.g.instanceCount=V.n; V.a.needsUpdate=true; V.b.needsUpdate=true; }
