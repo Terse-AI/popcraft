@@ -527,7 +527,7 @@ function renderIcons(){
     const m=cropMesh(id,CROPS[id].days,CROPS[id].days);
     const box=new THREE.Box3().setFromObject(m), ctr=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
     m.position.sub(ctr); isc.add(m);
-    const rad=Math.max(sz.x,sz.y,sz.z)||0.5, d=rad*2.3;
+    const rad=Math.max(sz.x,sz.y,sz.z)||0.5, d=rad*1.75;
     icam.position.set(d*0.55,d*0.45,d); icam.lookAt(0,0,0);
     renderer.clear(); renderer.render(isc,icam);
     renderer.readRenderTargetPixels(rt,0,0,SZ,SZ,buf);
@@ -850,7 +850,7 @@ function openShop(){
   closeAll(); const g=$('#shopg'); g.innerHTML='';
   for(const id in CROPS){ const c=CROPS[id]; if(c.season.indexOf(S.season)<0) continue;
     const b=document.createElement('div'); b.className='buy'+(S.gold<c.seed?' dim':'');
-    b.innerHTML='<div class="em">'+itemIcon('seed',id,34)+'</div><div class="nm">'+cropName(id)+'</div><div class="pr">'+c.seed+'g</div>';
+    b.innerHTML='<div class="em">'+itemIcon('seed',id,56)+'</div><div class="nm">'+cropName(id)+'</div><div class="pr">'+c.seed+'g</div>';
     b.onclick=()=>{ if(S.gold<c.seed){toast(t('nomoney'));return;} S.gold-=c.seed; invAdd('seed',id,1); renderStatus(); toast(t('buy')+cropName(id)); openShop(); };
     g.appendChild(b); }
   $('#shop').classList.remove('hidden');
@@ -863,7 +863,7 @@ function openInv(){
     const mt=metaOf(kind,id);
     const sub = kind==='craft' ? ('×'+n+' · '+t('place')) : kind==='food' ? ('×'+n+' · '+L('食用','eat')+' ⚡'+FOOD[id].energy) : (mt.price?('×'+n+' · '+mt.price+'g'):('×'+n));
     const b=document.createElement('div'); b.className='buy';
-    b.innerHTML='<div class="em">'+itemIcon(kind,id,34)+'</div><div class="nm">'+mt.name+'</div><div class="pr">'+sub+'</div>';
+    b.innerHTML='<div class="em">'+itemIcon(kind,id,52)+'</div><div class="nm">'+mt.name+'</div><div class="pr">'+sub+'</div>';
     if(kind==='seed'){ b.onclick=()=>{ S.heldSeed=id; S.heldPlace=null; renderHotbar(); closeAll(); toast(t('hold')+cropName(id)); }; }
     else if(kind==='craft'){ b.onclick=()=>{ S.heldPlace=id; S.heldSeed=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); }; }
     else if(kind==='food'){ b.onclick=()=>{ eat(id); openInv(); }; }

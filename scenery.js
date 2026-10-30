@@ -253,6 +253,7 @@ export function makeSprites(root,sheet,items,opts={}){
       uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear; ${ramp}
       void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
+        if(vNear<4.2&&cameraPosition.y>-1.){ vec2 q=mod(floor(gl_FragCoord.xy*.5),4.); if(q.x+q.y*2.>vNear*2.2-.5) discard; }   // foliage against the lens opens up
         if(vNear<uReveal.z&&cameraPosition.y>-1.){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.3){ vec2 q=mod(floor(gl_FragCoord.xy*.5),3.); if(q.x+q.y>rr/.3*3.2-.2) discard; } }
         #ifdef COLORED
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
