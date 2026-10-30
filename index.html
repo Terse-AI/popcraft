@@ -634,17 +634,21 @@ function buildScenery(){
       m.position.set(Math.cos(a)*R, h/2-8, Math.sin(a)*R); m.rotation.y=-a+Math.PI/2; world.add(m); } });
   // dark pine silhouettes on the nearer hills (Cast-n-Chill forest line)
   const pineMat=new THREE.MeshStandardMaterial({color:0x33442f,roughness:0.9});
+  const pineTrunkM=new THREE.MeshStandardMaterial({color:0x4a3626,roughness:0.95});
   for(let i=0;i<88;i++){ const a=Math.random()*6.28, R=46+Math.random()*40, x=Math.cos(a)*R, z=Math.sin(a)*R;
     if(Math.abs(x)<FARM_HALF+18&&Math.abs(z)<FARM_HALF+18) continue;
-    const ph=2.2+Math.random()*2.6; const pine=new THREE.Mesh(new THREE.ConeGeometry(ph*0.3,ph,6), pineMat);
-    pine.position.set(x, terrainH(x,z)+ph/2, z); pine.castShadow=true; world.add(pine); }
-  // pink blossom trees — cozy colour accents (Cast-n-Chill)
-  const trunkM=new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.9}), bcols=[0xffc0d6,0xffd6e2,0xf5b3cc];
+    const ph=2.4+Math.random()*2.8, g=new THREE.Group();   // layered fir: 3 stacked tiers + trunk
+    const tk=new THREE.Mesh(new THREE.CylinderGeometry(ph*0.05,ph*0.07,ph*0.3,6),pineTrunkM); tk.position.y=ph*0.12; g.add(tk);
+    for(let j=0;j<3;j++){ const t=new THREE.Mesh(new THREE.ConeGeometry(ph*(0.34-j*0.08),ph*0.5,7), pineMat); t.position.y=ph*(0.3+j*0.26); t.castShadow=true; g.add(t); }
+    g.position.set(x, terrainH(x,z), z); world.add(g); }
+  // pink blossom trees — fuller rounded canopy (Cast-n-Chill)
+  const trunkM=new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.9}), bcols=[0xffb3d1,0xffd0e0,0xf59ac0];
   for(let i=0;i<30;i++){ const a=Math.random()*6.28, R=FARM_HALF+9+Math.random()*46, x=Math.cos(a)*R, z=Math.sin(a)*R;
     if(Math.abs(x)>95||Math.abs(z)>95) continue; const g=new THREE.Group(), h=2.2+Math.random()*1.2;
-    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.2,h,7),trunkM); tr.position.y=h/2; tr.castShadow=true; g.add(tr);
-    const bm=new THREE.MeshStandardMaterial({color:bcols[i%3],roughness:0.82,flatShading:true});
-    for(let j=0;j<3;j++){ const c=new THREE.Mesh(new THREE.IcosahedronGeometry(0.95-j*0.22,1),bm); c.position.set((Math.random()-.5)*0.4,h+0.15+j*0.5,(Math.random()-.5)*0.4); c.castShadow=true; g.add(c); }
+    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.2,h,7),trunkM); tr.position.y=h/2; tr.castShadow=true; g.add(tr);
+    const bm=new THREE.MeshStandardMaterial({color:bcols[i%3],roughness:0.85});
+    for(let j=0;j<7;j++){ const r=0.55+Math.random()*0.35, c=new THREE.Mesh(new THREE.IcosahedronGeometry(r,2),bm);
+      const ang=j/7*6.28, rad=(j===0?0:0.55); c.position.set(Math.cos(ang)*rad,(h+0.5)+(j===0?0.35:0)+(Math.random()-.5)*0.3,Math.sin(ang)*rad); c.castShadow=true; g.add(c); }
     g.position.set(x,terrainH(x,z),z); world.add(g); }
   // soft drifting clouds
   cloudGroup=new THREE.Group(); world.add(cloudGroup);
@@ -1190,17 +1194,15 @@ class WarmGrade extends Effect {
     'uniform float warm;\n'+
     'void mainImage(const in vec4 c, const in vec2 uv, out vec4 o){\n'+
     '  vec3 col=max(c.rgb,0.0);\n'+
+    '  col=clamp(((col-0.5)*1.08+0.5)*1.14,0.0,1.0);\n'+             // gentle contrast + brighten (airy, not crushed)
     '  float l=dot(col,vec3(0.2126,0.7152,0.0722));\n'+
-    '  col=mix(vec3(l),col,0.9);\n'+                                  // mute saturation (keep some richness)
-    '  col.g=mix(col.g,(col.r+col.b)*0.5,0.1);\n'+                    // greens → olive
-    '  float sm=1.0-smoothstep(0.0,0.55,l), hm=smoothstep(0.45,1.0,l);\n'+
-    '  col += vec3(-0.015,0.006,0.05)*sm;\n'+                         // cool teal shadows (subtle)
-    '  col += vec3(0.07,0.04,-0.022)*(0.5+0.8*warm)*hm;\n'+           // warm highlights
-    '  col=(col-0.5)*0.9+0.5; col=col*0.95+0.042;\n'+                 // soft contrast + lift (airy)
-    '  col*=vec3(1.0+warm*0.07,1.0,1.0-warm*0.06);\n'+               // warm neutral wash
-    '  col=floor(col*18.0+0.5)/18.0;\n'+                             // posterize → flat painterly colour bands
-    '  float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.2;\n'+          // cozy vignette
-    '  o=vec4(clamp(col,0.0,1.6),c.a);\n'+
+    '  col=clamp(mix(vec3(l),col,1.38),0.0,1.0);\n'+                  // STRONG saturation (rich Cast-n-Chill tone)
+    '  float sm=1.0-smoothstep(0.0,0.5,l), hm=smoothstep(0.5,1.0,l);\n'+
+    '  col += vec3(-0.012,0.004,0.028)*sm;\n'+                        // subtle cool shadows
+    '  col += vec3(0.045,0.022,-0.02)*(0.4+0.9*warm)*hm;\n'+          // warm highlights
+    '  col*=vec3(1.0+warm*0.05,1.0,1.0-warm*0.04);\n'+              // seasonal warm wash
+    '  float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.12;\n'+         // light vignette
+    '  o=vec4(clamp(col,0.0,1.0),c.a);\n'+
     '}',
     { uniforms:new Map([['warm',new THREE.Uniform(0.5)]]) }); }
 }
@@ -1223,7 +1225,7 @@ let QUAL = localStorage.getItem('sv_qual')||'med';
 // low = fast path (no post, max fps). med = cinematic post (bloom+grade+vignette, no AO).
 // high = + N8AO contact shadows + volumetric god rays.
 const QSET={ low:{dpr:0.9,shadow:1024,post:false,ao:false,god:false},
-            med:{dpr:1.0,shadow:1536,post:true,ao:false,god:false},
+            med:{dpr:1.35,shadow:1536,post:true,ao:false,god:false},
             high:{dpr:1.3,shadow:2048,post:true,ao:true,god:true} };
 function setupPost(){
   const q=QSET[QUAL]||QSET.med;
@@ -1245,7 +1247,7 @@ function setupPost(){
   if(q.ao){ aoPass=new N8AOPostPass(scene,camera,innerWidth,innerHeight);
     aoPass.configuration.aoRadius=1.3; aoPass.configuration.distanceFalloff=1.0; aoPass.configuration.intensity=2.4; aoPass.configuration.halfRes=true;
     try{ aoPass.setQualityMode('Medium'); }catch(e){} composer.addPass(aoPass); } else aoPass=null;
-  const fx=[ new ToonOutline(), new BloomEffect({ intensity:0.62, luminanceThreshold:0.72, luminanceSmoothing:0.35, mipmapBlur:true, radius:0.72 }) ];
+  const fx=[ new ToonOutline(), new BloomEffect({ intensity:0.36, luminanceThreshold:0.82, luminanceSmoothing:0.25, mipmapBlur:true, radius:0.4 }) ];
   if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
   fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
   warmGradeFx=new WarmGrade(); warmGradeFx.uniforms.get('warm').value=seasonWarm; fx.push(warmGradeFx);  // grade AFTER tonemap (display-referred)
@@ -1346,16 +1348,16 @@ function dayNight(){
   const noon=Math.sin(ang);
   const dusk=clamp(1.0-Math.abs(tt-0.5)*2.3,0,1);   // 0 midday → 1 near dawn/dusk
   // Cast-n-Chill: soft MUTED painterly palette, strong atmospheric haze
-  sun.intensity=clamp(noon*1.8+0.45,0.35,2.15)*weatherDim;   // softer sun → gentler shadows
+  sun.intensity=clamp(noon*1.7+0.75,0.7,2.3)*weatherDim;   // brighter floor so dawn isn't dark
   sun.color.setHSL(lerp(0.045,0.1,noon),0.55*weatherDim+0.06,0.62);
   // gradient sky dome: pale warm hazy horizon, soft muted blue-grey zenith (warmer+lower at dawn/dusk)
   const horizon=new THREE.Color().setHSL(lerp(0.1,0.07,seasonWarm), lerp(0.14,0.4,dusk)*(0.6+seasonWarm*0.6), clamp((lerp(0.86,0.64,dusk))*(0.5+0.5*noon)+0.18,0.2,0.9));
   const zenith =new THREE.Color().setHSL(0.58, lerp(0.2,0.3,dusk), clamp(lerp(0.58,0.26,1-noon),0.18,0.6));
   skyU.bot.value.copy(horizon); skyU.top.value.copy(zenith); skyU.night.value=clamp(0.8-noon*2.2,0,1); skyDome.position.copy(camera.position);
   hemi.color.copy(horizon);
-  hemi.intensity=clamp(noon*0.4+0.6,0.6,1.1)*(0.6+0.4*weatherDim);   // more ambient fill → airy, soft
+  hemi.intensity=clamp(noon*0.35+0.85,0.85,1.35)*(0.65+0.35*weatherDim);   // bright ambient fill (airy)
   scene.fog.color.copy(horizon);                    // ridges melt into the sky
-  scene.fog.density = 0.0038*(S.weather==='rain'?1.7:(S.weather==='cloudy'?1.3:1.0));
+  scene.fog.density = 0.0016*(S.weather==='rain'?1.8:(S.weather==='cloudy'?1.4:1.0));   // crisp, only distant ridges haze
   if(scene.environmentIntensity!==undefined) scene.environmentIntensity=lerp(0.35,0.82,clamp(noon,0.1,1));
 }
 function hintProximity(){
