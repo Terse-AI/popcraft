@@ -149,3 +149,38 @@ def salmon(W_=260, H_=130):
     b.paint([('e', 120, 64, 92, 32), ('l', [(40, 62), (8, 40)], [26, 8]), ('l', [(40, 66), (8, 92)], [26, 8]), ('e', 120, 34, 24, 10, -10)], SAL, 3, .8, r)
     b.dot(190, 56, 3.6, DK)
     return b.finish()
+
+
+def portrait(col, style, idx, S_=256):
+    """A villager's bust, painted the same way as the animals: soft shapes, value steps, brush strokes."""
+    r = np.random.default_rng(100 + idx)
+    b = Body(S_, S_)
+    hexs = '#%06x' % col
+    from lib import hex2rgb
+    c = hex2rgb(hexs)
+    def tone(k): return '#%02x%02x%02x' % tuple(int(np.clip(v * k, 0, 255)) for v in c)
+    CL = ramp([tone(.38), tone(.62), tone(.85), tone(1.05), tone(1.3)])
+    skin = [['#6e4632', '#a8724e', '#d8a278', '#efc49a', '#fbe0c0'], ['#5a3626', '#8e5c3e', '#bc8660', '#d8a67e', '#ecc29c'], ['#3e2418', '#6a4028', '#8e5c3e', '#ac7a56', '#c89a74'], ['#7a5038', '#b88460', '#e4b48c', '#f4d2ac', '#ffe8cc']][idx % 4]
+    SK = ramp(skin)
+    hairs = [['#1a100a', '#3a2416', '#5a3a24', '#7a5436'], ['#101014', '#22222a', '#3a3a46', '#54545e'], ['#3e1e0c', '#7a4418', '#a86a30', '#d09450'], ['#3a3a40', '#6c6c74', '#9c9ca4', '#cacad0'], ['#5a3a10', '#a87a24', '#d8ae48', '#f0d27c'], ['#2a0e0a', '#5a2418', '#84402a', '#a86248']][(idx + style) % 6]
+    HR = ramp(hairs)
+    b.paint([('e', 128, 262, 104, 74)], CL, 8, 1.3, r)
+    b.paint([('e', 128, 176, 30, 34)], SK, 5, 0, r, .84)
+    if style % 4 == 2: b.paint([('e', 128, 126, 78, 84), ('e', 66, 150, 26, 54), ('e', 190, 150, 26, 54)], HR, 7, 1.5, r)
+    b.paint([('e', 128, 118, 62, 72)], SK, 7, 0, r, 1.02)
+    if style % 4 == 0: b.paint([('e', 128, 74, 66, 40), ('e', 72, 104, 18, 34), ('e', 184, 104, 18, 34)], HR, 7, 1.6, r)
+    if style % 4 == 1:
+        b.paint([('e', 128, 70, 96, 15)], HR, 4, .9, r); b.paint([('e', 128, 50, 52, 30)], HR, 6, 1, r)
+    if style % 4 == 2: b.paint([('e', 128, 68, 62, 28)], HR, 6, 1.5, r)
+    if style % 4 == 3:
+        b.paint([('e', 128, 62, 66, 34)], CL, 6, 1, r); b.paint([('e', 128, 86, 78, 7)], CL, 3, .6, r, .7)
+        b.paint([('e', 128, 160, 44, 28)], HR, 7, 1.7, r)
+    for s in (-1, 1):
+        x = 128 + s * 25
+        b.dot(x, 116, 8, (250, 246, 238)); b.dot(x, 117, 5.4, (42, 30, 26)); b.dot(x - 1.6, 114.5, 1.8, (255, 255, 255))
+        b.stroke([(x - 12, 100 - abs(s)), (x + 12, 99)], 3.4, tuple(hex2rgb(hairs[1])))
+        b.dot(128 + s * 36, 134, 9, tuple(np.array(hex2rgb(skin[3])) * np.array([1.04, .84, .78])))
+    b.stroke([(124, 124), (120, 140), (130, 142)], 2.4, tuple(hex2rgb(skin[1])))
+    if style % 4 != 3: b.stroke([(112, 152), (128, 160), (144, 152)], 3.2, (120, 60, 50))
+    out = b.finish()
+    return out
