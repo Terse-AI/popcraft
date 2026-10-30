@@ -157,26 +157,31 @@ def forest(W=4096, H=300, seed=31):
                 c.dab(x - w * .32, yy, w * .68, 1.7, -8, v + rng.uniform(-8, 12), g, 255)
     return c.finish()
 
-def clouds(W=4096, H=1024, seed=41):
-    """Sky sheet. R=light on cumulus, G=cumulus density, B=stratus density. Coverage is cut in the shader."""
+def clouds(W=4096, H=1024, seed=43):
+    """Sky sheet. R=light on cumulus, G=cumulus density, B=stratus density. Coverage is cut in the shader.
+    Forms run long: banks and anvils with torn edges, not blobs."""
     rng = np.random.default_rng(seed)
-    n = band((H, W), 1 / 520, rng) * 1.5 + band((H, W), 1 / 240, rng) * 1.0 + band((H, W), 1 / 110, rng) * .5
-    n = cv2.resize(n[:, ::2][::2], (W, H), interpolation=cv2.INTER_CUBIC)     # widen forms: clouds run long and low
-    n2 = pnoise((H, W), 1.45, rng)
-    yy = np.linspace(0, 1, H)[:, None]                      # 0 = zenith, 1 = horizon
-    prof = np.exp(-((yy - .66) / .34) ** 2)
-    d = n * .9 + n2 * .06 + prof * .55 - .72
-    m = (d > 0).astype(np.float32)
+    base = pnoise((H // 2, W // 7), 2.15, rng)
+    base = base - gaussian_filter(base, (26, 18), mode=('nearest', 'wrap'))      # drop the one-giant-cloud frequency
+    base = base / base.std()
+    n = cv2.resize(base, (W, H), interpolation=cv2.INTER_CUBIC)
+    n2 = pnoise((H, W), 1.6, rng)
+    wx = cv2.GaussianBlur(pnoise((H, W), 2.0, rng).astype(np.float32), (0, 0), 6) * 26
+    wy = cv2.GaussianBlur(pnoise((H, W), 2.0, rng).astype(np.float32), (0, 0), 6) * 14
+    yy0, xx0 = np.mgrid[0:H, 0:W].astype(np.float32)
+    n = cv2.remap(n.astype(np.float32), xx0 + wx, yy0 + wy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
+    yy = np.linspace(0, 1, H)[:, None]                      # 0 = high sky, 1 = horizon
+    prof = np.exp(-((yy - .74) / .3) ** 2)
+    d = n * .62 + n2 * .1 + prof * .62 - .72
     n3 = gaussian_filter(n2, 2.5, mode=('nearest', 'wrap'))
-    h = gaussian_filter(np.clip(d, 0, 1.4), 12, mode=('nearest', 'wrap')) + gaussian_filter(np.clip(d, 0, 1.4), 4, mode=('nearest', 'wrap')) * .3 + n3 * .02
-    gx = np.gradient(h, axis=1) * 44; gy = np.gradient(h, axis=0) * 44
-    lam = (gx * .62 + gy * .78 + .55) / np.sqrt(gx ** 2 + gy ** 2 + 1)
-    edge = np.clip(d * 3, 0, 1)
-    light = np.clip(.5 + .7 * (lam - .45) + .24 * edge * (1 - np.clip(gy * -1, -1, 1)) * .4, 0, 1)
-    light = np.floor(light * 5 + .5 + n3 * .12) / 5
-    st = cv2.resize(pnoise((H, W // 8), 1.7, rng), (W, H), interpolation=cv2.INTER_CUBIC)
-    st2 = cv2.resize(pnoise((H // 2, W // 6), 1.3, rng), (W, H), interpolation=cv2.INTER_CUBIC)
-    sd = st * .8 + st2 * .3 + np.exp(-((yy - .78) / .2) ** 2) * 1.0 - .55
+    h = gaussian_filter(np.clip(d, 0, 1.2), 10, mode=('nearest', 'wrap')) + gaussian_filter(np.clip(d, 0, 1.2), 3, mode=('nearest', 'wrap')) * .4 + n3 * .018
+    gx = np.gradient(h, axis=1) * 40; gy = np.gradient(h, axis=0) * 40
+    lam = (gx * .55 + gy * .84 + .55) / np.sqrt(gx ** 2 + gy ** 2 + 1)
+    light = np.clip(.52 + .78 * (lam - .45), 0, 1)
+    light = np.floor(light * 5 + .5 + n3 * .14) / 5
+    st = cv2.resize(pnoise((H, W // 10), 1.8, rng), (W, H), interpolation=cv2.INTER_CUBIC)
+    st2 = cv2.resize(pnoise((H // 2, W // 7), 1.4, rng), (W, H), interpolation=cv2.INTER_CUBIC)
+    sd = st * .5 + st2 * .22 + np.exp(-((yy - .8) / .2) ** 2) * .5 - .44
     return np.dstack([np.clip(light, 0, 1) * 255, np.clip((d + .9) / 1.8, 0, 1) * 255, np.clip((sd + .5) / 1.5, 0, 1) * 255]).astype(np.uint8)
 
 if __name__ == '__main__':

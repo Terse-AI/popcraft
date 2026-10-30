@@ -2,7 +2,7 @@
 import json, sys, os, numpy as np, cv2
 from PIL import Image
 sys.path.insert(0, '.')
-import trees as T, mountains as M
+import trees as T, mountains as M, animals as A
 
 OUT = '../../assets/paint'
 FORCE = set(os.environ.get('FORCE', '').split(','))
@@ -18,6 +18,12 @@ SHEETS = {
         ('larch_a', lambda: T.larch(7)), ('larch_b', lambda: T.larch(9)),
         ('broad_a', lambda: T.broadleaf(3, W=680, H=812)), ('broad_b', lambda: T.broadleaf(4, W=680, H=812)), ('broad_c', lambda: T.broadleaf(5, W=680, H=812)),
         ('shrub_a', lambda: T.shrub(1, W=420, H=210, r=52)), ('shrub_b', lambda: T.shrub(2, W=420, H=210, r=52)), ('shrub_c', lambda: T.shrub(3, W=420, H=210, r=52)),
+    ]),
+    'sheet_animals': (2048, 1024, [
+        ('bear_0', lambda: A.bear(0)), ('bear_1', lambda: A.bear(1)), ('bear_2', lambda: A.bear(2)),
+        ('dog_sit', lambda: A.dog('sit')), ('dog_w1', lambda: A.dog('walk1', W_=360, H_=300)), ('dog_w2', lambda: A.dog('walk2', W_=360, H_=300)),
+        ('heron_a', lambda: A.heron()), ('heron_b', lambda: A.heron(True)), ('deer_a', lambda: A.deer()),
+        ('duck_a', lambda: A.duck()), ('salmon_a', lambda: A.salmon()),
     ]),
     'sheet_plants': (2048, 1536, [
         ('pine_big', lambda: T.big_pine(4)),

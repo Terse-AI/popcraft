@@ -150,7 +150,7 @@ export async function loadScenery(onProgress){
   const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
-  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
+  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_animals',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
     ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],
     ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
   await Promise.all(names.map(([n,f],i)=>load('assets/paint/'+n+'.webp',f).then(t=>{ TEX[n]=t; onProgress&&onProgress(i/names.length); })));
@@ -219,7 +219,7 @@ function buildMountains(root){
 }
 
 /* ---------- sprites: instanced camera-facing paintings ---------- */
-function makeSprites(root,sheet,items,opts={}){
+export function makeSprites(root,sheet,items,opts={}){
   const n=items.length, geo=new THREE.InstancedBufferGeometry();
   geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-.5,0,0, .5,0,0, .5,1,0, -.5,1,0]),3));
   geo.setAttribute('uv',new THREE.BufferAttribute(new Float32Array([0,0, 1,0, 1,1, 0,1]),2));
@@ -232,8 +232,10 @@ function makeSprites(root,sheet,items,opts={}){
   geo.setAttribute('iSize',new THREE.InstancedBufferAttribute(S,2));
   geo.setAttribute('iRect',new THREE.InstancedBufferAttribute(R,4));
   geo.setAttribute('iMisc',new THREE.InstancedBufferAttribute(M,4));
+  if(opts.dynamic) for(const k of ['iPos','iSize','iRect','iMisc']) geo.attributes[k].setUsage(THREE.DynamicDrawUsage);
   geo.instanceCount=n;
   const mat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, alphaToCoverage:true,
+    defines:opts.colored?{COLORED:1}:{},
     uniforms:{ ...U, uMap:{value:TEX[sheet]}, uSnowRow:{value:rowV('ice')} },
     vertexShader:`attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iRect,iMisc;
       uniform float uTime,uFogD; uniform vec3 uSide;
@@ -251,9 +253,13 @@ function makeSprites(root,sheet,items,opts={}){
       uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear; ${ramp}
       void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
+        #ifdef COLORED
+        vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
+        #else
         float v=t.r+(t.g-.5)*.16+vTone+vSideL*vX*.42;
         vec3 c=ramp(v,vRow);
         if(uSnow>.01){ float s=uSnow*smoothstep(.1,.6,t.b)*smoothstep(.2,.42,t.r); c=mix(c,ramp(.45+v*.6,uSnowRow),s); }
+        #endif
         c*=mix(uShade,uLit,smoothstep(.08,.7,v));
         c=mix(c,uFog,vFogF);
         float a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
@@ -262,7 +268,7 @@ function makeSprites(root,sheet,items,opts={}){
 }
 
 /* ---------- ground ---------- */
-const groundU={ uSplat:{value:null}, uTile:{value:null}, uGroundRow:{value:rowV('ground')}, uEarthRow:{value:rowV('earth')}, uRockRow:{value:rowV('rock')}, uIceRow:{value:rowV('ice')} };
+const groundU={ uLeafRow:{value:rowV('broad3')}, uSplat:{value:null}, uTile:{value:null}, uGroundRow:{value:rowV('ground')}, uEarthRow:{value:rowV('earth')}, uRockRow:{value:rowV('rock')}, uIceRow:{value:rowV('ice')} };
 export function splatPixel(x,z){   // zones used by the painted ground and the map
   const f=lakeField(x,z), y=terrainH(x,z);
   const dirt=clamp(1-(pathDist(x,z)-1.1+(vnoise(x*.6,z*.6)-.5)*1.2)/.9,0,1);
@@ -286,11 +292,11 @@ function groundMaterial(){
     Object.assign(sh.uniforms,groundU,{uRamps:U.uRamps,uSnow:U.uSnow});
     sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <worldpos_vertex>',
       '#include <worldpos_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normal;');
-    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow; ${ramp}\n`+
+    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow,uLeafRow; ${ramp}\n`+
       sh.fragmentShader.replace('#include <map_fragment>',`
         vec2 suv=vWP.xz/840.+.5; vec4 sp=texture2D(uSplat,suv);
         vec3 t1=texture2D(uTile,vWP.xz/9.).rgb, t2=texture2D(uTile,vWP.xz/31.).rgb, t3=texture2D(uTile,vWP.xz/157.).rgb;
-        float g=(t1.r*.62+t2.r*.3+t3.r*.5-.21)*1.24-.1;
+        float g=(t1.r*.72+t2.r*.34+t3.r*.22-.14)*1.2-.08;
         vec3 grass=ramp(g,uGroundRow);
         vec3 earth=ramp(t1.g*.6+t2.g*.3+.05,uEarthRow);
         vec3 rock=ramp(t1.b*.42+t2.b*.42+t3.b*.2,uRockRow);
@@ -298,7 +304,9 @@ function groundMaterial(){
         float wet=smoothstep(.1,-.55,vWP.y+1.15);
         float steep=smoothstep(.72,.5,normalize(vWN).y);
         c=mix(c,rock,clamp(max(sp.b,steep)+t2.b*.3-.15,0.,1.));
-        c*=1.28-sp.r*.4;
+        c*=1.34-sp.r*.3;
+        float fleck=smoothstep(.72,.8,t1.g)*smoothstep(.45,.6,t2.r)*(1.-smoothstep(.2,.6,sp.g));
+        c=mix(c,ramp(.5+t2.r*.5,uLeafRow),fleck*.85);
         c*=mix(1.,.55,wet);
         if(uSnow>.01){ c=mix(c,ramp(.62+g*.42,uIceRow),uSnow*smoothstep(.15,.4,g+.3-sp.g*.4)); }
         diffuseColor.rgb*=c;`);
@@ -530,7 +538,6 @@ export function setSeason(season){
   layers.forEach(l=>{ if(l.m.uniforms.uKind.value>.5) l.m.uniforms.uDecAmt.value=[.35,.0,1,.0][season]; l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; });
 }
 
-const sunTmp=new THREE.Vector3();
 // returns the frame's light rig so index.html can drive the directional light and grade
 export const rig={ sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color() };
 export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
@@ -544,7 +551,7 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   skyU.uMoonD.value.set(Math.cos(ma)*.75,Math.sin(ma)*.6+.12,.62).normalize();
   skyU.uSunD.value.copy(rig.sunDir);
   setC(skyU.uTop.value,P.top); setC(skyU.uMid.value,P.mid); setC(skyU.uLow.value,P.low); setC(skyU.uCL.value,P.cloudL); setC(skyU.uCS.value,P.cloudS); setC(skyU.uSunC.value,P.sun);
-  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.78:.4; skyU.uAurora.value=aurora?1:0;
+  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.8:.56; skyU.uAurora.value=aurora?1:0;
   setC(mtU.uRS.value,P.rockS); setC(mtU.uRL.value,P.rockL); setC(mtU.uSS.value,P.snowS); setC(mtU.uSL.value,P.snowL); setC(mtU.uFS.value,P.forS); setC(mtU.uFL.value,P.forL); setC(mtU.uHz.value,P.haze);
   setC(mtU.uDS.value,mixc(P.forS,[.46,.2,.08],.55)); setC(mtU.uDL.value,mixc(P.forL,[.98,.66,.2],.7));
   setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;
@@ -560,7 +567,14 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.1); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value);
   return rig;
 }
-export function setScenerySun(){ return sunTmp; }
+/* wildlife: a small dynamic sprite pool, posed each frame */
+export function animalPool(root,count){
+  const items=Array.from({length:count},()=>({name:'duck_a',x:0,y:-50,z:0,h:1,row:'wood',wind:0}));
+  const m=makeSprites(root,'sheet_animals',items,{colored:true,dynamic:true}), g=m.geometry;
+  return { set(i,name,x,y,z,h,flip){ const a=ATLAS[name];
+      g.attributes.iPos.setXYZ(i,x,y,z); g.attributes.iSize.setXY(i,h*a.w/a.h,h); g.attributes.iRect.setXYZW(i,a.u0,a.v0,a.u1,a.v1); g.attributes.iMisc.setW(i,flip?-1:1); },
+    commit(){ for(const k of ['iPos','iSize','iRect','iMisc']) g.attributes[k].needsUpdate=true; } };
+}
 
 /* tilled soil, painted to sit in the same ground */
 export function paintedSoil(wet){

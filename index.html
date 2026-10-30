@@ -6,49 +6,49 @@
 <title>StarVale · 星星人露谷</title>
 <style>
   :root{
-    --neon:#5bd1ff; --gold:#ffd66b; --leaf:#8fe39a; --ink:#06121f; --panel:rgba(8,16,26,.82);
+    --neon:#e8a34a; --gold:#f4c95d; --leaf:#b9c46a; --ink:#2a1a12; --panel:rgba(48,32,24,.9); --cream:#f1e4c8;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;overflow:hidden;background:#0a1420;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#eaf6ff;-webkit-user-select:none;user-select:none;touch-action:none}
+  html,body{margin:0;height:100%;overflow:hidden;background:#231610;font-family:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"PingFang SC",system-ui,sans-serif;color:var(--cream);-webkit-user-select:none;user-select:none;touch-action:none}
   canvas{display:block}
   #c{position:fixed;inset:0}
   .hidden{display:none!important}
 
   /* ---- loading ---- */
   #load{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
-    background:radial-gradient(130% 100% at 50% 0%,#12314f 0%,#0a1726 55%,#060e18 100%)}
-  #load h1{margin:0;font-size:34px;letter-spacing:.5px;font-weight:800;background:linear-gradient(90deg,#9fe8ff,#ffe39a 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
-  #load .sub{color:#9fc0d8;font-size:13px}
+    background:radial-gradient(130% 100% at 50% 0%,#5a3424 0%,#2e1c14 55%,#1a100c 100%)}
+  #load h1{margin:0;font-size:34px;letter-spacing:.5px;font-weight:800;background:linear-gradient(90deg,#f6d9a0,#f2a95c 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #load .sub{color:#d8c4a0;font-size:13px}
   #bar{width:min(320px,70vw);height:6px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
-  #bar>i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--neon),var(--leaf));transition:width .3s}
+  #bar>i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#e8a34a,#f4c95d);transition:width .3s}
 
   /* ---- HUD ---- */
   #hud{position:fixed;inset:0;pointer-events:none;z-index:50}
-  .card{background:var(--panel);border:1px solid rgba(91,209,255,.22);border-radius:14px;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  .card{background:var(--panel);border:2px solid #7a5a3c;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,226,170,.12),0 6px 18px rgba(20,10,4,.4)}
   #status{position:absolute;top:12px;left:12px;padding:10px 14px;display:flex;gap:16px;align-items:center;font-size:13px}
   #status .ic{font-size:17px;margin-right:5px}
   #status b{font-weight:700}
   #clock b{font-variant-numeric:tabular-nums}
   #goldv{color:var(--gold)}
   #energy{position:absolute;bottom:92px;left:12px;width:180px;padding:8px 10px}
-  #energy .lab{font-size:11px;color:#a9c6da;display:flex;justify-content:space-between;margin-bottom:5px}
+  #energy .lab{font-size:11px;color:#e6d6b4;display:flex;justify-content:space-between;margin-bottom:5px}
   #ebar{height:9px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
-  #ebar>i{display:block;height:100%;width:100%;border-radius:99px;background:linear-gradient(90deg,#7CFFB2,#36d08a);transition:width .25s}
+  #ebar>i{display:block;height:100%;width:100%;border-radius:99px;background:linear-gradient(90deg,#b9c46a,#8ea04a);transition:width .25s}
 
   /* minimap */
   #mini{position:absolute;top:12px;right:12px;width:168px;height:168px;padding:7px}
-  #mini .t{font-size:10px;color:#9fc0d8;letter-spacing:1px;text-transform:uppercase;margin:0 0 5px 3px}
-  #mmc{width:154px;height:132px;border-radius:9px;display:block;background:#0c1b2a}
+  #mini .t{font-size:10px;color:#e6d6b4;letter-spacing:1px;text-transform:uppercase;margin:0 0 5px 3px}
+  #mmc{width:154px;height:132px;border-radius:7px;display:block;background:#d6c59c;border:1px solid #5c4028}
 
   /* hotbar */
   #hot{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px}
-  .slot{width:52px;height:52px;border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  .slot{width:52px;height:52px;border-radius:9px;background:rgba(241,228,200,.1);border:1px solid rgba(241,228,200,.2);
     display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;transition:.12s}
   .slot .em{font-size:23px;line-height:1}
-  .slot .nm{font-size:8.5px;color:#bcd6e8;margin-top:2px;white-space:nowrap}
+  .slot .nm{font-size:8.5px;color:#e6d6b4;margin-top:2px;white-space:nowrap}
   .slot .cnt{position:absolute;right:4px;bottom:2px;font-size:10px;font-weight:700;color:var(--gold)}
   .slot .key{position:absolute;left:4px;top:2px;font-size:9px;color:#6d8598}
-  .slot.on{background:rgba(91,209,255,.16);border-color:var(--neon);box-shadow:0 0 0 1px var(--neon),0 6px 18px rgba(91,209,255,.25);transform:translateY(-3px)}
+  .slot.on{background:rgba(232,163,74,.22);border-color:var(--neon);box-shadow:0 0 0 1px var(--neon),0 6px 14px rgba(232,163,74,.25);transform:translateY(-3px)}
 
   /* crosshair */
   #cross{position:absolute;top:50%;left:50%;width:7px;height:7px;margin:-3.5px;border-radius:50%;background:rgba(255,255,255,.5);box-shadow:0 0 0 2px rgba(0,0,0,.25);pointer-events:none}
@@ -61,30 +61,30 @@
   /* panels (shop / inventory / menu) */
   .panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,90vw);max-height:80vh;overflow:auto;padding:20px;z-index:60;pointer-events:auto}
   .panel h2{margin:0 0 4px;font-size:20px}
-  .panel .hint{color:#9fc0d8;font-size:12px;margin-bottom:14px}
+  .panel .hint{color:#d8c4a0;font-size:12px;margin-bottom:14px}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:9px}
   .buy{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:11px;padding:10px;cursor:pointer;transition:.12s;text-align:center}
-  .buy:hover{border-color:var(--neon);background:rgba(91,209,255,.1)}
+  .buy:hover{border-color:var(--neon);background:rgba(232,163,74,.14)}
   .buy .em{font-size:26px}
   .buy .nm{font-size:12px;font-weight:600;margin-top:4px}
   .buy .pr{font-size:11px;color:var(--gold);margin-top:2px}
   .buy.dim{opacity:.4;pointer-events:none}
-  .xbtn{position:absolute;top:12px;right:14px;cursor:pointer;color:#9fc0d8;font-size:20px;pointer-events:auto}
+  .xbtn{position:absolute;top:12px;right:14px;cursor:pointer;color:#d8c4a0;font-size:20px;pointer-events:auto}
 
   /* top controls */
   #top{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;pointer-events:auto}
-  .pill{font:600 12px/1 system-ui;color:#cfe;background:var(--panel);border:1px solid rgba(91,209,255,.3);padding:8px 13px;border-radius:999px;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .pill{font:600 12px/1 system-ui;color:#f1e4c8;background:var(--panel);border:1px solid #7a5a3c;padding:8px 13px;border-radius:999px;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
   .pill:hover{border-color:var(--neon)}
 
   /* help */
-  #help{position:absolute;bottom:14px;right:12px;max-width:230px;padding:11px 13px;font-size:11.5px;line-height:1.55;color:#bcd6e8}
-  #help b{color:#eaf6ff}
-  kbd{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 5px;font:600 10px/1 ui-monospace,monospace;color:#eaf6ff}
+  #help{position:absolute;bottom:14px;right:12px;max-width:230px;padding:11px 13px;font-size:11.5px;line-height:1.55;color:#e6d6b4}
+  #help b{color:#f1e4c8}
+  kbd{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 5px;font:600 10px/1 ui-monospace,monospace;color:#f1e4c8}
 
   /* day transition */
-  #fade{position:fixed;inset:0;z-index:150;background:#030912;opacity:0;pointer-events:none;transition:opacity .6s;display:flex;align-items:center;justify-content:center}
+  #fade{position:fixed;inset:0;z-index:150;background:#1a100c;opacity:0;pointer-events:none;transition:opacity .6s;display:flex;align-items:center;justify-content:center}
   #fade.on{opacity:1}
-  #fade .ft{font-size:22px;font-weight:700;color:#cfe}
+  #fade .ft{font-size:22px;font-weight:700;color:#f1e4c8}
 
   @media (max-width:560px){
     #mini{width:120px;height:122px} #mmc{width:106px;height:88px}
@@ -180,7 +180,7 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK
+  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, animalPool
 } from './scenery.js';
 import { logHouse, marketStall, shippingBin, anvilBlock, hearth, fenceRun, mineMouth, buildDock, makeVillager, buildSmoke, addSmoke, updateBuildings } from './buildings.js';
 
@@ -441,7 +441,7 @@ function getTile(x,z){ return S.tiles.get(tkey(x,z)); }
 function tileMeshes(){ return tileGroup.children; }
 
 const selector=new THREE.Mesh(new THREE.RingGeometry(0.46,0.52,4),
-  new THREE.MeshBasicMaterial({color:0x5bd1ff,transparent:true,opacity:0.9}));
+  new THREE.MeshBasicMaterial({color:0xf4c95d,transparent:true,opacity:0.9}));
 selector.rotation.x=-Math.PI/2; selector.position.y=0.14; selector.visible=false; selector.rotation.z=Math.PI/4; scene.add(selector);
 
 function makeTileMesh(x,z,wet){
@@ -683,6 +683,29 @@ function harvest(x,z){
   tl.crop=null; tl.watered=false; rebuildCrop(x,z); refreshTileMesh(x,z);
 }
 function near(p,d){ return Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<d; }
+/* wildlife, sprites posed by small routines */
+let beasts=null; const dog={x:2,z:6,walk:0,moving:false,flip:false,bob:0};
+const herons=[{x:-34,z:0,t:0},{x:62,z:0,t:3},{x:-92,z:0,t:6}], ducks=[{cx:-8,cz:54,r:9,sp:.05,ph:0},{cx:-8,cz:54,r:7.4,sp:.05,ph:.36},{cx:92,cz:64,r:14,sp:.035,ph:2}];
+let bear={x:96,z:0,dir:-1,t:0,w:0}, deer={x:-62,z:-38,t:0};
+function shoreZ(x){ let z=24; while(lakeField(x,z)<-.008&&z<150) z+=.6; return z-1.5; }
+function setupBeasts(){ beasts=animalPool(world,10); herons.forEach(h=>h.z=shoreZ(h.x)); bear.z=shoreZ(bear.x)-5; }
+const rightV=new THREE.Vector3();
+function updateBeasts(dt,now){ if(!beasts||S.inMine) return; const t=now*.001;
+  rightV.set(1,0,0).applyQuaternion(camera.quaternion);
+  // the dog keeps to heel, sits when you stop, rides in the bow when you row
+  let i=0;
+  if(S.boating){ const bx=player.pos.x+Math.sin(boatYaw)*1.5, bz=player.pos.z+Math.cos(boatYaw)*1.5; dog.x=bx; dog.z=bz; beasts.set(i++,'dog_sit',bx,WATER_Y+.2+Math.sin(now*.0016)*.05,bz,1.15,Math.sin(boatYaw)*rightV.x+Math.cos(boatYaw)*rightV.z<0); }
+  else { const dx=player.pos.x-dog.x, dz=player.pos.z-dog.z, d=Math.hypot(dx,dz);
+    dog.moving=d>2.6; if(dog.moving){ const sp=Math.min(9,2+d*1.2)*dt/d; dog.x+=dx*sp; dog.z+=dz*sp; dog.walk+=dt*9; const side=dx*rightV.x+dz*rightV.z; if(Math.abs(side)>.2) dog.flip=side<0; }
+    if(d>30){ dog.x=player.pos.x-3; dog.z=player.pos.z-3; }
+    const nm=dog.moving?(Math.sin(dog.walk)>0?'dog_w1':'dog_w2'):'dog_sit'; beasts.set(i++,nm,dog.x,walkH(dog.x,dog.z)-.03,dog.z,dog.moving?1.02:1.15,dog.flip); }
+  for(const h of herons){ h.t+=dt; const bow=(h.t%11)>8; beasts.set(i++,bow?'heron_b':'heron_a',h.x,walkH(h.x,h.z)-.06,h.z,2.1,h.x<0); }
+  for(const d of ducks){ const a=t*d.sp+d.ph, x=d.cx+Math.cos(a*6.28)*d.r, z=d.cz+Math.sin(a*6.28)*d.r*.6; beasts.set(i++,'duck_a',x,WATER_Y-.08,z,.62,Math.sin(a*6.28)>0); }
+  bear.t+=dt; bear.x+=bear.dir*dt*.9; if(bear.x<58||bear.x>128) bear.dir*=-1; bear.w+=dt*2.6;
+  const bz=shoreZ(bear.x)-6; beasts.set(i++,['bear_0','bear_1','bear_0','bear_2'][Math.floor(bear.w)%4],bear.x,walkH(bear.x,bz)-.1,bz,2.3,bear.dir<0);
+  beasts.set(i++,'deer_a',deer.x,walkH(deer.x,deer.z)-.08,deer.z,2.6,(Math.sin(t*.04)>0));
+  beasts.commit();
+}
 // the rowboat: board at the dock, row anywhere on the lake, fish from it, land at any shore
 let boat=null, boatHome=null, boatYaw=Math.PI/2, boatRock=0;
 function nearBoat(){ return boat&&Math.hypot(player.pos.x-boat.position.x,player.pos.z-boat.position.z)<4.2; }
@@ -796,7 +819,7 @@ function renderStatus(){
   $('#goldv').textContent=S.gold;
 }
 function renderEnergy(){ $('#ebar>i').style.width=(S.energy/S.maxEnergy*100)+'%'; $('#env').textContent=Math.round(S.energy)+'/'+S.maxEnergy;
-  $('#ebar>i').style.background=S.energy/S.maxEnergy<0.25?'linear-gradient(90deg,#ff8a7a,#e85a4a)':'linear-gradient(90deg,#7CFFB2,#36d08a)'; }
+  $('#ebar>i').style.background=S.energy/S.maxEnergy<0.25?'linear-gradient(90deg,#d8603c,#b83a2a)':'linear-gradient(90deg,#b9c46a,#8ea04a)'; }
 function renderHotbar(){
   const hot=$('#hot'); hot.innerHTML='';
   const toolE=['⛏️','🪣','🪓','🔨','🌾']; // hoe(dig), can, axe, pick(break), scythe — all widely-rendered
@@ -903,8 +926,8 @@ function drawMini(){
   mark(BED,'#6a9bd8','🛏'); mark(SHOP,'#ffd66b','🏪'); mark(BIN,'#c89a5a','📦'); mark(CABIN,'#e9dcc5','🏠');
   // player arrow
   mx.save(); mx.translate(cx,cy); mx.rotate(-cam.yaw+Math.PI);
-  mx.fillStyle='#5bd1ff'; mx.beginPath(); mx.moveTo(0,-6); mx.lineTo(4,5); mx.lineTo(0,2); mx.lineTo(-4,5); mx.closePath(); mx.fill();
-  mx.strokeStyle='#06121f'; mx.lineWidth=1; mx.stroke(); mx.restore();
+  mx.fillStyle='#b83a2a'; mx.beginPath(); mx.moveTo(0,-6); mx.lineTo(4,5); mx.lineTo(0,2); mx.lineTo(-4,5); mx.closePath(); mx.fill();
+  mx.strokeStyle='#2a1a12'; mx.lineWidth=1; mx.stroke(); mx.restore();
 }
 
 /* ============================ LOOP ============================ */
@@ -988,7 +1011,7 @@ function frame(now){
     player.walkT+=dt*(S.running?15:10);
   }
   player.pos.y=S.inMine?0:S.boating?WATER_Y+.08+Math.sin(now*.0016)*.05:walkH(player.pos.x,player.pos.z);
-  updateBoat(dt,now);
+  updateBoat(dt,now); updateBeasts(dt,now);
   if(S.inMine){ player.pos.x=clamp(player.pos.x,-14.5,14.5); player.pos.z=clamp(player.pos.z,-14.5,14.5); player.pos.y=0; }
   avatar.position.copy(player.pos);
   avatar.rotation.y = lerpAngle(avatar.rotation.y, player.yaw, 0.2);
@@ -1354,7 +1377,7 @@ async function boot(){
   await loadScenery(p=>setProgress(5+p*35)); setProgress(42);
   buildScenery(world,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
   buildRain(); buildCritters(); buildFireflies(); buildPetals();
-  buildFarmstead(); buildTown(); buildCoop(); buildMine(); buildNPCs(); boat=buildDock(world); buildSmoke(world); setProgress(70);
+  buildFarmstead(); buildTown(); buildCoop(); buildMine(); buildNPCs(); boat=buildDock(world); buildSmoke(world); setupBeasts(); setProgress(70);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(84);
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
   setProgress(90);
