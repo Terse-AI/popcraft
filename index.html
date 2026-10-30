@@ -108,6 +108,7 @@
     <span class="pill" id="qualbtn">⚙ 均衡</span>
     <span class="pill" id="langbtn">🌐 中文</span>
     <a class="pill" href="./mc.html">⛏ Minecraft 模式</a>
+    <span class="pill" id="resetbtn" title="new game">🆕</span>
     <span class="pill" id="fps" style="pointer-events:none;opacity:.75">60 fps</span>
   </div>
 
@@ -330,7 +331,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 400);
+const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 620);
 scene.fog = new THREE.FogExp2(0xcfe3f0, 0.0052);
 
 /* sun + fill */
@@ -347,6 +348,21 @@ const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(7,20,16), new THREE.Mesh
 sunMesh.frustumCulled=false; sunMesh.visible=false; scene.add(sunMesh);
 const hemi = new THREE.HemisphereLight(0xbfe0ff, 0x4a6b3a, 0.55);
 scene.add(hemi);
+
+/* ---- gradient sky dome (Cast-n-Chill soft hazy vista) ---- */
+const skyU={ top:{value:new THREE.Color(0x8ea9bd)}, bot:{value:new THREE.Color(0xe6dccb)}, night:{value:0}, moon:{value:new THREE.Vector3(0.35,0.55,-0.4)} };
+const skyDome=new THREE.Mesh(new THREE.SphereGeometry(480,32,20),
+  new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, fog:false, uniforms:skyU,
+    vertexShader:'varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:
+      'uniform vec3 top; uniform vec3 bot; uniform float night; uniform vec3 moon; varying vec3 vP;'+
+      'float h21(vec3 p){ return fract(sin(dot(floor(p),vec3(12.9898,78.233,37.719)))*43758.5453); }'+
+      'void main(){ vec3 d=normalize(vP); float t=smoothstep(0.28,0.72,d.y*0.5+0.5); vec3 col=mix(bot,top,t);'+
+      '  if(night>0.01 && d.y>0.0){ float s=h21(d*260.0); s=step(0.992,s)*(0.4+0.6*h21(d*131.0)); col+=s*night;'+
+      '    float md=distance(d,normalize(moon)); col+=smoothstep(0.05,0.028,md)*night*vec3(1.0,0.96,0.86)*1.3;'+
+      '    col+=smoothstep(0.18,0.05,md)*night*vec3(0.55,0.6,0.75)*0.22; }'+
+      '  gl_FragColor=vec4(col,1.0); }' }));
+skyDome.frustumCulled=false; scene.add(skyDome);
 
 /* ============================ NOISE ============================ */
 function hash2(x,z){ let n=Math.sin(x*127.1+z*311.7)*43758.5453; return n-Math.floor(n); }
@@ -573,7 +589,7 @@ function buildPond(){
   const col=[]; const c=new THREE.Color(); const p=geo.attributes.position;  // deep center -> shallow rim
   for(let i=0;i<p.count;i++){ const r=Math.min(1,Math.hypot(p.getX(i),p.getY(i))/6); c.setHSL(0.55,0.62,0.14+r*0.18); col.push(c.r,c.g,c.b); }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
-  waterMat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.025, metalness:0.2, normalMap:n, envMapIntensity:2.3, transparent:true, opacity:0.9 });
+  waterMat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.02, metalness:0.25, normalMap:n, envMapIntensity:3.0, transparent:true, opacity:0.92 });
   waterMat.normalScale.set(0.5,0.5);
   const pond=new THREE.Mesh(geo, waterMat);
   pond.rotateX(-Math.PI/2); pond.position.set(-24,0.06,20); world.add(pond);
@@ -608,10 +624,35 @@ function buildScenery(){
     pad.rotation.x=-Math.PI/2; pad.position.set(PX+Math.cos(a)*r,0.09,PZ+Math.sin(a)*r); world.add(pad);
     if(Math.random()<0.4){ const fl=new THREE.Mesh(new THREE.IcosahedronGeometry(0.08,0),new THREE.MeshStandardMaterial({color:0xffc0d6,roughness:0.6})); fl.position.set(pad.position.x,0.14,pad.position.z); world.add(fl);} }
   // layered distant mountain ridges (silhouette depth, like Cast-n-Chill backdrops)
-  const mtnMat=new THREE.MeshStandardMaterial({color:0x5b6b72,roughness:1,metalness:0});
-  for(let i=0;i<10;i++){ const a=i/10*6.28+0.3, R=118+Math.random()*26, h=22+Math.random()*26, rad=34+Math.random()*22;
-    const m=new THREE.Mesh(new THREE.ConeGeometry(rad,h,6,1), mtnMat); m.position.set(Math.cos(a)*R, h/2-6, Math.sin(a)*R); m.rotation.y=Math.random()*6; world.add(m); }
+  // layered mountain ridges — fog gives the atmospheric perspective (distant = hazier, melts into sky)
+  const ridgeMat=new THREE.MeshStandardMaterial({color:0x9aa4a2,roughness:1,metalness:0});
+  [[88,16,2.2],[128,23,2.7],[168,32,3.2]].forEach(([R,H,W],layer)=>{ const n=14;
+    for(let i=0;i<n;i++){ const a=i/n*6.28 + layer*0.4, h=H*(0.6+Math.random()*0.7), rad=H*W*(0.7+Math.random()*0.5);
+      const m=new THREE.Mesh(new THREE.ConeGeometry(rad,h,5,1), ridgeMat); m.scale.z=0.5;
+      m.position.set(Math.cos(a)*R, h/2-8, Math.sin(a)*R); m.rotation.y=-a+Math.PI/2; world.add(m); } });
+  // dark pine silhouettes on the nearer hills (Cast-n-Chill forest line)
+  const pineMat=new THREE.MeshStandardMaterial({color:0x33442f,roughness:0.9});
+  for(let i=0;i<60;i++){ const a=Math.random()*6.28, R=48+Math.random()*36, x=Math.cos(a)*R, z=Math.sin(a)*R;
+    if(Math.abs(x)<FARM_HALF+18&&Math.abs(z)<FARM_HALF+18) continue;
+    const ph=2.2+Math.random()*2.6; const pine=new THREE.Mesh(new THREE.ConeGeometry(ph*0.3,ph,6), pineMat);
+    pine.position.set(x, terrainH(x,z)+ph/2, z); pine.castShadow=true; world.add(pine); }
+  // pink blossom trees — cozy colour accents (Cast-n-Chill)
+  const trunkM=new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.9}), bcols=[0xffc0d6,0xffd6e2,0xf5b3cc];
+  for(let i=0;i<14;i++){ const a=Math.random()*6.28, R=FARM_HALF+9+Math.random()*42, x=Math.cos(a)*R, z=Math.sin(a)*R;
+    if(Math.abs(x)>95||Math.abs(z)>95) continue; const g=new THREE.Group(), h=2.2+Math.random()*1.2;
+    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.2,h,7),trunkM); tr.position.y=h/2; tr.castShadow=true; g.add(tr);
+    const bm=new THREE.MeshStandardMaterial({color:bcols[i%3],roughness:0.82,flatShading:true});
+    for(let j=0;j<3;j++){ const c=new THREE.Mesh(new THREE.IcosahedronGeometry(0.95-j*0.22,1),bm); c.position.set((Math.random()-.5)*0.4,h+0.15+j*0.5,(Math.random()-.5)*0.4); c.castShadow=true; g.add(c); }
+    g.position.set(x,terrainH(x,z),z); world.add(g); }
+  // soft drifting clouds
+  cloudGroup=new THREE.Group(); world.add(cloudGroup);
+  const cmat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,transparent:true,opacity:0.7,depthWrite:false});
+  for(let i=0;i<9;i++){ const c=new THREE.Group(); const n=3+Math.floor(Math.random()*3);
+    for(let j=0;j<n;j++){ const b=new THREE.Mesh(new THREE.IcosahedronGeometry(6+Math.random()*5,1),cmat); b.position.set((Math.random()-.5)*16,(Math.random()-.5)*2,(Math.random()-.5)*8); b.scale.y=0.45; c.add(b); }
+    c.position.set((Math.random()-.5)*200, 44+Math.random()*18, (Math.random()-.5)*200); c.userData.sp=0.4+Math.random()*0.5; cloudGroup.add(c); }
 }
+let cloudGroup=null;
+function updateClouds(dt){ if(!cloudGroup) return; for(const c of cloudGroup.children){ c.position.x+=c.userData.sp*dt; if(c.position.x>130) c.position.x=-130; } }
 
 /* farm structures: cottage, bed, shop stall, shipping bin ----------- */
 const BED={x:3,z:-9}, SHOP={x:-6,z:-10}, BIN={x:8,z:-4};
@@ -802,7 +843,7 @@ async function loadTwinkle(){
 }
 
 /* ============================ CAMERA / CONTROLS ============================ */
-const cam={ dist:7.5, height:3.2, yaw:0, pitch:0.35 };
+const cam={ dist:8.5, height:2.9, yaw:0, pitch:0.26 };   // lower/further → more cozy horizon vista in frame
 let pointerLocked=false;
 const keys={};
 addEventListener('keydown',e=>{
@@ -973,7 +1014,7 @@ function advanceDay(){
   rollWeather();                     // new day's weather (rain auto-waters)
   // sprinklers water their 4 neighbours for the new day
   for(const [k,tl] of S.tiles){ if(tl.sprinkler){ const [x,z]=k.split(',').map(Number); for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nt=getTile(x+dx,z+dz); if(nt&&nt.tilled){ nt.watered=true; if(nt.crop) nt.crop.watered=true; refreshTileMesh(x+dx,z+dz); } } } }
-  animalsProduce(); NPCS.forEach(n=>n.gifted=false); S.festDone=false; checkFestival();
+  animalsProduce(); NPCS.forEach(n=>n.gifted=false); S.festDone=false; checkFestival(); saveGame();
   renderStatus(); renderEnergy();
   return earned;
 }
@@ -1066,6 +1107,7 @@ function applyLang(){
 }
 $('#langbtn').onclick=()=>{ LANG=LANG==='zh'?'en':'zh'; localStorage.setItem('sv_lang',LANG); applyLang(); };
 $('#qualbtn').onclick=()=>{ const o=['low','med','high']; setQuality(o[(o.indexOf(QUAL)+1)%3]); };
+$('#resetbtn').onclick=()=>{ if(confirm(LANG==='zh'?'开始新游戏？当前存档会被清除。':'Start a new game? Your save will be erased.')) resetSave(); };
 
 /* ============================ MINIMAP ============================ */
 const mm=$('#mmc'), mx=mm.getContext('2d');
@@ -1110,7 +1152,7 @@ class WarmGrade extends Effect {
     '  col *= 1.0 - d*d*0.16;\n'+
     '  o=vec4(col,c.a);\n'+
     '}',
-    { uniforms:new Map([['tint',new THREE.Uniform(new THREE.Color(1.12,1.0,0.82))],['amt',new THREE.Uniform(0.55)]]) }); }
+    { uniforms:new Map([['tint',new THREE.Uniform(new THREE.Color(1.06,1.0,0.9))],['amt',new THREE.Uniform(0.38)]]) }); }
 }
 let QUAL = localStorage.getItem('sv_qual')||'med';
 // low = fast path (no post, max fps). med = cinematic post (bloom+grade+vignette, no AO).
@@ -1141,7 +1183,7 @@ function setupPost(){
   const fx=[ new BloomEffect({ intensity:0.62, luminanceThreshold:0.72, luminanceSmoothing:0.35, mipmapBlur:true, radius:0.72 }) ];
   if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
   fx.push(new HueSaturationEffect({ saturation:0.1 }));
-  fx.push(new BrightnessContrastEffect({ brightness:0.04, contrast:0.05 }));  // soft, airy, lifted shadows
+  fx.push(new BrightnessContrastEffect({ brightness:0.012, contrast:0.07 }));
   fx.push(new WarmGrade());                                                   // cozy amber cast
   fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
   fx.push(new VignetteEffect({ eskil:false, offset:0.3, darkness:0.5 }));
@@ -1159,7 +1201,7 @@ function frame(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   if(grassUniform) grassUniform.value=now*0.001;
   if(waterMat&&waterMat.normalMap){ waterMat.normalMap.offset.x+=dt*0.025; waterMat.normalMap.offset.y+=dt*0.012; }
-  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt);
+  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt); updateClouds(dt);
   if(S.inMine && mineLight) mineLight.position.set(player.pos.x,4,player.pos.z);
   fCnt++; fAcc+=dt; if(fAcc>=0.5){ const fe=$('#fps'); if(fe) fe.textContent=Math.round(fCnt/fAcc)+' fps'; fCnt=0; fAcc=0; }
 
@@ -1238,15 +1280,19 @@ function dayNight(){
   sun.target.position.copy(player.pos); sun.target.updateMatrixWorld();
   if(sunMesh.visible){ const dir=sun.position.clone().sub(player.pos).normalize(); sunMesh.position.copy(player.pos).addScaledVector(dir,360).setY(Math.max(30,player.pos.y+dir.y*360)); }
   const noon=Math.sin(ang);
-  // Cast-n-Chill cozy palette: golden sun all day, warm peach ambient, soft warm haze
-  sun.intensity=clamp(noon*2.3+0.55,0.4,2.8)*weatherDim;
-  sun.color.setHSL(lerp(0.05,0.1,noon),0.72*weatherDim+0.02,0.6);
-  hemi.color.setHSL(lerp(0.08,0.52,noon),0.42,0.68);     // warm-peach dawn → soft blue midday
-  hemi.intensity=clamp(noon*0.5+0.38,0.38,0.92)*(0.55+0.45*weatherDim);
-  const skyLight=clamp(noon,0.12,1)*(0.5+0.5*weatherDim);
-  scene.fog.color.setHSL(lerp(0.065,0.1,skyLight), 0.4, lerp(0.36,0.78,skyLight));  // warm golden haze
-  scene.fog.density = 0.0058*(S.weather==='rain'?1.8:(S.weather==='cloudy'?1.3:1.0));
-  if(scene.background&&scene.backgroundIntensity!==undefined){ scene.backgroundIntensity=lerp(0.3,1.0,skyLight); scene.environmentIntensity=lerp(0.35,1.02,skyLight); }
+  const dusk=clamp(1.0-Math.abs(tt-0.5)*2.3,0,1);   // 0 midday → 1 near dawn/dusk
+  // Cast-n-Chill: soft MUTED painterly palette, strong atmospheric haze
+  sun.intensity=clamp(noon*2.1+0.5,0.35,2.5)*weatherDim;
+  sun.color.setHSL(lerp(0.045,0.1,noon),0.55*weatherDim+0.06,0.62);
+  // gradient sky dome: pale warm hazy horizon, soft muted blue-grey zenith (warmer+lower at dawn/dusk)
+  const horizon=new THREE.Color().setHSL(0.085, lerp(0.16,0.4,dusk), clamp((lerp(0.86,0.64,dusk))*(0.5+0.5*noon)+0.18,0.2,0.9));
+  const zenith =new THREE.Color().setHSL(0.58, lerp(0.2,0.3,dusk), clamp(lerp(0.58,0.26,1-noon),0.18,0.6));
+  skyU.bot.value.copy(horizon); skyU.top.value.copy(zenith); skyU.night.value=clamp(0.8-noon*2.2,0,1); skyDome.position.copy(camera.position);
+  hemi.color.copy(horizon);
+  hemi.intensity=clamp(noon*0.45+0.4,0.4,0.9)*(0.55+0.45*weatherDim);
+  scene.fog.color.copy(horizon);                    // ridges melt into the sky
+  scene.fog.density = 0.0038*(S.weather==='rain'?1.7:(S.weather==='cloudy'?1.3:1.0));
+  if(scene.environmentIntensity!==undefined) scene.environmentIntensity=lerp(0.35,0.82,clamp(noon,0.1,1));
 }
 function hintProximity(){
   // show a one-shot toast when first approaching a landmark
@@ -1291,11 +1337,15 @@ function torchMesh(){ const g=new THREE.Group();
   const p=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.8,6), new THREE.MeshStandardMaterial({color:0x6b4a2e})); p.position.y=0.4; g.add(p);
   const f=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6), new THREE.MeshStandardMaterial({color:0xffa030,emissive:0xff6a00,emissiveIntensity:1.4})); f.position.y=0.85; g.add(f);
   g.add(new THREE.PointLight(0xffa040,5,8).translateY(0.9)); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g; }
+let placements=[];
+function spawnPlacement(id,x,z,ry){
+  const m = id==='sprinkler'?sprinklerMesh() : id==='scarecrow'?scarecrowMesh() : id==='fence'?fenceMesh() : torchMesh();
+  m.position.set(x, terrainH(x,z), z); m.rotation.y=(ry!==undefined?ry:Math.random()*6); placedGroup.add(m);
+}
 function placeCraftable(x,z){
   const id=S.heldPlace; if(!invCount('craft',id)){ S.heldPlace=null; renderHotbar(); return; }
   if(id==='sprinkler'){ const tl=getTile(x,z); if(!tl||!tl.tilled){ toast(L('洒水器要放在松土上','Sprinkler needs tilled soil')); return; } tl.sprinkler=true; }
-  let m = id==='sprinkler'?sprinklerMesh() : id==='scarecrow'?scarecrowMesh() : id==='fence'?fenceMesh() : torchMesh();
-  m.position.set(x, terrainH(x,z), z); m.rotation.y=Math.random()*6; placedGroup.add(m);
+  const ry=Math.random()*6; spawnPlacement(id,x,z,ry); placements.push({id,x,z,ry});
   invTake('craft',id,1); toast(metaOf('craft',id).em+' '+L('已放置','placed'));
   if(invCount('craft',id)<=0){ S.heldPlace=null; } renderHotbar();
 }
@@ -1421,10 +1471,10 @@ function spawnMineNodes(){ for(const n of mineNodes){ mineGroup.remove(n.mesh); 
 }
 function enterMine(){ S.inMine=true; S.mineLevel=1; mineSavedBg=scene.background; world.visible=false; mineGroup.visible=true;
   scene.fog.density=0.022; scene.fog.color.setHex(0x05070a); scene.background=new THREE.Color(0x05070a); if(scene.environmentIntensity!==undefined) scene.environmentIntensity=0.15;
-  sun.intensity=0; hemi.intensity=0; if(rainPts) rainPts.visible=false;
+  sun.intensity=0; hemi.intensity=0; if(rainPts) rainPts.visible=false; skyDome.visible=false;
   player.pos.set(0,0,0); cam.yaw=0; spawnMineNodes(); showMineBtns(true); renderStatus(); toast(L('进入矿洞 · 第 1 层','Entered the mine · Lv 1')); }
 function descendMine(){ S.mineLevel++; player.pos.set(0,0,0); spawnMineNodes(); renderStatus(); toast(L('下到第 '+S.mineLevel+' 层','Descended · Lv '+S.mineLevel)); }
-function leaveMine(){ S.inMine=false; world.visible=true; mineGroup.visible=false; showMineBtns(false);
+function leaveMine(){ S.inMine=false; world.visible=true; mineGroup.visible=false; showMineBtns(false); skyDome.visible=true;
   scene.background=mineSavedBg; if(scene.environmentIntensity!==undefined) scene.environmentIntensity=1.0; player.pos.set(MINE_ENT.x,0,MINE_ENT.z+3); toast(L('离开矿洞','Left the mine')); }
 function mineSwing(){ if(S.energy<=0){toast(t('noenergy'));return;}
   ray.setFromCamera({x:0,y:0},camera); let hit=null,hd=1e9;
@@ -1535,6 +1585,33 @@ function openFestival(){ modal('🎉 '+(S.festival||L('节日','Festival')), bod
     g.appendChild(b); }
 }); }
 
+/* ---- save / load (localStorage) ---- */
+function saveGame(){
+  try{
+    const tiles=[]; for(const [k,tl] of S.tiles){ tiles.push([k,{t:tl.tilled?1:0,w:tl.watered?1:0,s:tl.sprinkler?1:0,c:tl.crop?[tl.crop.id,tl.crop.stage]:0}]); }
+    const data={ v:2, gold:S.gold, day:S.day, season:S.season, time:S.time, energy:S.energy,
+      toolLvl:S.toolLvl, inv:S.inv, weather:S.weather, shipped:S.shipped, mineLevel:S.mineLevel,
+      tiles, placements, coopStash, animals:animals.map(a=>a.type), npc:NPCS.map(n=>n.hearts) };
+    localStorage.setItem('sv_save', JSON.stringify(data));
+  }catch(e){}
+}
+function loadGame(){
+  let data; try{ data=JSON.parse(localStorage.getItem('sv_save')); }catch(e){} if(!data||data.v!==2) return false;
+  try{
+    S.gold=data.gold; S.day=data.day; S.season=data.season; S.time=data.time; S.energy=data.energy;
+    S.toolLvl=data.toolLvl||[0,0,0,0,0]; S.inv=data.inv||{}; S.weather=data.weather||'clear'; S.shipped=data.shipped||0; S.mineLevel=data.mineLevel||0;
+    S.tiles=new Map();
+    for(const [k,tl] of (data.tiles||[])){ S.tiles.set(k,{tilled:!!tl.t,watered:!!tl.w,sprinkler:!!tl.s, crop: tl.c?{id:tl.c[0],stage:tl.c[1],watered:!!tl.w}:null}); }
+    for(const [k] of S.tiles){ const a=k.split(',').map(Number); refreshTileMesh(a[0],a[1]); rebuildCrop(a[0],a[1]); }
+    placements=[]; (data.placements||[]).forEach(p=>{ placements.push(p); spawnPlacement(p.id,p.x,p.z,p.ry); });
+    (data.animals||[]).forEach(t=>spawnAnimal(t));
+    (data.npc||[]).forEach((h,i)=>{ if(NPCS[i]) NPCS[i].hearts=h; });
+    coopStash=data.coopStash||{egg:0,milk:0};
+    retintGround(); return true;
+  }catch(e){ return false; }
+}
+function resetSave(){ try{ localStorage.removeItem('sv_save'); }catch(e){} location.reload(); }
+
 /* ============================ BOOT ============================ */
 function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; }
 async function boot(){
@@ -1552,7 +1629,7 @@ async function boot(){
     hdr.mapping=THREE.EquirectangularReflectionMapping;
     const pmrem=new THREE.PMREMGenerator(renderer);
     const env=pmrem.fromEquirectangular(hdr).texture;
-    scene.environment=env; scene.background=hdr; scene.backgroundBlurriness=0.25; scene.environmentIntensity=1.0; scene.backgroundIntensity=1.0;
+    scene.environment=env; scene.background=null; scene.environmentIntensity=1.0;   // gradient dome is the visible sky; HDRI only lights reflections
     hdr.dispose(); pmrem.dispose();
   }catch(e){ scene.background=new THREE.Color(0x9fc9e8); }
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
@@ -1561,6 +1638,8 @@ async function boot(){
   // starter kit
   invAdd('seed','parsnip',5); invAdd('seed','potato',2);
   invAdd('mat','wood',8); invAdd('mat','stone',6); invAdd('ore','copper',2);
+  if(loadGame()) toast(L('存档已读取','Save loaded'));   // restore progress if present
+  addEventListener('beforeunload', saveGame);
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn();
   setProgress(100);
