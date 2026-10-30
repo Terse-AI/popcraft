@@ -289,28 +289,57 @@ function terrainH(x,z){
   return roll * clamp(edge,0,1)*clamp(edge,0,1);
 }
 
+/* ============================ TEXTURES (CC0 Poly Haven PBR) ============================ */
+const texLoader=new THREE.TextureLoader();
+function loadSet(name,rep){
+  const mk=(file,srgb)=>{ const t=texLoader.load('assets/tex/'+name+'/'+file);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep,rep); t.anisotropy=8;
+    if(srgb) t.colorSpace=THREE.SRGBColorSpace; return t; };
+  return { map:mk('col.jpg',true), normalMap:mk('nor.jpg',false), arm:mk('arm.jpg',false) };
+}
+const TEX={ grass:loadSet('grass',36), bark:loadSet('bark',2), mud:loadSet('mud',1) };
+const barkMat=new THREE.MeshStandardMaterial({map:TEX.bark.map,normalMap:TEX.bark.normalMap,roughnessMap:TEX.bark.arm,metalnessMap:TEX.bark.arm,roughness:1,metalness:1});
+let grassIM=null, grassUniform=null;
+
 /* ============================ WORLD ============================ */
 const world = new THREE.Group(); scene.add(world);
 
-// ground mesh
+// ground mesh — real grass PBR, tinted per season
 let ground;
 function buildGround(){
-  const N=160, SZ=200;
+  const N=140, SZ=200;
   const geo=new THREE.PlaneGeometry(SZ,SZ,N,N); geo.rotateX(-Math.PI/2);
-  const pos=geo.attributes.position, col=[];
-  const cGrass=new THREE.Color(), cDirt=new THREE.Color(0x6b4e33);
-  for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i), z=pos.getZ(i); pos.setY(i, terrainH(x,z));
-    const n=vnoise(x*0.3+9,z*0.3+4);
-    cGrass.setHSL(0.26+ (SEASON_HUE()[0]) + n*0.02, 0.5, 0.33+n*0.1);
-    col.push(cGrass.r,cGrass.g,cGrass.b);
-  }
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
+  const pos=geo.attributes.position;
+  for(let i=0;i<pos.count;i++){ const x=pos.getX(i), z=pos.getZ(i); pos.setY(i, terrainH(x,z)); }
   geo.computeVertexNormals();
-  const mat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.96, metalness:0.0});
+  const mat=new THREE.MeshStandardMaterial({ map:TEX.grass.map, normalMap:TEX.grass.normalMap,
+    roughnessMap:TEX.grass.arm, metalnessMap:TEX.grass.arm, roughness:1, metalness:1 });
+  mat.normalScale.set(0.6,0.6);
   ground=new THREE.Mesh(geo,mat); ground.receiveShadow=true; world.add(ground);
 }
-function SEASON_HUE(){ return [[0,0],[ -0.02,0],[ -0.14,0],[ 0.02,0]][S.season]; } // hue nudge per season
+
+// lush instanced grass field (wind-animated), meadow ring around the farm plot
+function buildGrassField(){
+  // tapered triangle blade (base width ~7cm, tip ~32cm) — reads as fine grass, not flags
+  const blade=new THREE.BufferGeometry();
+  blade.setAttribute('position', new THREE.Float32BufferAttribute([-0.035,0,0, 0.035,0,0, 0,0.34,0],3));
+  blade.setAttribute('normal', new THREE.Float32BufferAttribute([0,0,1, 0,0,1, 0,0,1],3));
+  blade.setAttribute('uv', new THREE.Float32BufferAttribute([0,0, 1,0, 0.5,1],2));
+  const mat=new THREE.MeshStandardMaterial({color:0x6aa84e,roughness:0.95,metalness:0,side:THREE.DoubleSide});
+  mat.onBeforeCompile=sh=>{ sh.uniforms.uTime={value:0}; grassUniform=sh.uniforms.uTime;
+    sh.vertexShader='uniform float uTime;\n'+sh.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n float w=sin(uTime*1.7 + instanceMatrix[3][0]*0.5 + instanceMatrix[3][2]*0.5)*0.16*transformed.y;\n transformed.x+=w; transformed.z+=w*0.5;'); };
+  const COUNT=6000; const im=new THREE.InstancedMesh(blade,mat,COUNT); const d=new THREE.Object3D(); let n=0;
+  for(let i=0;i<COUNT*3 && n<COUNT;i++){
+    // clump: pick a clump center, scatter blades tightly around it → denser carpet
+    const cx=(Math.random()-.5)*(FARM_HALF*2+18), cz=(Math.random()-.5)*(FARM_HALF*2+18);
+    const x=cx+(Math.random()-.5)*1.2, z=cz+(Math.random()-.5)*1.2;
+    if(Math.abs(x)<7.5 && Math.abs(z)<7.5) continue;            // keep the central farming plot clear
+    d.position.set(x,terrainH(x,z),z); d.rotation.y=Math.random()*6; d.scale.set(1,0.75+Math.random()*0.7,1);
+    d.updateMatrix(); im.setMatrixAt(n++,d.matrix);
+  }
+  im.count=n; im.instanceMatrix.needsUpdate=true; im.castShadow=false; world.add(im); grassIM=im;
+}
 
 /* smooth props ------------------------------------------------------ */
 function noisedGeo(geo, amp){
@@ -326,9 +355,7 @@ function noisedGeo(geo, amp){
 // tree: tapered trunk + layered rounded canopy (no cubes)
 function makeTree(){
   const g=new THREE.Group();
-  const trunk=new THREE.Mesh(
-    new THREE.CylinderGeometry(0.17,0.28,2.1,8),
-    new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.9}));
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.28,2.1,8), barkMat);
   trunk.position.y=1.05; trunk.castShadow=true; g.add(trunk);
   const leafMat=new THREE.MeshStandardMaterial({color:0x3f7d3a,roughness:0.8,flatShading:true});
   for(let i=0;i<3;i++){
@@ -430,8 +457,8 @@ function makeBin(){
 /* ============================ FARM TILES ============================ */
 const tileGroup=new THREE.Group(); world.add(tileGroup);
 const cropGroup=new THREE.Group(); world.add(cropGroup);
-const soilMat=new THREE.MeshStandardMaterial({color:0x5a3d26,roughness:1.0});
-const wetMat =new THREE.MeshStandardMaterial({color:0x3a271a,roughness:1.0});
+const soilMat=new THREE.MeshStandardMaterial({map:TEX.mud.map,normalMap:TEX.mud.normalMap,roughnessMap:TEX.mud.arm,color:0xb39776,roughness:1,metalness:0});
+const wetMat =new THREE.MeshStandardMaterial({map:TEX.mud.map,normalMap:TEX.mud.normalMap,roughnessMap:TEX.mud.arm,color:0x6a5238,roughness:1,metalness:0});
 const tileGeo=new THREE.BoxGeometry(0.92,0.12,0.92);
 function tkey(x,z){ return x+','+z; }
 function getTile(x,z){ return S.tiles.get(tkey(x,z)); }
@@ -639,13 +666,12 @@ function sleep(){
     setTimeout(()=>{ $('#fade').classList.remove('on'); S.sleeping=false; },1100);
   },700);
 }
-function retintGround(){ // recolor grass per season
-  const col=ground.geometry.attributes.color, pos=ground.geometry.attributes.position, c=new THREE.Color();
-  const sat=[0.5,0.55,0.42,0.18][S.season], lig=[0.33,0.3,0.34,0.5][S.season], hueB=[0.26,0.24,0.12,0.28][S.season];
-  for(let i=0;i<pos.count;i++){ const x=pos.getX(i),z=pos.getZ(i),n=vnoise(x*0.3+9,z*0.3+4);
-    c.setHSL(hueB+n*0.02,sat,lig+n*0.1); col.setXYZ(i,c.r,c.g,c.b); }
-  col.needsUpdate=true;
-  hemi.groundColor.setHSL(hueB,0.3,[0.25,0.22,0.2,0.4][S.season]);
+function retintGround(){ // seasonal tint multiplies the grass texture
+  const tint=[0xb9e39a,0xcfe79a,0xe3b878,0xe2edf3][S.season]; // spring, summer, fall golden, winter frost
+  if(ground) ground.material.color.setHex(tint);
+  if(grassIM) grassIM.material.color.setHex([0x5fae4e,0x5aa048,0xc08f3a,0xd4e2ea][S.season]);
+  const hueB=[0.26,0.24,0.12,0.28][S.season];
+  hemi.groundColor.setHSL(hueB,0.3,[0.3,0.28,0.26,0.5][S.season]);
 }
 
 /* ============================ UI ============================ */
@@ -762,6 +788,7 @@ let last=performance.now(), miniT=0;
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(grassUniform) grassUniform.value=now*0.001;
 
   // time of day
   if(!S.sleeping){ S.time += dt*0.7; // ~0.7 min/sec → a full 6:00→2:00 day ≈ ~20 min real
@@ -848,7 +875,7 @@ function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub')
 async function boot(){
   $('#loadsub').textContent=t('gen');
   buildGround(); setProgress(25);
-  scatterProps(); buildPond(); setProgress(45);
+  scatterProps(); buildPond(); buildGrassField(); setProgress(45);
   makeCottage(); makeBed(); makeStall(); makeBin(); setProgress(55);
   buildAvatar(); setupPost(); setProgress(70);
 
