@@ -201,27 +201,51 @@ if __name__ == '__main__':
         cv2.imwrite(f'{sys.argv[1]}/mt_{n}.png', out[:, :2048, ::-1].astype(np.uint8))
 
 
+def ring_height(W, D, rng):
+    """Massifs carved at several scales: long ridges, side spurs, gullies, then fine scree."""
+    n = 13
+    peaks = [((i + rng.uniform(-.22, .22)) / n, rng.uniform(.5, .74), rng.uniform(.66, 1.0), rng.uniform(.05, .08), rng.uniform(.36, .52)) for i in range(n)]
+    peaks += [((i + .5 + rng.uniform(-.2, .2)) / n, rng.uniform(.26, .42), rng.uniform(.32, .56), rng.uniform(.04, .06), rng.uniform(.22, .32)) for i in range(n)]
+    zz = np.linspace(0, 1, D)[:, None]; xx = np.linspace(0, 1, W, endpoint=False)[None, :]
+    wx = pnoise((D, W), 2.3, rng); wz = pnoise((D, W), 2.3, rng)
+    env = np.zeros((D, W))
+    for px, pz, ph, pw, pd in peaks:
+        dx = (((xx - px + .5) % 1) - .5) / pw + wx * .16
+        dz = (zz - pz) / pd + wz * .2
+        env = np.maximum(env, ph * np.clip(1 - np.sqrt(dx ** 2 + dz ** 2), 0, 1) ** .8)
+    big = eroded((D, W), 1 / 340, rng, oct=4, k=1.2)
+    fine = eroded((D, W), 1 / 90, rng, oct=4, k=2.2)
+    big = (big - big.min()) / (big.max() - big.min()); fine = (fine - fine.min()) / (fine.max() - fine.min())
+    h = env * (.14 + 1.1 * big) * (.92 + .16 * fine) + (env > 0) * fine * .01
+    h = np.clip(h, 0, None)
+    return gaussian_filter(h, .8, mode=('nearest', 'wrap'))
+
 def ring(W=4096, D=640, seed=61):
     """Real mountains: a heightfield wrapped into a ring around the valley (x = angle, y = outward).
     Returns height (16 bit, for the mesh), a relief sheet (R,G = surface normal, B = crease) and a mask
     sheet (R = snow level, G = forest), so the mesh carries every ridge at full resolution per pixel."""
     rng = np.random.default_rng(seed)
-    n = 13
-    peaks = [((i + rng.uniform(-.22, .22)) / n, rng.uniform(.5, .74), rng.uniform(.62, 1.0), rng.uniform(.045, .07), rng.uniform(.34, .5)) for i in range(n)]
-    peaks += [((i + .5 + rng.uniform(-.2, .2)) / n, rng.uniform(.24, .42), rng.uniform(.3, .52), rng.uniform(.035, .055), rng.uniform(.22, .32)) for i in range(n)]
-    h = heightfield(W, D, rng, peaks)
-    h = np.clip(h, 0, None); h = h / h.max()
+    h = ring_height(W, D, rng); h = h / h.max()
     streak = pnoise((D, W), 1.9, rng)
-    sm = gaussian_filter(h, 9, mode=('nearest', 'wrap'))
-    crease = np.clip((h - sm) * 22, -1, 1)
-    hs = gaussian_filter(h, 1.0, mode=('nearest', 'wrap'))
+    crease = np.clip((h - gaussian_filter(h, 7, mode=('nearest', 'wrap'))) * 26, -1, 1)
+    hs = gaussian_filter(h, .8, mode=('nearest', 'wrap'))
     gu = np.gradient(hs, axis=1) * 430 / 1.25; gv = np.gradient(hs, axis=0) * 430 / 1.14
     m = np.sqrt(gu ** 2 + gv ** 2 + 1)
     relief = np.dstack([(-gu / m * .5 + .5) * 255, (-gv / m * .5 + .5) * 255, (crease * .5 + .5) * 255]).astype(np.uint8)
-    snow = np.clip(h + streak * .055 - crease * .06, 0, 1)
-    forest = np.clip((.15 - h + streak * .03) / .05, 0, 1)
+    snow = np.clip(h + streak * .05 - crease * .08, 0, 1)
+    forest = np.clip((.17 - h + streak * .035) / .045, 0, 1)
     mask = np.dstack([snow * 255, forest * 255, np.zeros_like(h)]).astype(np.uint8)
-    small = cv2.resize(h.astype(np.float32), (1024, 160), interpolation=cv2.INTER_AREA)
+    small = cv2.resize(h.astype(np.float32), (2048, 320), interpolation=cv2.INTER_AREA)
     hi = (np.clip(small, 0, 1) * 65535).astype(np.uint32)
     enc = np.dstack([(hi >> 8) & 255, hi & 255, np.zeros_like(hi)]).astype(np.uint8)
-    return enc, relief, mask
+    return enc, relief, mask, h
+
+def rock_tile(S=1024, seed=71):
+    """Tiling rock surface for close views of the peaks: fractured facets and strata. R,G normal, B crease."""
+    rng = np.random.default_rng(seed)
+    e = eroded((S, S), 1 / 70, rng, oct=5, k=2.4)
+    e = (e - e.mean()) / e.std()
+    gu = np.gradient(gaussian_filter(e, .7, mode='wrap'), axis=1) * 6; gv = np.gradient(gaussian_filter(e, .7, mode='wrap'), axis=0) * 6
+    m = np.sqrt(gu ** 2 + gv ** 2 + 1)
+    crease = np.clip((e - gaussian_filter(e, 5, mode='wrap')) * .8, -1, 1)
+    return np.dstack([(-gu / m * .5 + .5) * 255, (-gv / m * .5 + .5) * 255, (crease * .5 + .5) * 255]).astype(np.uint8)

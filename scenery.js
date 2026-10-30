@@ -7,6 +7,7 @@
    ====================================================================== */
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
 const smooth=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
@@ -49,6 +50,7 @@ export function terrainH(x,z){
   const r=Math.hypot(x/LAKE.rx,(z-LAKE.cz)/LAKE.rz);
   h+=smooth(1.02,1.75,r)*78*(.45+1.1*vnoise(x*.012+9,z*.012+2))*smooth(60,170,Math.hypot(x,z))*lerp(.2,1,smooth(90,250,Math.abs(x)));   // valley walls: high at the sides, low at the far end so the peaks show
   h+=smooth(70,210,Math.hypot(x,z+6))*34*vnoise(x*.014+3,z*.014)*smooth(40,-30,z);          // wooded ridges behind the farm
+  if(h<-.45) h=-.45+(h+.45)*.16;                                                             // hollows stay dry above the lake level
   for(const [ix,iz,ir] of ISLANDS){ const d=Math.hypot(x-ix,z-iz); if(d<ir*1.4) h=Math.max(h,WATER_Y+(1-d/(ir*1.2))*ir*.34); }
   { const px=Math.max(0,Math.abs(x+38.5)-9), pz=Math.max(0,Math.abs(z+14)-8), pd=Math.hypot(px,pz); if(pd<10) h=lerp(0,h,smooth(0,10,pd)); }   // the greenhouse sits on a level pad
   const rv=riverAt(x,z);
@@ -163,10 +165,21 @@ export const U={
   uRain:{value:0}, uLodT:{value:46}, uLodP:{value:28}, uWindAmp:{value:.6}, uWindDir:{value:new THREE.Vector2(.8,.6)}, uNoise:{value:null},
   uHeight:{value:null}, uHeightSpan:{value:440}, uPush:{value:new THREE.Vector4(0,0,1.3,0)}, uPush2:{value:new THREE.Vector4(0,0,.8,0)}, uSunDirW:{value:new THREE.Vector3(0,1,0)},
   uTime:{value:0}, uShade:{value:new THREE.Color()}, uLit:{value:new THREE.Color()}, uFog:{value:new THREE.Color()}, uFogD:{value:.0014},
-  uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uReveal:{value:new THREE.Vector4(.5,.5,10,1)}, uRes:{value:new THREE.Vector2(1,1)}
+  uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uReveal:{value:new THREE.Vector4(.5,.5,10,1)}, uRes:{value:new THREE.Vector2(1,1)},
+  uCloud:{value:null}, uCloudOff:{value:new THREE.Vector2()}, uCloudAmt:{value:0}, uCloudTint:{value:new THREE.Color(1,1,1)}, uFogSun:{value:new THREE.Color(0,0,0)}, uGlow:{value:0}, uSeason:{value:0}
 };
 const ramp=`vec3 ramp(float v,float row){ return texture2D(uRamps,vec2(clamp(v,.004,.996),row)).rgb; }`;
 export const RAMP_GLSL=ramp;
+// light shared by everything outdoors: slow cloud shadows crossing the valley, and haze that warms toward the sun
+export const CLOUD_GLSL=`uniform sampler2D uCloud; uniform vec2 uCloudOff; uniform float uCloudAmt; uniform vec3 uCloudTint;
+  vec3 cloudShade(vec2 p){ float n=texture2D(uCloud,p*.00085+uCloudOff).r; return mix(vec3(1.),uCloudTint,uCloudAmt*smoothstep(.45,.6,n)); }`;
+function tileNoise(S,seed){            // tiling fractal noise, for the cloud shadows
+  const r=rng(seed), oct=[[6,.5],[13,.27],[29,.15],[61,.08]].map(([n,w])=>({n,w,g:Float32Array.from({length:n*n},()=>r())})), d=new Uint8Array(S*S*4);
+  for(let j=0;j<S;j++) for(let i=0;i<S;i++){ let v=0; for(const o of oct){ const x=i/S*o.n, y=j/S*o.n, xi=Math.floor(x), yi=Math.floor(y), fx=x-xi, fy=y-yi, ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy), n=o.n, g=(a,b)=>o.g[((b%n)*n+(a%n))];
+      v+=lerp(lerp(g(xi,yi),g(xi+1,yi),ux),lerp(g(xi,yi+1),g(xi+1,yi+1),ux),uy)*o.w; }
+    d[(j*S+i)*4]=clamp(v,0,1)*255; d[(j*S+i)*4+3]=255; }
+  const t=new THREE.DataTexture(d,S,S,THREE.RGBAFormat); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; t.generateMipmaps=true; t.needsUpdate=true; return t;
+}
 
 /* ---------- loading ---------- */
 const load=(url,fn)=>new Promise((res,rej)=>new THREE.TextureLoader().load(url,t=>{ fn&&fn(t); res(t); },undefined,rej));
@@ -175,7 +188,8 @@ export async function loadScenery(onProgress){
   const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
-  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_ring',pano],['mt_mask',pano],['clouds',pano],['mt_height',null,'png'],
+  const wrap=t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
+  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_ring',pano],['mt_mask',pano],['clouds',pano],['mt_height',null,'png'],['mt_detail',wrap],['ground_bits',wrap],
     ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],['surf_fur'],
     ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
   let done=0; await Promise.all(names.map(([n,f,ext])=>load('assets/paint/'+n+'.'+(ext||'webp'),f).then(t=>{ TEX[n]=t; onProgress&&onProgress(++done/names.length); })));
@@ -222,7 +236,7 @@ function buildSky(root){
 /* ---------- painted mountain layers: cylinders that hold their distance, a parallax stack ---------- */
 const mtU={ uRS:{value:new THREE.Color()},uRL:{value:new THREE.Color()},uSS:{value:new THREE.Color()},uSL:{value:new THREE.Color()},uFS:{value:new THREE.Color()},uFL:{value:new THREE.Color()},uHz:{value:new THREE.Color()},uDL:{value:new THREE.Color()},uDS:{value:new THREE.Color()} };
 const layers=[];
-function buildMountains(root){
+function buildMountains(root,qual){
   const mk=(tex,R,H,rep,off,base,hz,kind,mist)=>{
     const g=new THREE.CylinderGeometry(R,R,H,96,1,true);
     const m=new THREE.ShaderMaterial({ side:THREE.BackSide, fog:false, toneMapped:false,
@@ -239,32 +253,71 @@ function buildMountains(root){
     layers.push({o,m,base,H});
   };
   mk(TEX.mt_far,1450,620,2,.08,-6,.5,0,.5);             // the last, palest range stays a painting
-  buildRing(root);
+  buildRing(root,qual);
 }
-/* real mountains: a mesh ring around the valley. Light moves across the faces with the sun, and they shift against each other as you row */
-let ringMat=null;
-function buildRing(root){
+/* real mountains: a mesh ring around the valley, cut into sectors so what is behind you is never drawn.
+   Light moves across the faces with the sun, cloud shadows drift over them, and they shift against each other as you row */
+let ringMat=null, ringTreeMat=null;
+const RING={CX:0,CZ:70,Rin:430,Rout:1160,Top:430};
+function ringHeightReader(){
   const tex=TEX.mt_height, c=document.createElement('canvas'), w=tex.image.width, h=tex.image.height; c.width=w; c.height=h; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(tex.image,0,0); const d=x.getImageData(0,0,w,h).data;
   const H=(i,j)=>{ const o=(j*w+((i%w+w)%w))*4; return (d[o]*256+d[o+1])/65535; };
-  const CX=0, CZ=70, Rin=430, Rout=1160, Top=430, N=720, M=84, P=new Float32Array((N+1)*(M+1)*3), UV=new Float32Array((N+1)*(M+1)*2), I=[];
-  for(let a=0;a<=N;a++) for(let r=0;r<=M;r++){ const u=a/N, v=r/M, ang=u*Math.PI*2, rad=Rin+(Rout-Rin)*Math.pow(v,1.25), fi=u*w, fj=v*(h-1), i0=Math.floor(fi), j0=Math.min(h-2,Math.floor(fj)), tx=fi-i0, ty=fj-j0;
-      const hh=lerp(lerp(H(i0,j0),H(i0+1,j0),tx),lerp(H(i0,j0+1),H(i0+1,j0+1),tx),ty), edge=smooth(0,.12,v), o=(a*(M+1)+r);
-      P.set([CX+Math.cos(ang)*rad,hh*Top*edge+(1-edge)*18-4,CZ+Math.sin(ang)*rad],o*3); UV.set([u,v],o*2); }
-  for(let a=0;a<N;a++) for(let r=0;r<M;r++){ const p=a*(M+1)+r, q=p+M+1; I.push(p,p+1,q,q,p+1,q+1); }
-  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setAttribute('uv',new THREE.BufferAttribute(UV,2)); g.setIndex(I); g.computeVertexNormals();
-  ringMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...mtU, uMap:{value:TEX.mt_ring}, uMask:{value:TEX.mt_mask}, uSun:U.uSunDirW, uLine:{value:.45}, uDecAmt:{value:0}, uTile:{value:TEX.ground_tile} },
+  return (u,v)=>{ const fi=u*w, fj=v*(h-1), i0=Math.floor(fi), j0=Math.min(h-2,Math.floor(fj)), tx=fi-i0, ty=fj-j0; return lerp(lerp(H(i0,j0),H(i0+1,j0),tx),lerp(H(i0,j0+1),H(i0+1,j0+1),tx),ty); };
+}
+const ringPos=(hh,u,v)=>{ const ang=u*Math.PI*2, rad=RING.Rin+(RING.Rout-RING.Rin)*Math.pow(v,1.25), edge=smooth(0,.12,v); return [RING.CX+Math.cos(ang)*rad,hh*RING.Top*edge+(1-edge)*18-4,RING.CZ+Math.sin(ang)*rad]; };
+function ringSectors(root,heightAt,mat,N,M,layer){
+  const SECT=18, n=Math.round(N/SECT);
+  for(let s=0;s<SECT;s++){ const P=new Float32Array((n+1)*(M+1)*3), UV=new Float32Array((n+1)*(M+1)*2), I=[];
+    for(let a=0;a<=n;a++) for(let r=0;r<=M;r++){ const u=(s+a/n)/SECT, v=r/M, o=a*(M+1)+r; P.set(ringPos(heightAt(u%1,v),u,v),o*3); UV.set([u,v],o*2); }
+    for(let a=0;a<n;a++) for(let r=0;r<M;r++){ const p=a*(M+1)+r, q=p+M+1; I.push(p,p+1,q,q,p+1,q+1); }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setAttribute('uv',new THREE.BufferAttribute(UV,2)); g.setIndex(I); g.computeBoundingSphere();
+    const o=new THREE.Mesh(g,mat); o.layers.set(layer); root.add(o); }
+}
+function buildRing(root,qual){
+  const heightAt=ringHeightReader();
+  ringMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...U, ...mtU, uMap:{value:TEX.mt_ring}, uMask:{value:TEX.mt_mask}, uDetail:{value:TEX.mt_detail}, uSun:U.uSunDirW, uLine:{value:.45}, uDecAmt:{value:0}, uGrove:{value:null} },
     vertexShader:`varying vec2 vUv; varying vec3 vW; void main(){ vUv=uv; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader:`precision highp float; uniform sampler2D uMap,uMask,uTile; uniform vec3 uRS,uRL,uSS,uSL,uFS,uFL,uHz,uDL,uDS,uSun; uniform float uLine,uDecAmt; varying vec2 vUv; varying vec3 vW;
-      void main(){ vec4 t=texture2D(uMap,vUv), mk=texture2D(uMask,vUv); float a=vUv.x*6.28318; vec2 q=t.rg*2.-1.; float crease=t.b-.5;
-        vec3 U=vec3(-sin(a),0.,cos(a)), V=vec3(cos(a),0.,sin(a)), n=normalize(U*q.x+V*q.y+vec3(0.,1.,0.)*sqrt(max(.02,1.-dot(q,q))));
+    fragmentShader:`precision highp float; uniform sampler2D uMap,uMask,uDetail; uniform vec3 uRS,uRL,uSS,uSL,uFS,uFL,uHz,uDL,uDS,uSun,uFogSun; uniform float uLine,uDecAmt; varying vec2 vUv; varying vec3 vW; ${CLOUD_GLSL}
+      void main(){ vec2 ruv=vec2(vUv.x,1.-vUv.y); vec4 t=texture2D(uMap,ruv), mk=texture2D(uMask,ruv); float a=vUv.x*6.28318; vec2 q=t.rg*2.-1.; float crease=t.b-.5;
+        vec2 dv=vec2(vUv.x*2600.,vW.y*1.1+vUv.y*420.); vec3 d1=texture2D(uDetail,dv*.0032).rgb, d2=texture2D(uDetail,dv*.0117+.31).rgb, d3=texture2D(uDetail,dv*.041+.13).rgb;
+        q+=(d1.rg-.5)*.62+(d2.rg-.5)*.46+(d3.rg-.5)*.24; crease+=(d1.b-.5)*.34+(d2.b-.5)*.3+(d3.b-.5)*.22;
+        vec3 U=vec3(-sin(a),0.,cos(a)), V=vec3(cos(a),0.,sin(a)), n=normalize(U*q.x+V*q.y+vec3(0.,1.,0.)*sqrt(max(.02,1.-min(dot(q,q),.98))));
         float lam=clamp(dot(n,normalize(uSun+vec3(0.,.32,0.)))*1.1+.1,0.,1.);
-        float brush=texture2D(uTile,vW.xz*.016).b-.5; float v=clamp(lam*.9+crease*.8+brush*.16,0.,1.); v=floor(v*9.+.5)/9.;
+        float v=clamp(lam*.9+crease*.8,0.,1.);
+        float strata=sin(vW.y*.19+sin(a*14.)*2.4+d1.b*5.)*.5+.5; v=clamp(v-smoothstep(.72,.98,strata)*.09,0.,1.); v=floor(v*13.+.5)/13.;
         vec3 rock=mix(uRS,uRL,v), sn=mix(uSS,uSL,smoothstep(.1,.72,v));
-        float steep=smoothstep(.62,.36,n.y), snow=smoothstep(uLine,uLine+.035,mk.r+crease*.05)*(1.-steep*.72); vec3 c=mix(rock,sn,snow);
-        float w=clamp(v*1.5,0.,1.); vec3 fo=mix(uFS,uFL,w); float dec=step(.5,fract(sin(dot(floor(vW.xz*.03),vec2(12.9,78.2)))*43758.5))*uDecAmt; fo=mix(fo,mix(uDS,uDL,w),dec); c=mix(c,fo,mk.g);
-        float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(380.,1400.,d)*.36; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz,clamp(hz+low*low*.3,0.,1.));
+        float steep=smoothstep(.62,.36,n.y), snow=smoothstep(uLine,uLine+.018,mk.r+crease*.08)*(1.-steep*.72); vec3 c=mix(rock,sn,snow);
+        float w=clamp(v*1.5,0.,1.); vec3 fo=mix(uFS,uFL,w); float grove=smoothstep(.42,.58,texture2D(uDetail,vW.xz*.0031).b+texture2D(uDetail,vW.xz*.0009).b-.5); fo=mix(fo,mix(uDS,uDL,w),grove*uDecAmt);
+        float fm=smoothstep(.32,.66,mk.g+(d2.b-.5)*.9); c=mix(c,fo*(.74+.42*smoothstep(.3,.7,d3.b)),fm);
+        c*=cloudShade(vW.xz);
+        vec3 vd=normalize(vW-cameraPosition); float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(380.,1400.,d)*.36; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz+uFogSun*pow(max(dot(vd,uSunDirW),0.),6.),clamp(hz+low*low*.3,0.,1.));
+        gl_FragColor=vec4(c,1.); }`.replace('uniform vec3 uRS','uniform vec3 uSunDirW; uniform vec3 uRS') });
+  const [N,M]={low:[720,84],med:[1080,120],high:[1440,160]}[qual]||[1080,120];
+  ringSectors(root,heightAt,ringMat,N,M,1); ringSectors(root,heightAt,ringMat,540,48,2);        // the lake mirror sees a light copy
+  ringTrees(root,qual,heightAt);
+}
+/* forests on the slopes: real sprites, thousands of them, so a ridge line is made of trees, and they catch the same light */
+function ringTrees(root,qual,heightAt){
+  const tex=TEX.mt_mask, c=document.createElement('canvas'); c.width=1024; c.height=160; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(tex.image,0,0,1024,160); const mk=x.getImageData(0,0,1024,160).data;
+  const forestAt=(u,v)=>mk[(Math.min(159,Math.floor(v*160))*1024+Math.floor(u*1024)%1024)*4+1]/255;
+  const r=rng(909), cap={low:5000,med:11000,high:18000}[qual]||11000, names=['spruce_a','spruce_b','spruce_c','spruce_d','larch_a','broad_a','broad_b','larch_b'];
+  const P=new Float32Array(cap*3), S=new Float32Array(cap*2), Q=new Float32Array(cap*4), Mi=new Float32Array(cap*3); let n=0;
+  for(let i=0;i<cap*40&&n<cap;i++){ const u=r(), v=Math.pow(r(),1.5)*.9+.025; if(forestAt(u,v)<.5||r()>1-v*.6) continue;
+    const p=ringPos(heightAt(u,v),u,v), rad=Math.hypot(p[0]-RING.CX,p[2]-RING.CZ); if(p[1]<6) continue;
+    const grove=vnoise(p[0]*.006+3,p[2]*.006)>.5, nm=grove?names[4+Math.floor(r()*4)]:names[Math.floor(r()*4)], a=ATLAS[nm], h=(15+r()*13)*(1+smooth(600,1100,rad)*.9);
+    P.set(p,n*3); S.set([h*a.w/a.h,h],n*2); Q.set([a.u0,a.v0,a.u1,a.v1],n*4); Mi.set([(r()-.5)*.26,grove?1:0,r()<.5?-1:1],n*3); n++; }
+  const g=new THREE.InstancedBufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-.5,0,0, .5,0,0, .5,1,0, -.5,1,0]),3)); g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array([0,0,1,0,1,1,0,1]),2)); g.setIndex([0,1,2,0,2,3]);
+  g.setAttribute('iPos',new THREE.InstancedBufferAttribute(P,3)); g.setAttribute('iSize',new THREE.InstancedBufferAttribute(S,2)); g.setAttribute('iRect',new THREE.InstancedBufferAttribute(Q,4)); g.setAttribute('iMisc',new THREE.InstancedBufferAttribute(Mi,3)); g.instanceCount=n;
+  ringTreeMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...U, ...mtU, uMap:{value:TEX.sheet_trees}, uDecAmt:{value:0} },
+    vertexShader:`attribute vec3 iPos,iMisc; attribute vec2 iSize; attribute vec4 iRect; uniform vec3 uSide; varying vec2 vUv; varying float vTone,vGrove,vL,vD; varying vec3 vP;
+      void main(){ vec3 tc=cameraPosition-iPos; tc.y=0.; float d=max(length(tc),.001); tc/=d; vec3 right=vec3(tc.z,0.,-tc.x); vec3 wp=iPos+right*position.x*iSize.x+vec3(0.,position.y*iSize.y-1.5,0.);
+        float u=iMisc.z<0.?1.-uv.x:uv.x; vUv=vec2(mix(iRect.x,iRect.z,u),mix(iRect.y,iRect.w,uv.y)); vTone=iMisc.x; vGrove=iMisc.y; vL=dot(right,uSide)*(uv.x-.5); vD=d; vP=iPos; gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
+    fragmentShader:`precision highp float; uniform sampler2D uMap; uniform vec3 uFS,uFL,uDS,uDL,uHz,uSS,uSL,uFogSun,uSunDirW; uniform float uDecAmt,uSnow; varying vec2 vUv; varying float vTone,vGrove,vL,vD; varying vec3 vP; ${CLOUD_GLSL}
+      void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.42) discard; float v=t.r+(t.g-.5)*.2+vTone+vL*.5, w=clamp(v*1.5,0.,1.); vec3 c=mix(uFS,uFL,w); c=mix(c,mix(uDS,uDL,w),vGrove*uDecAmt);
+        if(uSnow>.5) c=mix(c,mix(uSS,uSL,w),.42*smoothstep(.1,.6,t.b)+.1);
+        c*=cloudShade(vP.xz); float hz=smoothstep(380.,1400.,vD)*.36, low=1.-smoothstep(10.,120.,vP.y); c=mix(c,uHz+uFogSun*pow(max(dot(normalize(vP-cameraPosition),uSunDirW),0.),6.),clamp(hz+low*low*.3,0.,1.));
         gl_FragColor=vec4(c,1.); }` });
-  const o=new THREE.Mesh(g,ringMat); o.frustumCulled=false; root.add(o);
+  const o=new THREE.Mesh(g,ringTreeMat); o.frustumCulled=false; root.add(o);
 }
 
 /* ---------- sprites: instanced camera-facing paintings ---------- */
@@ -288,8 +341,8 @@ export function makeSprites(root,sheet,items,opts={}){
     defines:opts.colored?{COLORED:1}:{},
     uniforms:{ ...U, uMap:{value:TEX[sheet]}, uSnowRow:{value:rowV('ice')} },
     vertexShader:`attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iRect,iMisc;
-      uniform float uTime,uFogD,uLodT,uLodP,uWindAmp; uniform vec3 uSide;
-      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF;
+      uniform float uTime,uFogD,uLodT,uLodP,uWindAmp; uniform vec3 uSide,uSunDirW;
+      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF,vInsc; varying vec2 vP;
       void main(){ vec3 tc=cameraPosition-iPos; tc.y=0.; float d=max(length(tc),.001); tc/=d;
         vec3 right=vec3(tc.z,0.,-tc.x);
         float h=position.y*position.y*iMisc.z;
@@ -298,12 +351,12 @@ export function makeSprites(root,sheet,items,opts={}){
         vec3 wp=iPos+right*(position.x*iSize.x+sw)+vec3(0.,position.y*iSize.y,0.);
         float u=iMisc.w<0.?1.-uv.x:uv.x;
         vUv=vec2(mix(iRect.x,iRect.z,u),mix(iRect.y,iRect.w,uv.y));
-        vRow=iMisc.x; vTone=iMisc.y; vX=uv.x-.5; vSideL=dot(right,uSide); vFogF=1.-exp(-d*d*uFogD*uFogD); vNear=d;
+        vRow=iMisc.x; vTone=iMisc.y; vX=uv.x-.5; vSideL=dot(right,uSide); vFogF=1.-exp(-d*d*uFogD*uFogD); vNear=d; vP=iPos.xz; vInsc=pow(max(dot(normalize(wp-cameraPosition),uSunDirW),0.),5.);
         gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
     fragmentShader:`precision highp float;
-      uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow; uniform vec4 uReveal; uniform vec2 uRes;
-      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF; ${ramp}
-      float dith(vec2 p){ vec2 q=mod(floor(p),4.); return (mod(q.x+q.y*2.,4.)+mod(q.y,2.)*.5)/4.5; }
+      uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog,uFogSun; uniform float uSnow,uSnowRow,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
+      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF,vInsc; varying vec2 vP; ${ramp} ${CLOUD_GLSL}
+      float dith(vec2 p){ return fract(52.9829189*fract(dot(floor(p)+.5,vec2(.06711056,.00583715)))); }
       void main(){ if(vLodF<=dith(gl_FragCoord.xy)) discard; vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
         #ifdef COLORED
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
@@ -313,14 +366,18 @@ export function makeSprites(root,sheet,items,opts={}){
         if(uSnow>.01){ float s=uSnow*smoothstep(.1,.6,t.b)*smoothstep(.2,.42,t.r); c=mix(c,ramp(.45+v*.6,uSnowRow),s); }
         #endif
         c*=mix(uShade,uLit,smoothstep(.08,.7,v));
-        c=mix(c,uFog,vFogF);
+        #ifndef COLORED
+        c=mix(c,ramp(v+.3,vRow)*uLit*1.5,vInsc*uGlow*.55);
+        #endif
+        c*=cloudShade(vP);
+        c=mix(c,uFog+uFogSun*vInsc,vFogF);
         float a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
         gl_FragColor=vec4(c,a); }` });
   const m=new THREE.Mesh(geo,mat); m.frustumCulled=false; if(opts.mainOnly){ m.layers.set(1); } root.add(m); return m;
 }
 
 /* ---------- ground ---------- */
-const groundU={ uLeafRow:{value:rowV('broad3')}, uSplat:{value:null}, uTile:{value:null}, uGroundRow:{value:rowV('ground')}, uEarthRow:{value:rowV('earth')}, uRockRow:{value:rowV('rock')}, uIceRow:{value:rowV('ice')} };
+const groundU={ uSeasonG:U.uSeason, uLeafRow:{value:rowV('broad3')}, uSplat:{value:null}, uTile:{value:null}, uBits:{value:null}, uGroundRow:{value:rowV('ground')}, uEarthRow:{value:rowV('earth')}, uRockRow:{value:rowV('rock')}, uIceRow:{value:rowV('ice')} };
 export function splatPixel(x,z){   // zones used by the painted ground and the map
   const f=lakeField(x,z), y=terrainH(x,z);
   const dirt=clamp(1-(pathDist(x,z)-1.1+(vnoise(x*.6,z*.6)-.5)*1.2)/.9,0,1);
@@ -333,19 +390,22 @@ function bakeSplat(){
   const S=768, R=420, cv=document.createElement('canvas'); cv.width=cv.height=S; const cx=cv.getContext('2d'), im=cx.createImageData(S,S);
   for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const x=(i+.5)/S*R*2-R, z=(j+.5)/S*R*2-R, s=splatPixel(x,z), o=(j*S+i)*4;
     im.data[o]=0; im.data[o+1]=s.dirt*255; im.data[o+2]=s.shore*255; im.data[o+3]=255; im.data[o]=s.forest*255; }
-  cx.putImageData(im,0,0);
+  cx.putImageData(im,0,0); splatCPU=im.data;
   const t=new THREE.CanvasTexture(cv); t.flipY=false; t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; t.colorSpace=THREE.NoColorSpace;
   return t;
 }
 function groundMaterial(){
   const m=new THREE.MeshLambertMaterial({color:0xffffff});
-  splatT=groundU.uSplat.value=bakeSplat(); groundU.uTile.value=TEX.ground_tile;
+  splatT=groundU.uSplat.value=bakeSplat(); groundU.uTile.value=TEX.ground_tile; groundU.uBits.value=TEX.ground_bits;
   m.onBeforeCompile=sh=>{
-    Object.assign(sh.uniforms,groundU,{uRamps:U.uRamps,uSnow:U.uSnow});
+    Object.assign(sh.uniforms,groundU,{uRamps:U.uRamps,uSnow:U.uSnow,uCloud:U.uCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt,uCloudTint:U.uCloudTint,uFogSun:U.uFogSun,uSunDirW:U.uSunDirW});
     sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <worldpos_vertex>',
       '#include <worldpos_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normal;');
-    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow,uLeafRow; ${ramp}\n`+
-      sh.fragmentShader.replace('#include <map_fragment>',`
+    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps,uBits; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow,uLeafRow,uSeasonG; uniform vec3 uFogSun,uSunDirW; ${ramp} ${CLOUD_GLSL}\n`+
+      sh.fragmentShader.replace('#include <fog_fragment>',`#ifdef USE_FOG
+        { float ff=1.-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth); gl_FragColor.rgb=mix(gl_FragColor.rgb,fogColor+uFogSun*pow(max(dot(normalize(vWP-cameraPosition),uSunDirW),0.),6.),ff); }
+        #endif`).replace('#include <normal_fragment_maps>',`
+        { float dn=length(vWP-cameraPosition), nk=1.-smoothstep(26.,64.,dn); if(nk>.01){ float e=.05; vec2 q=vWP.xz/9.; float h0=texture2D(uTile,q).g, hx=texture2D(uTile,q+vec2(e/9.,0.)).g, hz=texture2D(uTile,q+vec2(0.,e/9.)).g; vec3 wn=normalize(vWN+vec3(h0-hx,0.,h0-hz)*3.2*nk); normal=normalize(mat3(viewMatrix)*wn); } }`).replace('#include <map_fragment>',`
         vec2 suv=vWP.xz/840.+.5; vec4 sp=texture2D(uSplat,suv);
         vec3 t1=texture2D(uTile,vWP.xz/9.).rgb, t2=texture2D(uTile,vWP.xz/31.).rgb, t3=texture2D(uTile,vWP.xz/157.).rgb;
         float g=(t1.r*.72+t2.r*.34+t3.r*.22-.14)*1.2+.0;
@@ -357,9 +417,15 @@ function groundMaterial(){
         float steep=smoothstep(.72,.5,normalize(vWN).y);
         c=mix(c,rock,clamp(max(sp.b,steep)+t2.b*.3-.15,0.,1.));
         c*=1.34-sp.r*.3;
-        float fleck=smoothstep(.72,.8,t1.g)*smoothstep(.45,.6,t2.r)*(1.-smoothstep(.2,.6,sp.g));
-        c=mix(c,ramp(.5+t2.r*.5,uLeafRow),fleck*.85);
+        float gd=length(vWP-cameraPosition), bk=1.-smoothstep(34.,84.,gd);
+        if(bk>.01){ vec3 b=texture2D(uBits,vWP.xz/4.3).rgb, b2=texture2D(uBits,vWP.xz/7.7+.37).rgb;
+          float pz=clamp(sp.b*1.5+t2.r*.5-.42,0.,1.), pe=clamp(sp.g*1.1-.25,0.,1.), pr=b.g>.5?b.r:b2.r, pm=max(b.g*step(.52,t3.g+t2.g*.3+.22),b2.g*step(.5,t2.b+.12));
+          c=mix(c,ramp(pr*1.05+.05,uRockRow)*1.12,pm*pz*bk);                                    // cobbles at the water, small stones in the earth of the paths
+          c=mix(c,ramp(pr*.62+.34,uEarthRow),pm*pe*bk*.62);
+          float lk=abs(uSeasonG-2.)<.5?1.:.3, lz=sp.r*(1.-smoothstep(.2,.6,sp.g))*smoothstep(.42,.64,t2.g+t3.r*.4)*lk, lf=max(smoothstep(.6,.64,b.b)*b.b,smoothstep(.74,.78,b2.b)*b2.b);
+          c=mix(c,ramp(.3+lf*.6,uLeafRow),step(.1,lf)*lz*bk*.85); }
         c*=mix(1.,.55,wet);
+        c*=cloudShade(vWP.xz);
         if(uSnow>.01){ c=mix(c,ramp(.62+g*.42,uIceRow),uSnow*smoothstep(.15,.4,g+.3-sp.g*.4)); }
         diffuseColor.rgb*=c;`);
   };
@@ -382,7 +448,7 @@ export let water=null; let mirrorEvery=1;
 export const setMirrorEvery=n=>{ mirrorEvery=n; };
 let aboveWater=[];
 export const setUnderwater=on=>{ for(const o of aboveWater) o.visible=!on; };
-const waterU={ uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
+const waterU={ sunD:new THREE.Vector3(0,1,0), uSunC:{value:new THREE.Color()}, uShallow:{value:new THREE.Color()}, uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
 function shoreTex(){
   const S=512, d=new Uint8Array(S*S*4);
   for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const x=(i+.5)/S*760-380, z=(j+.5)/S*460-50, f=lakeField(x,z), o=(j*S+i)*4; d[o]=clamp(f*16,0,1)*255; d[o+1]=clamp(f*3,0,1)*255; d[o+3]=255; }
@@ -390,11 +456,11 @@ function shoreTex(){
 }
 function buildLake(root,res){
   const shader={ name:'PaintedLake',
-    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.14},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null},uRain:{value:0} },
+    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.14},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null},uRain:{value:0},uSunD:{value:null},uSunC:{value:null},uShallow:{value:null},uGlow:{value:0},uCloud:{value:null},uCloudOff:{value:null},uCloudAmt:{value:0},uCloudTint:{value:null},uFogSun:{value:null} },
     vertexShader:`uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW;
       void main(){ vUv=textureMatrix*vec4(position,1.); vW=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader:`precision highp float;
-      uniform sampler2D tDiffuse,uShore,uNoise; uniform vec3 uTint,uGlint,uFog; uniform float uGlintAmt,uTimeW,uTintAmt,uFogD,uRain; varying vec4 vUv; varying vec3 vW;
+      uniform sampler2D tDiffuse,uShore,uNoise; uniform vec3 uTint,uGlint,uFog,uSunD,uSunC,uShallow,uFogSun; uniform float uGlintAmt,uTimeW,uTintAmt,uFogD,uRain,uGlow; varying vec4 vUv; varying vec3 vW; ${CLOUD_GLSL}
       float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
       float dash(vec2 p,float dens){ vec2 g=floor(p), f=fract(p); float h=h21(g); if(h<dens) return 0.;
         float l=.22+.26*fract(h*7.3), c=.5+(fract(h*13.)-.5)*.4; return (1.-smoothstep(l*.7,l,abs(f.x-c)))*(1.-smoothstep(.12,.34,abs(f.y-.5))); }
@@ -403,17 +469,25 @@ function buildLake(root,res){
         float n=texture2D(uNoise,p*vec2(.006,.05)+vec2(t*.004,t*.0025)).b+texture2D(uNoise,p*vec2(.013,.11)-vec2(t*.006,0.)).b-1.;
         vec4 uv=vUv; uv.x+=n*.012*uv.w; uv.y+=n*.026*uv.w;
         vec3 c=texture2DProj(tDiffuse,uv).rgb;
-        c=mix(c,uTint,uTintAmt+.1*(1.-s.g));
+        vec3 vd=(vW-cameraPosition)/max(d,.001); vec3 rd=vec3(vd.x,-vd.y,vd.z);
+        float fres=pow(1.-clamp(-vd.y,0.,1.),4.);
+        c=mix(c,uTint,uTintAmt+.1*(1.-s.g)+(1.-fres)*.12);
+        c=mix(c,uShallow,(1.-smoothstep(.0,.42,s.g))*(1.-fres*.7)*.62);                         // the bed shows through at the edge
+        float road=pow(max(dot(rd,uSunD),0.),26.)*uGlow, sheen=pow(max(dot(rd,uSunD),0.),7.)*uGlow;   // the sun's path across the lake
         float f1=smoothstep(14.,6.,d), f2=smoothstep(60.,24.,d)*smoothstep(10.,20.,d), f3=(1.-smoothstep(160.,420.,d)*.4)*smoothstep(36.,70.,d);
         float g=0.;
-        g+=f1*dash(vec2(p.x*1.9+t*.1,p.y*11.),.92)*.6;
-        g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),.91);
-        g+=f3*dash(vec2(p.x*.13+t*.025,p.y*.9),.92);
-        c=mix(c,uGlint,clamp(g,0.,1.)*uGlintAmt*.6);
+        float dn=.92-road*.5, cl=cloudShade(p).g;
+        g+=f1*dash(vec2(p.x*1.9+t*.1,p.y*11.),dn)*.6;
+        g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),dn-.01);
+        g+=f2*dash(vec2(p.x*.97+t*.09+7.,p.y*5.3),dn+.02)*.7;
+        g+=f3*dash(vec2(p.x*.13+t*.025,p.y*.9),dn);
+        g+=f3*dash(vec2(p.x*.31-t*.04+3.,p.y*2.1),dn+.02)*.8;
+        c=mix(c,uSunC,sheen*.3);
+        c=mix(c,mix(uGlint,uSunC,road),clamp(g,0.,1.)*uGlintAmt*(.6+road*.4)*cl);
         if(uRain>.5&&d<70.){ vec2 cell=floor(p*.9), f=fract(p*.9)-.5; float h=h21(cell), ph=fract(t*.9+h*7.), r=length(f+vec2(h-.5,fract(h*3.)-.5)*.4); c=mix(c,uGlint,(1.-smoothstep(.015,.05,abs(r-ph*.46)))*(1.-ph)*.55*(1.-d/70.)); }
         float foam=smoothstep(.0,.05,s.r)*(1.-smoothstep(.05,.2,s.r+n*.05));
         c=mix(c,uGlint,foam*.55);
-        c=mix(c,uFog,(1.-exp(-d*d*uFogD*uFogD))*.8);
+        c=mix(c,uFog+uFogSun*pow(max(dot(vd,uSunD),0.),6.),(1.-exp(-d*d*uFogD*uFogD))*.8);
         gl_FragColor=vec4(c,1.); }` };
   const geo=new THREE.PlaneGeometry(760,460);
   water=new Reflector(geo,{ textureWidth:res[0], textureHeight:res[1], shader, multisample:0, clipBias:.002 });
@@ -421,7 +495,7 @@ function buildLake(root,res){
   const mirror=water.onBeforeRender; let tick=0;       // the reflection may refresh every 2nd or 3rd frame on slower machines
   water.onBeforeRender=function(r,sc,cam){ if(cam.isPerspectiveCamera&&(tick++%mirrorEvery)===0) mirror.call(this,r,sc,cam); };
   const u=water.material.uniforms;
-  u.uTint.value=waterU.uTint.value; u.uGlint.value=waterU.uGlint.value; u.uFog.value=U.uFog.value; u.uShore.value=shoreTex(); u.uNoise.value=TEX.clouds;
+  u.uTint.value=waterU.uTint.value; u.uGlint.value=waterU.uGlint.value; u.uFog.value=U.uFog.value; u.uShore.value=shoreTex(); u.uNoise.value=TEX.clouds; u.uSunD.value=waterU.sunD; u.uSunC.value=waterU.uSunC.value; u.uShallow.value=waterU.uShallow.value; u.uCloud.value=U.uCloud.value; u.uCloudOff.value=U.uCloudOff.value; u.uCloudTint.value=U.uCloudTint.value; u.uFogSun.value=U.uFogSun.value;
   waterU.uni=u;
 }
 
@@ -480,30 +554,37 @@ function buildMist(root){
 /* ---------- rocks ---------- */
 function vn3(x,y,z){ return (vnoise(x+z*.7,y-z*.4)+vnoise(y*1.3+5,z*1.3-x*.5))*.5; }
 function rockGeo(seed,flat,detail=2){
-  const g=new THREE.IcosahedronGeometry(1,detail), p=g.attributes.position, s=seed*7.3;
-  for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-    const n=1+(vn3(x*1.1+s,y*1.1,z*1.1)-.5)*1.1+(vn3(x*3+s,y*3,z*3)-.5)*.3; let yy=y*n*flat; if(yy<-.2) yy=-.2;
-    p.setXYZ(i,x*n,yy,z*n); }
+  const s=seed*7.3, r=rng(seed*31+5), cuts=Array.from({length:6},()=>{ const a=r()*6.28, b=r()*2-1, q=Math.sqrt(1-b*b); return [Math.cos(a)*q,b,Math.sin(a)*q,.62+r()*.3]; });
+  let g=new THREE.IcosahedronGeometry(1,detail); g.deleteAttribute('uv'); g.deleteAttribute('normal'); g=mergeVertices(g,1e-3); const p=g.attributes.position;
+  for(let i=0;i<p.count;i++){ let x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+    const n=1+(vn3(x*1.1+s,y*1.1,z*1.1)-.5)*1.1+(vn3(x*3+s,y*3,z*3)-.5)*.34+(Math.abs(vn3(x*6.5+s,y*6.5,z*6.5)-.5)*2-.3)*.13+(vn3(x*14+s,y*14,z*14)-.5)*.06; x*=n; y*=n; z*=n;
+    for(const c of cuts){ const d=x*c[0]+y*c[1]+z*c[2]-c[3]; if(d>0){ x-=c[0]*d*.86; y-=c[1]*d*.86; z-=c[2]*d*.86; } }        // cleaved faces
+    let yy=y*flat; if(yy<-.2) yy=-.2; p.setXYZ(i,x,yy,z); }
   g.computeVertexNormals(); return g;
 }
 const toonGrad=(()=>{ const d=new Uint8Array([70,130,195,255]); const t=new THREE.DataTexture(d,4,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.NearestFilter; t.needsUpdate=true; return t; })();
 export function toonOf(params){ return new THREE.MeshToonMaterial({gradientMap:toonGrad,...params}); }
 function buildRocks(root,obst){
-  const r=rng(77), geos=[rockGeo(1,.72),rockGeo(2,.6),rockGeo(3,.84),rockGeo(4,.5),rockGeo(5,.7,1),rockGeo(6,.56,1),rockGeo(7,.8,1),rockGeo(8,.5,1)];
+  const r=rng(77), geos=[rockGeo(1,.72,5),rockGeo(2,.6,5),rockGeo(3,.84,5),rockGeo(4,.5,5),rockGeo(5,.7,2),rockGeo(6,.56,2),rockGeo(7,.8,2),rockGeo(8,.5,2)];
   const mat=toonOf({color:0xffffff});
-  mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uRockRow:{value:rowV('rock')},uMossRow:{value:rowV('ground')},uIceRow:{value:rowV('ice')},uSnow:U.uSnow});
+  mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uDetail:{value:TEX.mt_detail},uRockRow:{value:rowV('rock')},uMossRow:{value:rowV('ground')},uIceRow:{value:rowV('ice')},uSnow:U.uSnow,uCloud:U.uCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt,uCloudTint:U.uCloudTint});
     sh.vertexShader='varying vec3 vWN; varying vec3 vWP;\n'+sh.vertexShader.replace('#include <defaultnormal_vertex>',
       `#include <defaultnormal_vertex>\n mat3 svM=mat3(instanceMatrix); vWN=normalize(svM*(objectNormal/vec3(dot(svM[0],svM[0]),dot(svM[1],svM[1]),dot(svM[2],svM[2]))));`).replace('#include <project_vertex>',
       `#include <project_vertex>\n vWP=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;`);
-    sh.fragmentShader=`varying vec3 vWN; varying vec3 vWP; uniform sampler2D uRamps,uTile; uniform float uRockRow,uMossRow,uIceRow,uSnow; ${ramp}\n`+sh.fragmentShader.replace('#include <map_fragment>',`
+    sh.fragmentShader=`varying vec3 vWN; varying vec3 vWP; uniform sampler2D uRamps,uTile,uDetail; uniform float uRockRow,uMossRow,uIceRow,uSnow; ${ramp} ${CLOUD_GLSL}\n`+sh.fragmentShader.replace('#include <normal_fragment_maps>',`
+      { vec2 rq=(rd1.rg-.5)*1.25+(rd2.rg-.5)*.8+(rd3.rg-.5)*.4; normal=normalize(mat3(viewMatrix)*normalize(nn+vec3(rq.x,rq.y*.4,rq.y))); }`).replace('#include <map_fragment>',`
       vec3 tb=texture2D(uTile,vWP.xz/4.+vWP.y*.17).rgb, tc=texture2D(uTile,vec2(vWP.x+vWP.z,vWP.y*1.6)/7.).rgb;
       vec3 nn=normalize(vWN); float side=1.-abs(nn.y);
-      float v=mix(tb.b,tc.b,side)*.62+.16+nn.y*.14;
+      vec2 ruv=abs(nn.y)>.62?vWP.xz:vec2(vWP.x*.7+vWP.z*.7,vWP.y); vec3 rd1=texture2D(uDetail,ruv*.11).rgb, rd2=texture2D(uDetail,ruv*.37+.31).rgb, rd3=texture2D(uDetail,ruv*1.1+.13).rgb;
+      float crack=(rd1.b-.5)*.7+(rd2.b-.5)*.6+(rd3.b-.5)*.34;
+      float v=mix(tb.b,tc.b,side)*.42+.26+nn.y*.14+crack*.62;
       vec3 c=ramp(v,uRockRow);
-      float moss=smoothstep(.56,.84,nn.y+tb.r*.3-.05);
-      c=mix(c,ramp(tb.r*.8+.05,uMossRow),moss*.92);
+      float lichen=smoothstep(.62,.7,rd2.b+tb.r*.1)*smoothstep(.45,.62,tc.r)*.5; c=mix(c,ramp(.78,uRockRow)*vec3(1.02,1.,.86),lichen);
+      float moss=smoothstep(.5,.8,nn.y+tb.r*.34+crack*.5-.05);
+      c=mix(c,ramp(tb.r*.8+rd3.b*.28-.04,uMossRow),moss*.94);
       if(uSnow>.01) c=mix(c,ramp(.6+tb.r*.4,uIceRow),uSnow*smoothstep(.3,.62,nn.y));
       c*=mix(.5,1.,smoothstep(-1.5,.2,vWP.y+1.15));
+      c*=cloudShade(vWP.xz);
       diffuseColor.rgb*=c;`); };
   const spots=[[],[],[],[],[],[],[],[]];
   const add=(x,z,s,sy)=>{ const y=terrainH(x,z), sp={x,y:y-.1*s,z,s,sy,ry:r()*6.28}; spots[Math.floor(r()*4)+(s<1.7?4:0)].push(sp); sp.ob=s>1.1?{x,z,r:s*.82,kind:'rock'}:null; if(sp.ob) obst.push(sp.ob); return; };
@@ -517,9 +598,11 @@ function buildRocks(root,obst){
   // reefs off the shore
   for(let i=0;i<70;i++){ const x=(r()-.5)*420, z=46+r()*230, f=lakeField(x,z); if(f<.015||f>.16) continue; add(x,z,.5+r()*1.8,.5+r()*.3); }
   const d=new THREE.Object3D(); rockGeos=geos;
-  spots.forEach((list,i)=>{ if(!list.length) return; const im=new THREE.InstancedMesh(geos[i],mat,list.length); const col=new THREE.Color();
+  // grouped by area as well as by shape, so rocks behind you are never drawn
+  spots.forEach((all,i)=>{ const areas=new Map(); for(const q of all){ const k=Math.floor(q.x/170)+','+Math.floor(q.z/170); if(!areas.has(k)) areas.set(k,[]); areas.get(k).push(q); }
+   for(const list of areas.values()){ const im=new THREE.InstancedMesh(geos[i],mat,list.length); const col=new THREE.Color();
     list.forEach((s,k)=>{ d.position.set(s.x,s.y,s.z); d.rotation.set(0,s.ry,0); d.scale.set(s.s,s.s*s.sy,s.s*(.8+.5*((k*7%10)/10))); d.updateMatrix(); im.setMatrixAt(k,d.matrix); const ri=rockInst.length; rockInst.push({im,k,m:d.matrix.clone(),ob:s.ob}); if(s.ob) s.ob.ri=ri; col.setScalar(.82+.3*((k*3%7)/7)); im.setColorAt(k,col); });
-    im.receiveShadow=true; im.frustumCulled=false; root.add(im); });
+    im.receiveShadow=true; im.computeBoundingSphere(); im.boundingSphere.radius+=9; root.add(im); } });
   return spots.flat();
 }
 
@@ -527,11 +610,18 @@ function buildRocks(root,obst){
 const pick=(a,r)=>a[Math.floor(r()*a.length)];
 let splatT=null, blockT=null;
 export const splatTex=()=>splatT, blockTex=()=>blockT;
+/* the same fields the ground is painted from, on the CPU, so a chunk of grass can be baked without touching the GPU */
+let heightCPU=null, splatCPU=null; const HS=512, HR=440, SS=768;
+export function heightAt(x,z){ const fx=(x/HR+.5)*HS-.5, fz=(z/HR+.5)*HS-.5, i=Math.floor(fx), j=Math.floor(fz); if(!heightCPU||i<0||j<0||i>=HS-1||j>=HS-1) return terrainH(x,z); const a=heightCPU[j*HS+i], b=heightCPU[j*HS+i+1], c=heightCPU[(j+1)*HS+i], d=heightCPU[(j+1)*HS+i+1], tx=fx-i, tz=fz-j; return lerp(lerp(a,b,tx),lerp(c,d,tx),tz); }
+export function splatAt(x,z){ const i=clamp(Math.floor((x/840+.5)*SS),0,SS-1), j=clamp(Math.floor((z/840+.5)*SS),0,SS-1), o=(j*SS+i)*4; return [splatCPU[o]/255,splatCPU[o+1]/255,splatCPU[o+2]/255]; }
+export function blockedAt(x,z){ const i=Math.floor((x+128)*2), j=Math.floor((z+128)*2); return i>=0&&j>=0&&i<512&&j<512&&blockT.image.data[j*512+i]>5; }
+export const blockHook={fn:null};
 // where grass may not grow: floors, tilled soil. 0.5 unit cells over +-128.
-export function stampBlock(x,z,hx,hz,v=255){ const d=blockT.image.data, S=512, c=S/256; for(let j=Math.max(0,Math.floor((z-hz+128)*c));j<Math.min(S,Math.ceil((z+hz+128)*c));j++) for(let i=Math.max(0,Math.floor((x-hx+128)*c));i<Math.min(S,Math.ceil((x+hx+128)*c));i++) d[j*S+i]=v; blockT.needsUpdate=true; }
+export function stampBlock(x,z,hx,hz,v=255){ const d=blockT.image.data, S=512, c=S/256; for(let j=Math.max(0,Math.floor((z-hz+128)*c));j<Math.min(S,Math.ceil((z+hz+128)*c));j++) for(let i=Math.max(0,Math.floor((x-hx+128)*c));i<Math.min(S,Math.ceil((x+hx+128)*c));i++) d[j*S+i]=v; blockT.needsUpdate=true; if(blockHook.fn) blockHook.fn(x,z,hx,hz); }
 function bakeFields(){
-  const S=512, R=440, d=new Uint16Array(S*S); for(let j=0;j<S;j++) for(let i=0;i<S;i++) d[j*S+i]=THREE.DataUtils.toHalfFloat(terrainH((i+.5)/S*R-R/2,(j+.5)/S*R-R/2));
+  const S=512, R=440, d=new Uint16Array(S*S); heightCPU=new Float32Array(S*S); for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const h=terrainH((i+.5)/S*R-R/2,(j+.5)/S*R-R/2); heightCPU[j*S+i]=h; d[j*S+i]=THREE.DataUtils.toHalfFloat(h); }
   const t=new THREE.DataTexture(d,S,S,THREE.RedFormat,THREE.HalfFloatType); t.minFilter=t.magFilter=THREE.LinearFilter; t.needsUpdate=true; U.uHeight.value=t;
+  U.uCloud.value=tileNoise(256,4242);
   blockT=new THREE.DataTexture(new Uint8Array(512*512),512,512,THREE.RedFormat); blockT.minFilter=blockT.magFilter=THREE.NearestFilter; blockT.needsUpdate=true;
   U.uNoise.value=TEX.clouds;
 }
@@ -611,11 +701,14 @@ export const rockGeoFor=i=>rockGeos[i%rockGeos.length];
 
 /* ---------- birds in formation, drifting across the sky ---------- */
 function buildBirds(root){
-  const n=9, g=new THREE.BufferGeometry(), pos=[];
-  for(let i=0;i<n;i++){ const row=Math.ceil(i/2), s=i%2?1:-1, ox=row*s*3.2, oz=-row*3.4;
-    pos.push(ox-.9,0.28,oz, ox,0,oz, ox,0,oz, ox+.9,.28,oz); }
-  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
-  const m=new THREE.LineBasicMaterial({color:0x1a1a22,toneMapped:false,fog:false}), o=new THREE.LineSegments(g,m); o.frustumCulled=false; root.add(o);
+  const n=11, g=new THREE.BufferGeometry(), pos=[], ph=[], tip=[];
+  for(let i=0;i<n;i++){ const row=Math.ceil(i/2), s=i%2?1:-1, ox=row*s*3.2, oz=-row*3.4, p=i*1.7;
+    for(const sd of [-1,1]){ pos.push(ox,0,oz+.34, ox,0,oz-.3, ox+sd*1.15,0,oz-.12); ph.push(p,p,p); tip.push(0,0,1); }
+    pos.push(ox-.1,0,oz+.5, ox+.1,0,oz+.5, ox,0,oz-.62); ph.push(p,p,p); tip.push(0,0,0); }
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('aP',new THREE.Float32BufferAttribute(ph,1)); g.setAttribute('aT',new THREE.Float32BufferAttribute(tip,1));
+  const m=new THREE.ShaderMaterial({ side:THREE.DoubleSide, toneMapped:false, fog:false, uniforms:{uTime:U.uTime},
+    vertexShader:`attribute float aP,aT; uniform float uTime; void main(){ vec3 p=position; float b=sin(uTime*5.4+aP); p.y+=aT*(b*.62+.12); p.x*=1.-aT*abs(b)*.18; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.); }`,
+    fragmentShader:`void main(){ gl_FragColor=vec4(vec3(.05,.05,.07),1.); }` }), o=new THREE.Mesh(g,m); o.frustumCulled=false; root.add(o);
   return o;
 }
 
@@ -642,7 +735,7 @@ let mistRings=[], birds=null, birdT=0, root=null;
 export const QUAL_RES={low:[512,320],med:[900,560],high:[1280,800]};
 export function buildScenery(parent,qual){
   root=new THREE.Group(); parent.add(root);
-  bakeFields(); const before=root.children.length; buildSky(root); buildMountains(root); aboveWater=root.children.slice(before); buildGround(root);
+  bakeFields(); const before=root.children.length; buildSky(root); buildMountains(root,qual); aboveWater=root.children.slice(before); buildGround(root);
   buildLake(root,QUAL_RES[qual]||QUAL_RES.med);
   mistRings=buildMist(root); buildCreek(root);
   const rocks=buildRocks(root,obstacles);
@@ -654,13 +747,13 @@ export function buildScenery(parent,qual){
 export function setSeason(season){
   for(const k in SEASON) writeRow(k,SEASON[k][season]);
   rampTex.needsUpdate=true;
-  U.uSnow.value=season===3?1:0;
-  layers.forEach(l=>{ l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; }); if(ringMat){ ringMat.uniforms.uDecAmt.value=[.3,0,1,0][season]; ringMat.uniforms.uLine.value=[.4,.54,.44,.2][season]; }
+  U.uSnow.value=season===3?1:0; U.uSeason.value=season;
+  layers.forEach(l=>{ l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; }); if(ringMat){ ringMat.uniforms.uDecAmt.value=[.3,0,1,0][season]; ringMat.uniforms.uLine.value=[.4,.54,.44,.2][season]; } if(ringTreeMat) ringTreeMat.uniforms.uDecAmt.value=[.3,0,1,0][season];
 }
 
 // returns the frame's light rig so index.html can drive the directional light and grade
 const revealV=new THREE.Vector3();
-export const rig={ water:new THREE.Color(), rain:0, sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color() };
+export const rig={ water:new THREE.Color(), rain:0, sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color(), sunC:new THREE.Color(), shaft:0 };
 export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   U.uTime.value=t;
   const weather=weather0==='storm'?'rain':weather0==='snow'?'cloudy':weather0;
@@ -683,6 +776,14 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;
   // the sun side of every sprite, in world XZ
   U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize(); U.uSunDirW.value.copy(rig.sunDir);
+  // cloud shadows drift with the high wind; the low sun lights the air toward it, and leaves and grass glow against it
+  const day=1-P.night, wxK=weather==='rain'?.2:weather==='cloudy'?.5:1;
+  U.uCloudOff.value.set(t*.0034,t*.0019); U.uCloudAmt.value=(weather==='rain'?.25:weather==='cloudy'?.5:.72)*day; setC(U.uCloudTint.value,mixc(P.shade,[1,1,1],.42));
+  const gl=day*wxK*(.42+.58*(1-clamp(rig.sunDir.y/.62,0,1))); U.uGlow.value=gl;
+  { const a=new THREE.Color(), b=new THREE.Color(); setC(a,P.sun); setC(b,P.haze); U.uFogSun.value.setRGB(Math.max(0,a.r-b.r),Math.max(0,a.g-b.g),Math.max(0,a.b-b.b)).multiplyScalar(.75*day*wxK); }
+  const moonUp=P.night>.5; waterU.sunD.copy(moonUp?skyU.uMoonD.value:rig.sunDir); setC(waterU.uSunC.value,moonUp?P.snowL:P.sun);
+  { const lit=P.lit, sh=mixc([.62*lit[0],.56*lit[1],.42*lit[2]],P.water,.45); setC(waterU.uShallow.value,sh); }
+  if(waterU.uni){ waterU.uni.uGlow.value=moonUp?(P.night-.5)*1.1:gl*(1-P.night*2); waterU.uni.uCloudAmt.value=U.uCloudAmt.value; }
   const wa=t*.021; U.uWindDir.value.set(Math.cos(wa)*.8+.2,Math.sin(wa)*.6+.5).normalize();    // the breeze wanders, and picks up with the weather
   const target=(weather==='rain'?1.35:weather==='cloudy'?.95:.6)*(.82+.32*Math.sin(t*.13)); U.uWindAmp.value+=(target-U.uWindAmp.value)*Math.min(1,dt*.6);
   const c=camera.position;
@@ -691,7 +792,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
   mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
   if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }
-  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value);
+  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value); setC(rig.sunC,P.sun); rig.shaft=day*wxK;
   return rig;
 }
 /* tilled soil, painted to sit in the same ground */

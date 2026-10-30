@@ -25,9 +25,9 @@ SHEETS = {
         ('heron_a', lambda: A.heron()), ('heron_b', lambda: A.heron(True)), ('deer_a', lambda: A.deer()),
         ('duck_a', lambda: A.duck()), ('salmon_a', lambda: A.salmon()),
     ]),
-    'sheet_near': (1024, 1024, [
+    'sheet_near': (2048, 2048, [
         ('bough_a', lambda: T.bough(1)), ('bough_b', lambda: T.bough(2)), ('bough_c', lambda: T.bough(3)),
-        ('clump_a', lambda: T.leaf_clump(1)), ('clump_b', lambda: T.leaf_clump(2)), ('clump_c', lambda: T.leaf_clump(3)), ('clump_d', lambda: T.leaf_clump(4)),
+        ('clump_a', lambda: T.leaf_clump(1)), ('clump_b', lambda: T.leaf_clump(2)), ('clump_c', lambda: T.leaf_clump(3)), ('clump_d', lambda: T.leaf_clump(4)), ('clump_e', lambda: T.leaf_clump(5)), ('clump_f', lambda: T.leaf_clump(6)), ('clump_g', lambda: T.leaf_clump(7)), ('clump_h', lambda: T.leaf_clump(8)),
         ('frond_a', lambda: T.frond(1)), ('frond_b', lambda: T.frond(2)),
     ]),
     'sheet_plants': (2048, 1536, [
@@ -72,7 +72,7 @@ def panos():
     save(M.forest(), 'mt_forest', 88)
     save(M.clouds(), 'clouds', 88)
 
-def tile(size=1024, seed=51):
+def tile(size=2048, seed=51):
     """Ground detail, tiling. R=grass dabs, G=earth and pebbles, B=rock strokes."""
     rng = np.random.default_rng(seed)
     S = size
@@ -89,7 +89,7 @@ def tile(size=1024, seed=51):
     n1 = (M.pnoise((S, S), 1.6, rng) * .5 + .5)
     def grass(im, x, y):
         v = 70 + 150 * np.clip(n1[int(y) % S, int(x) % S], 0, 1) + rng.uniform(-34, 34)
-        cv2.ellipse(im, (int(x), int(y)), (int(rng.uniform(4, 11)), int(rng.uniform(1, 2.6))), rng.uniform(55, 125), 0, 360, int(np.clip(v, 0, 255)), -1, cv2.LINE_AA)
+        cv2.ellipse(im, (int(x), int(y)), (int(rng.uniform(6, 15)), int(rng.uniform(1, 2.4))), rng.uniform(50, 130), 0, 360, int(np.clip(v, 0, 255)), -1, cv2.LINE_AA)
     def earth(im, x, y):
         v = 110 + rng.uniform(-70, 90)
         r = rng.uniform(2, 9)
@@ -97,7 +97,7 @@ def tile(size=1024, seed=51):
     def rock(im, x, y):
         v = 70 + 170 * np.clip(n1[int(y) % S, int(x) % S], 0, 1) + rng.uniform(-40, 40)
         cv2.ellipse(im, (int(x), int(y)), (int(rng.uniform(14, 46)), int(rng.uniform(2, 6))), rng.uniform(-22, 22), 0, 360, int(np.clip(v, 0, 255)), -1, cv2.LINE_AA)
-    out = np.dstack([wrapped(grass, 60000), wrapped(earth, 22000), wrapped(rock, 9000)])
+    out = np.dstack([wrapped(grass, 200000), wrapped(earth, 90000), wrapped(rock, 30000)])
     save(out, 'ground_tile', 88)
 
 def surfaces(S=512, seed=61):
@@ -161,6 +161,30 @@ def surfaces(S=512, seed=61):
         y += h
     save(im[:, :, ::-1], 'surf_stone', 86)
 
+def groundbits(S=1024, seed=81):
+    """Tiling scatter drawn over the ground in the shader. R=pebble light, G=pebble mask, B=fallen-leaf mask."""
+    rng = np.random.default_rng(seed)
+    r = np.zeros((S, S), np.uint8); g = np.zeros((S, S), np.uint8); bl = np.zeros((S, S), np.uint8)
+    for _ in range(5200):
+        x, y = rng.uniform(0, S), rng.uniform(0, S); a = rng.uniform(5, 19); bb = a * rng.uniform(.55, .9); ang = rng.uniform(0, 180); v = rng.uniform(70, 190)
+        for ox in (0, -S, S):
+            for oy in (0, -S, S):
+                if (ox and min(x, S - x) > 30) or (oy and min(y, S - y) > 30): continue
+                c = (int(x + ox), int(y + oy))
+                cv2.ellipse(r, c, (int(a), int(bb)), ang, 0, 360, int(v * .5), -1, cv2.LINE_AA)
+                cv2.ellipse(r, (c[0] - int(a * .18), c[1] - int(bb * .24)), (int(a * .62), int(bb * .55)), ang, 0, 360, int(v), -1, cv2.LINE_AA)
+                cv2.ellipse(g, c, (int(a), int(bb)), ang, 0, 360, 255, -1, cv2.LINE_AA)
+    prof = [(1, 0), (.46, .16), (.7, .52), (.26, .34), (.2, .68), (0, .34), (-.3, .46), (-.1, .16), (-.46, .08)]
+    shape = np.array([(p, q) for p, q in prof] + [(p, -q) for p, q in reversed(prof[1:])], float)
+    for _ in range(2600):
+        x, y = rng.uniform(0, S), rng.uniform(0, S); sz = rng.uniform(9, 20); a = rng.uniform(0, 6.28); ca, sa = np.cos(a), np.sin(a); v = int(rng.uniform(90, 255))
+        for ox in (0, -S, S):
+            for oy in (0, -S, S):
+                if (ox and min(x, S - x) > 30) or (oy and min(y, S - y) > 30): continue
+                p = np.stack([x + ox + (shape[:, 0] * ca - shape[:, 1] * sa) * sz, y + oy + (shape[:, 0] * sa + shape[:, 1] * ca) * sz], 1).astype(np.int32)
+                cv2.fillPoly(bl, [p], v, cv2.LINE_AA)
+    save(np.dstack([r, g, bl]), 'ground_bits', 84)
+
 def fur(S=512, seed=71):
     """Soft coat tile for the animals: long overlapping strokes, near-white so vertex colour tints it."""
     rng = np.random.default_rng(seed)
@@ -174,6 +198,11 @@ def fur(S=512, seed=71):
                 cv2.line(im, (int(x + ox), int(y + oy)), (int(x + ox + np.cos(a) * l), int(y + oy + np.sin(a) * l)), v, 2, cv2.LINE_AA)
     save(np.dstack([im] * 3), 'surf_fur', 84)
 
+def ringmaps():
+    enc, rel, mask, h = M.ring()
+    Image.fromarray(enc).save(f'{OUT}/mt_height.png', optimize=True)
+    save(rel, 'mt_ring', 84); save(mask, 'mt_mask', 80); save(M.rock_tile(), 'mt_detail', 84)
+
 if __name__ == '__main__':
     which = sys.argv[1:]
     sh = [w for w in which if w.startswith('sheet_')]
@@ -182,3 +211,5 @@ if __name__ == '__main__':
     if not which or 'tile' in which: tile()
     if not which or 'surfaces' in which: surfaces()
     if not which or 'fur' in which: fur()
+    if not which or 'bits' in which: groundbits()
+    if not which or 'ring' in which: ringmaps()

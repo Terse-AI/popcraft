@@ -30,6 +30,10 @@ class Canvas:
             cv2.line(s.img, tuple(int(q) for q in a), tuple(int(q) for q in b),
                      (int(np.clip(v, 0, 255)), int(j), int(u), 255), max(1, int(width * SS)), cv2.LINE_AA, 4)
 
+    def poly(s, pts, v, j=128, u=0):
+        p = (np.array(pts, float) * SS * 16).astype(np.int32)
+        cv2.fillPoly(s.img, [p], (int(np.clip(v, 0, 255)), int(np.clip(j, 0, 255)), int(np.clip(u, 0, 255)), 255), cv2.LINE_AA, 4)
+
     def finish(s):
         small = cv2.resize(s.img, (s.w, s.h), interpolation=cv2.INTER_AREA).astype(np.float32)
         a = small[..., 3:4] / 255.0

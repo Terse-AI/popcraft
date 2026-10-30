@@ -101,7 +101,7 @@ def _branch(c, rng, x, y, ang, ln, w, depth):
     for k in range(2 + (rng.random() < .35)):
         _branch(c, rng, ex, ey, ang + rng.uniform(-.7, .7), ln * rng.uniform(.62, .84), w * .66, depth - 1)
 
-def broadleaf(seed, W=720, H=860, rx=.38, ry=.37, n_scale=1.0, lobes=64):
+def broadleaf(seed, W=720, H=860, rx=.38, ry=.37, n_scale=1.0, lobes=96):
     """Maple / aspen crown. The silhouette is a noise-warped blob; inflating it gives lobes at every
     scale, lit from upper left, and small dabs carry the light so it reads as brushwork."""
     rng = np.random.default_rng(seed)
@@ -121,7 +121,7 @@ def broadleaf(seed, W=720, H=860, rx=.38, ry=.37, n_scale=1.0, lobes=64):
         a, rr = rng.uniform(0, math.tau), math.sqrt(rng.random()) * 1.02
         lim = 1 + .12 * math.sin(3 * a + ph[0]) + .08 * math.sin(5 * a + ph[1])
         x, y = cx + math.cos(a) * rr * rx * lim, cy + math.sin(a) * rr * ry * lim
-        r = rng.uniform(.085, .17) * W * (1.1 - .4 * rr)
+        r = rng.uniform(.06, .135) * W * (1.1 - .4 * rr)
         if x - r < 14 or x + r > W - 14 or y - r < 14 or y + r > H - 40: continue
         if any((x - p[0]) ** 2 + (y - p[1]) ** 2 < (.5 * (r + p[2])) ** 2 for p in pts): continue
         pts.append((x, y, r))
@@ -139,13 +139,13 @@ def broadleaf(seed, W=720, H=860, rx=.38, ry=.37, n_scale=1.0, lobes=64):
     val = cv2.GaussianBlur(val.astype(np.float32), (0, 0), 1.5)
     val = np.floor(val * 7 + .5 + n2 * .22) / 7
     ys, xs = np.nonzero(mask)
-    idx = rng.choice(len(ys), int(len(ys) * .1 * n_scale), replace=False)
+    idx = rng.choice(len(ys), int(len(ys) * .3 * n_scale), replace=False)
     order = idx[np.argsort(val[ys[idx], xs[idx]])]
     for i in order:
         x, y = float(xs[i]), float(ys[i]); v = float(val[ys[i], xs[i]])
-        d = rng.uniform(2.4, 5.0)
-        c.dab(x + rng.uniform(-3, 3), y + rng.uniform(-3, 3), d, d * rng.uniform(.5, .85), rng.uniform(0, 180),
-              30 + 222 * v + rng.uniform(-9, 9), rng.uniform(70, 186), 255 if lam[ys[i], xs[i]] > .5 else 60)
+        d = rng.uniform(1.6, 3.4)
+        c.dab(x + rng.uniform(-2.4, 2.4), y + rng.uniform(-2.4, 2.4), d, d * rng.uniform(.45, .8), rng.uniform(0, 180),
+              30 + 222 * v + rng.uniform(-16, 16), rng.uniform(70, 186), 255 if lam[ys[i], xs[i]] > .5 else 60)
     return c.finish()
 
 def shrub(seed, W=420, H=260, r=60):
@@ -251,42 +251,72 @@ def big_pine(seed, W=900, H=1024):
                 _pad(c, rng, ex + ox, ey + oy, s2, L, .26, 34, 92 * lit, 58, 1.0, -s2 * 10)
     return c.finish()
 
-def bough(seed, W=320, H=140):
-    """One conifer bough, spine along +x from the trunk end: laid over 3D cards, so a tree is built from these."""
+def bough(seed, W=640, H=280):
+    """One conifer bough, spine along +x: a stem carrying short side shoots in two ranks, each set with
+    single needles. Upper rank catches the light, lower rank falls to shade, as a real spruce spray does."""
     rng = np.random.default_rng(seed)
     c = Canvas(W, H)
-    y0 = H * .34
-    c.stroke([(2, y0), (W * .5, y0 + 5), (W - 12, y0 + 12)], 3.4, 30, 128, 0)
-    _pad(c, rng, 6, y0 + 8, 1, W - 18, .1, H * .62, 34, 14, .25)
-    for k in range(3):
-        _pad(c, rng, 6 + k * 26, y0 - 2 + k * 2, 1, (W - 20) * (1 - k * .14), .1, H * .5 * (1 - k * .12), 112 + k * 12, 50, 1.0)
-    for _ in range(90):
-        x = rng.uniform(10, W - 16); y = y0 + rng.uniform(-6, 16) + x / W * 10
-        c.dab(x, y, rng.uniform(1.8, 3.6), rng.uniform(.9, 1.5), rng.uniform(40, 130), 150 + rng.uniform(0, 80), rng.uniform(60, 200), 255)
+    y0 = H * .3
+    def twig(x0, y0_, ang, ln, base, curve):
+        n = max(3, int(ln / 3.1)); pts = []; x, y = x0, y0_; a = ang
+        for i in range(n + 1):
+            pts.append((x, y)); a += curve / n; x += math.cos(a) * ln / n; y += math.sin(a) * ln / n
+        c.stroke(pts, 1.9, 36, 128, 0)
+        for i in range(1, n + 1):
+            s = i / n; px, py = pts[i]
+            for sd in (-1, 1):
+                a2 = ang + curve * s + sd * rng.uniform(.5, .95) + .1
+                l = rng.uniform(8, 13) * (1 - s * .38)
+                v = base + (42 if sd < 0 else -30) + rng.uniform(-22, 22) + s * 34
+                c.stroke([(px, py), (px + math.cos(a2) * l, py + math.sin(a2) * l)], 1.6, v, rng.uniform(70, 186), 255 if sd < 0 else 50)
+    twig(4, y0 + 16, .08, W * .84, 44, .05)
+    xs = np.arange(W * .93, 8, -W * .036)
+    for x in xs:                                        # dark rank first, from the tip back so nearer shoots overlap
+        ln = (W - x) * rng.uniform(.26, .36) + 30
+        twig(x, y0 + x / W * 12, rng.uniform(.62, .92), ln * .92, 58 + 36 * rng.random(), -.22)
+    for x in xs + 7:
+        ln = (W - x) * rng.uniform(.24, .34) + 28
+        twig(x, y0 + x / W * 12, rng.uniform(.26, .5), ln, 112 + 46 * rng.random(), -.16)
+    twig(2, y0, .03, W * .95, 150, .02)
     return c.finish()
 
-def leaf_clump(seed, S=230):
-    """A loose spray of leaves for the 3D crowns: several small bunches with gaps between, no solid disc.
-    Value stays near the middle; the light comes from the 3D crown."""
+def _leaf(c, rng, x, y, r, ang, v, j, u):
+    """A single pointed leaf folded along its midrib: one half catches the light, the other falls to shade."""
+    ca, sa = math.cos(ang), math.sin(ang); w = rng.uniform(.34, .46)
+    prof = [(1, 0), (.72, .22), (.4, .36), (.1, .4), (-.24, .32), (-.52, .14), (-.62, 0)]
+    def side(sd, vv):
+        pts = [(p, q * w / .4 * sd * (1 + .1 * math.sin(k * 2.4))) for k, (p, q) in enumerate(prof)] + [(-.62, 0), (1, 0)]
+        c.poly([(x + (p * ca - q * sa) * r, y + (p * sa + q * ca) * r) for p, q in pts], vv, j, u)
+    side(1, v + 16); side(-1, v - 20)
+    c.stroke([(x - ca * r * .9, y - sa * r * .9), (x + ca * r * .8, y + sa * r * .8)], .8, v - 46, j, u)
+
+def leaf_clump(seed, S=256):
+    """A spray of real leaves for the 3D crowns, in several tones, with gaps and single leaves at the rim."""
     rng = np.random.default_rng(seed)
     c = Canvas(S, S)
-    for b in range(rng.integers(6, 10)):
-        a0 = rng.uniform(0, math.tau); d0 = rng.uniform(.1, .68) * S * .42
+    for t_ in range(rng.integers(4, 7)):
+        a = rng.uniform(0, math.tau); l = S * rng.uniform(.16, .3)
+        c.stroke([(S / 2, S / 2), (S / 2 + math.cos(a) * l, S / 2 + math.sin(a) * l)], 1.5, 34, 128, 0)
+    leaves = []
+    for b in range(rng.integers(11, 15)):
+        a0 = rng.uniform(0, math.tau); d0 = math.sqrt(rng.uniform(.02, 1)) * S * .34
         bx, by = S / 2 + math.cos(a0) * d0, S / 2 + math.sin(a0) * d0
-        r = S * rng.uniform(.09, .17); tone = rng.uniform(96, 164)
-        for _ in range(int(r * r * .34)):
-            a = rng.uniform(0, math.tau); q = math.sqrt(rng.random()) * r
-            d = rng.uniform(2.2, 4.8)
-            c.dab(bx + math.cos(a) * q, by + math.sin(a) * q, d, d * rng.uniform(.5, .85), rng.uniform(0, 180), tone + rng.uniform(-30, 30) - math.sin(a) * q / r * 24, rng.uniform(70, 186), 200)
+        tone = rng.uniform(70, 182)
+        for _ in range(rng.integers(6, 12)):
+            a = rng.uniform(0, math.tau); q = math.sqrt(rng.random()) * S * .1
+            leaves.append((tone + rng.uniform(-24, 24), bx + math.cos(a) * q, by + math.sin(a) * q))
+    leaves.sort(key=lambda l: l[0])
+    for tone, x, y in leaves:
+        _leaf(c, rng, x, y, rng.uniform(13, 21), rng.uniform(0, math.tau), tone, rng.uniform(70, 186), 200 if tone > 120 else 70)
     return c.finish()
 
-def frond(seed, W=320, H=100):
+def frond(seed, W=480, H=150):
     """Fern frond, spine along +x, for 3D ferns."""
     rng = np.random.default_rng(seed)
     c = Canvas(W, H)
     y0 = H * .5
     c.stroke([(2, y0), (W - 6, y0)], 2, 60, 128, 40)
-    n = 34
+    n = 46
     for i in range(n):
         s = i / n; x = 6 + (W - 16) * s; w = (1 - s) ** .7 * H * .44 + 2
         for sd in (-1, 1):
