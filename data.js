@@ -95,6 +95,8 @@ export const COOK={
   pizza:{cost:{'mat:flour':1,'crop:tomato':1,'artisan:cheese':1}}, tortilla:{cost:{'crop:corn':1}}, fish_taco:{cost:{'fish:*':1,'crop:tomato':1,'crop:corn':1}}, parsnip_soup:{cost:{'crop:parsnip':1,'product:milk':1,'mat:sugar':1}}, cranberry_sauce:{cost:{'crop:cranberry':1,'mat:sugar':1}}, spaghetti:{cost:{'mat:flour':1,'crop:tomato':1}}
 };
 
+/* fruit trees: bought as saplings, mature in 28 days, then fruit daily in their season */
+export const FRUIT={ apricot:{em:'🍑',nm:n('杏子','Apricot'),price:50,season:0,sapling:2000}, cherry:{em:'🍒',nm:n('樱桃','Cherry'),price:80,season:0,sapling:3400}, peach:{em:'🍑',nm:n('桃子','Peach'),price:140,season:1,sapling:6000}, orange:{em:'🍊',nm:n('橙子','Orange'),price:100,season:1,sapling:4000}, apple:{em:'🍎',nm:n('苹果','Apple'),price:100,season:2,sapling:4000}, pomegranate:{em:'🍎',nm:n('石榴','Pomegranate'),price:140,season:2,sapling:6000} };
 /* crafting: machines take time, keyed by minutes of game time */
 export const CRAFTABLES={
   chest:{em:'🧰',nm:n('箱子','Chest'),cost:{'mat:wood':50},lvl:['',0]},
@@ -114,7 +116,8 @@ export const CRAFTABLES={
   loom:{em:'🧵',nm:n('织布机','Loom'),cost:{'mat:wood':60,'mat:fiber':30},lvl:['farm',7],machine:1},
   bee_house:{em:'🐝',nm:n('蜂房','Bee House'),cost:{'mat:wood':40,'ore:coal':8,'bar:iron_bar':1},lvl:['farm',3],machine:1},
   charcoal_kiln:{em:'♨️',nm:n('炭窑','Charcoal Kiln'),cost:{'mat:wood':20,'bar:copper_bar':2},lvl:['forage',4],machine:1},
-  crab_pot:{em:'🦀',nm:n('蟹笼','Crab Pot'),cost:{'mat:wood':40,'bar:iron_bar':3},lvl:['fish',3],water:1}
+  crab_pot:{em:'🦀',nm:n('蟹笼','Crab Pot'),cost:{'mat:wood':40,'bar:iron_bar':3},lvl:['fish',3],water:1},
+  sapling_apricot:{em:'🌱',nm:n('杏树苗','Apricot Sapling'),shop:1,tree:'apricot',machine:1}, sapling_cherry:{em:'🌱',nm:n('樱桃树苗','Cherry Sapling'),shop:1,tree:'cherry',machine:1}, sapling_peach:{em:'🌱',nm:n('桃树苗','Peach Sapling'),shop:1,tree:'peach',machine:1}, sapling_orange:{em:'🌱',nm:n('橙树苗','Orange Sapling'),shop:1,tree:'orange',machine:1}, sapling_apple:{em:'🌱',nm:n('苹果树苗','Apple Sapling'),shop:1,tree:'apple',machine:1}, sapling_pomegranate:{em:'🌱',nm:n('石榴树苗','Pomegranate Sapling'),shop:1,tree:'pomegranate',machine:1}
 };
 /* input → output, minutes */
 export const MACHINES={

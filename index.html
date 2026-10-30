@@ -1042,6 +1042,7 @@ function placedMesh(id){ const g=new THREE.Group();
   else if(id==='preserves_jar'){ cyl(g,.3,.3,.6,0xc8d8c8,0,.42); cyl(g,.34,.34,.1,0xb88a4a,0,.76); cyl(g,.36,.36,.12,0x8a6a44,0,.06); }
   else if(id==='bee_house'){ box(g,.7,.7,.6,0xd8b868,0,.65); box(g,.82,.1,.72,0x7a5a3a,0,1.04); [-.25,.25].forEach(x=>cyl(g,.05,.05,.3,0x7a5a3a,x,.15)); }
   else if(id==='crab_pot'){ box(g,.7,.4,.7,0x8a6a44,0,.2); }
+  else if(/^sapling/.test(id)){ cyl(g,.06,.1,1.5,0x6a4a30,0,.75); const c=new THREE.Mesh(new THREE.IcosahedronGeometry(.62,1),pm(0x5a8a3a)); c.position.y=1.7; c.castShadow=true; g.add(c); }
   else { box(g,.9,.8,.7,0x8a7458,0,.4); box(g,.6,.3,.5,0x5a4a3a,0,.95); }
   return g; }
 function spawnPlacement(id,x,z,ry){ const m=placedMesh(id); m.position.set(x,walkH(x,z),z); m.rotation.y=ry||0; placedGroup.add(m); if(id!=='torch'&&!/sprinkler/.test(id)) addObstacle(x,z,.55); if(id==='torch'){ const l=new THREE.PointLight(0xffa040,0,8); l.position.set(x,walkH(x,z)+1,z); placedGroup.add(l); torches.push(l); } }
