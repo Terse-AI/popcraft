@@ -40,7 +40,7 @@ def spruce(seed, W=340, H=1024, width=0.44, droop=0.62, fill=1.0, base=96, dv=62
     while y > top + 8:
         t = (y - top) / (bot - top)
         ys.append((y, t))
-        y -= (10 + 34 * t ** 0.9) * rng.uniform(0.72, 1.28)
+        y -= (7 + 22 * t ** 0.9) * rng.uniform(0.6, 1.4)
     # dark inner mass, so gaps between boughs read as depth, not as holes everywhere
     for y, t in ys:
         L = R * (0.03 + 0.97 * t ** 0.92) * 0.62
@@ -49,7 +49,7 @@ def spruce(seed, W=340, H=1024, width=0.44, droop=0.62, fill=1.0, base=96, dv=62
             _pad(c, rng, tx(y), y - 4, side, L * rng.uniform(.8, 1.1), droop * .8, (12 + 44 * t), 26, 14, 0.25)
     for y, t in ys:
         Lmax = R * (0.04 + 0.96 * t ** 0.9) * (1 + 0.16 * math.sin(y * .021 + seed))
-        T = (9 + 54 * t ** 0.85) * fill
+        T = (7 + 40 * t ** 0.85) * fill
         for side in (-1, 1):
             if rng.random() < (0.28 * (1 - t) ** 2 + 0.05) / fill: continue
             L = Lmax * rng.uniform(0.62, 1.1)
@@ -75,7 +75,7 @@ def spruce(seed, W=340, H=1024, width=0.44, droop=0.62, fill=1.0, base=96, dv=62
     return c.finish()
 
 def larch(seed, W=340, H=1024):
-    return spruce(seed, W, H, width=0.34, droop=0.5, fill=1.0, base=118, dv=58)
+    return spruce(seed, W, H, width=0.33, droop=0.74, fill=.86, base=120, dv=52)
 
 def _clump(c, rng, cx, cy, r, lx, ly, gain, jbias):
     """Leaf mass: dabs scattered in a disc, lit from the upper left, deep pockets toward lower right."""
