@@ -32,7 +32,7 @@ export function makeValley(G){
   const split=id=>{ const a=id.split('~'); return [a[0],+(a[1]||0)]; };
   const META=G.META={
     of(kind,id){ const [base,q]=split(id); let d, nm, em, price;
-      if(kind==='artisan'&&base.includes('.')){ const [a,src]=base.split('.'), c=CROPS[src]||{}, A=ARTISAN[a]; nm=(c.nm?name(c.nm):src)+(T()==='zh'?'':' ')+name(A.nm); em=A.em; price=Math.round((c.price||30)*A.mult+(A.add||0)); }
+      if(kind==='artisan'&&base.includes('.')){ const [a,src]=base.split('.'), c=CROPS[src]||{}, A=ARTISAN[a]; nm=(c.nm?name(c.nm):src)+(T()==='zh'?A.suf:' '+name(A.nm)); em=A.em; price=Math.round((c.price||30)*A.mult+(A.add||0)); }
       else { d=(DB[kind]||{})[base]; if(kind==='seed'&&d) return {em:d.em,name:name(d.nm)+' '+L('种子','Seeds'),price:Math.round(d.seed/2),q:0}; if(!d) return {em:'❔',name:base,price:0,q:0}; nm=name(d.nm); em=d.em; price=d.price||0; }
       return {em,name:nm+(q?' '+QSTAR[q]:''),price:Math.round(price*QPRICE[q]),q}; }
   };
@@ -275,7 +275,7 @@ export function makeValley(G){
     else if(m!=='smooth'&&R()<d/2000) st.target=st.pos+(R()<.5?-ri(51,100):ri(50,100)); else st.target=-1;
     if(m==='dart'&&R()<d/1000) st.target=st.pos+(R()<.5?-ri(51,100+d*2):ri(50,100+d*2));
     st.target=clamp(st.target,-1,532); st.pos=clamp(st.pos+st.fv,0,532);
-    st.barV+=F.hold?-.25:.25; st.barPos+=st.barV; if(st.barPos<0){ st.barPos=0; st.barV=-st.barV*.6; } if(st.barPos+st.barH>568){ st.barPos=568-st.barH; st.barV=-st.barV*.66; }
+    const on0=st.pos+10>=st.barPos&&st.pos+10<=st.barPos+st.barH; st.barV+=(F.hold?-.25:.25)*(on0?.6:1); st.barPos+=st.barV; if(st.barPos<0){ st.barPos=0; st.barV=-st.barV*.6; } if(st.barPos+st.barH>568){ st.barPos=568-st.barH; st.barV=-st.barV*.66; }
     const on=st.pos+10>=st.barPos&&st.pos+10<=st.barPos+st.barH;
     const tr=st.treasure; if(tr&&!tr.got){ const onT=tr.y>=st.barPos&&tr.y<=st.barPos+st.barH; if(onT) tr.p+=.0135; if(tr.p>=1) tr.got=true; }
     st.prog+=on?.002:-.003*(tr&&!tr.got&&!on?.5:1); if(!on) st.perfect=false;
