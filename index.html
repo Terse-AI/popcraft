@@ -613,7 +613,8 @@ function steer(A,tx,tz,speed,dt,turn=5){ const dx=tx-A.x, dz=tz-A.z, d=Math.hypo
   A.yawV=damp(A.yawV||0,((A.yaw-y0+Math.PI*3)%(Math.PI*2)-Math.PI)/Math.max(dt,.001),8,dt);
   const face=Math.max(0,Math.cos(((want-A.yaw+Math.PI*3)%(Math.PI*2))-Math.PI)), v=speed*face;
   const nx=A.x+Math.sin(A.yaw)*v*dt, nz=A.z+Math.cos(A.yaw)*v*dt; if(!inWater(nx,nz)){ A.x=nx; A.z=nz; } return d; }
-function settle(A,dt){ const h=walkH(A.x,A.z); A.y=damp(A.y,h,12,dt); A.root.position.set(A.x,A.y,A.z); A.root.rotation.y=A.yaw;
+function settle(A,dt){ const h=walkH(A.x,A.z); A.y=damp(A.y,h,12,dt); A.vx=damp(A.vx===undefined?A.x:A.vx,A.x,16,dt); A.vz=damp(A.vz===undefined?A.z:A.vz,A.z,16,dt); A.root.position.set(A.vx,A.y,A.vz); A.root.rotation.y=A.yaw;   // the body glides to its position, so a nudge off a post never shows as a hop
+ 
   const k=1.1, f=walkH(A.x+Math.sin(A.yaw)*k,A.z+Math.cos(A.yaw)*k), b=walkH(A.x-Math.sin(A.yaw)*k,A.z-Math.cos(A.yaw)*k); A.root.rotation.x=damp(A.root.rotation.x,Math.atan2(b-f,2*k),8,dt); }
 function updateBeasts(dt,now){ if(!dog.A||S.inMine) return; const t=now*.001, A=dog.A, p=player.pos;
   paintU.uPush.value.set(p.x,p.z,S.boating?.01:1.25,0); paintU.uPush2.value.set(dog.x,dog.z,.7,0);
@@ -714,7 +715,7 @@ function sleep(passedOut){
   $('#fadet').textContent=passedOut===true?L('你累倒了…','You passed out…'):t('sleep'); $('#fade').classList.add('on');
   setTimeout(()=>{
     if(!S.inHouse&&passedOut!==true){} const r=G.endDay(passedOut===true);
-    if(S.inHouse||passedOut===true){ if(!S.inHouse) enterHouse(true); player.pos.set(-3.1,0,.4); }
+    if(S.inHouse||passedOut===true){ if(!S.inHouse) enterHouse(true); player.pos.set(-4.3,0,.6); }
     $('#fade').classList.remove('on'); S.sleeping=false; dayReport(r); retintGround(); applyWeather(); renderStatus(); renderEnergy();
   },900);
 }
@@ -843,7 +844,7 @@ class HourGrade extends Effect {
     `uniform vec3 gS,gM,gH,uTint; uniform float amt,flash,uLine,uT; uniform sampler2D tUnder;
      void mainImage(const in vec4 c, const in vec2 uv, out vec4 o){
        vec3 src=c.rgb; float wob=sin(uv.x*30.+uT*2.)*.0016+sin(uv.x*11.-uT*1.3)*.0022, ln=uLine+wob*step(.001,uLine);
-       if(uv.y<ln){ float dp=1.-uv.y/ln; vec2 q=vec2(uv.x+sin(uv.y*40.+uT*1.6)*.0015,(uv.y/ln)); vec3 u=texture2D(tUnder,q).rgb; u=mix(u,uTint*.55,.4+dp*.22); u*=1.05-dp*.62; float ray=smoothstep(.55,1.,sin(uv.x*22.+uT*.3+uv.y*6.)*.5+.5)*(1.-dp)*.1; src=u+uTint*ray; }
+       if(uv.y<ln){ float dp=1.-uv.y/ln; vec2 q=vec2(uv.x+sin(uv.y*40.+uT*1.6)*.0015,(uv.y/ln)); vec3 u=texture2D(tUnder,q).rgb; u=mix(u,uTint*.32+vec3(.0,.012,.02),.34+dp*.3); u*=.9-dp*.6; float ray=smoothstep(.55,1.,sin(uv.x*22.+uT*.3+uv.y*6.)*.5+.5)*(1.-dp)*.1; src=u+uTint*ray; }
        vec3 col=pow(max(src,0.0),vec3(1.0/2.2));
        vec3 s=pow(gS,vec3(1.0/2.2)), m=pow(gM,vec3(1.0/2.2)), h=pow(gH,vec3(1.0/2.2));
        float l=dot(col,vec3(0.2126,0.7152,0.0722));
@@ -936,7 +937,7 @@ function frame(now){
   player.pos.y=(S.inMine||S.inHouse)?0:S.boating?WATER_Y+.08+Math.sin(now*.0016)*.05:walkH(player.pos.x,player.pos.z);
   updateBoat(dt,now); updateBeasts(dt,now);
   if(S.inMine){ const r=Math.hypot(player.pos.x,player.pos.z); if(r>17){ player.pos.x*=17/r; player.pos.z*=17/r; } player.pos.y=0; }
-  if(S.inHouse){ player.pos.x=clamp(player.pos.x,-4,4); player.pos.z=clamp(player.pos.z,-2.8,2.8); player.pos.y=0; }
+  if(S.inHouse){ player.pos.x=clamp(player.pos.x,-5.6,5.6); player.pos.z=clamp(player.pos.z,-4,4); player.pos.y=0; }
   avatar.position.copy(player.pos);
   avatar.rotation.y=angDamp(avatar.rotation.y,player.yaw,S.boating?4:13,dt);
   animateWalk(dt);
@@ -948,7 +949,7 @@ function frame(now){
     player.pos.y + cam.height + Math.sin(cam.pitch)*cam.dist,
     player.pos.z - Math.cos(cam.yaw)*cam.dist*cs);
   if(!S.inMine&&!S.inHouse){ const gy=terrainH(camPos.x,camPos.z)+.7; if(camPos.y<gy) camPos.y=gy; }   // never dip under a slope
-  if(S.inHouse){ camPos.x=clamp(camPos.x,-3.8,3.8); camPos.z=clamp(camPos.z,-2.8,2.9); camPos.y=Math.min(camPos.y,2.8); }
+  if(S.inHouse){ camPos.x=clamp(camPos.x,-5.4,5.4); camPos.z=clamp(camPos.z,-4,4.2); camPos.y=Math.min(camPos.y,3.3); }
   if(cut.k>.001) { cutCamera(camPos); } if(shakeT>0){ shakeT-=dt; camPos.x+=(Math.random()-.5)*shakeT*.6; camPos.y+=(Math.random()-.5)*shakeT*.6; }
   camera.position.lerp(camPos,DBG?1:1-Math.pow(.0001,dt));
   camAim.x=DBG?player.pos.x:damp(camAim.x,player.pos.x,14,dt); camAim.y=DBG?player.pos.y:damp(camAim.y,player.pos.y,9,dt); camAim.z=DBG?player.pos.z:damp(camAim.z,player.pos.z,14,dt);
@@ -1077,7 +1078,7 @@ const built={};
 G.buildGreenhouse=()=>onBuilt('greenhouse');
 /* the cabin inside */
 let house=null;
-function enterHouse(q){ S.inHouse=true; world.visible=false; house.visible=true; if(!q){ player.pos.set(0,0,1.4); cam.yaw=Math.PI; } cam.dist=4.4; cam.height=1.4; cam.look=.9; cam.pitch=.22; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
+function enterHouse(q){ S.inHouse=true; world.visible=false; house.visible=true; if(!q){ player.pos.set(0,0,1.6); cam.yaw=Math.PI; } cam.dist=5; cam.height=1.9; cam.look=.8; cam.pitch=.3; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
 function leaveHouse(){ S.inHouse=false; world.visible=true; house.visible=false; player.pos.set(0,0,-9.6); cam.yaw=0; cam.dist=8.5; cam.height=2.3; cam.look=2.7; cam.pitch=.08; onMine(false); }
 function openTV(){ modal('📺 '+L('电视','Television'),b=>{ b.innerHTML='<div style="font-size:15px;line-height:1.8">'+G.forecastText()+'</div>'; }); }
 function onMine(on){ if(on){ scene.fog.density=.012; scene.fog.color.setHex(0x05070a); mineBg=scene.background; scene.background=new THREE.Color(0x05070a); sun.intensity=0; hemi.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=0; } else { scene.background=mineBg||null; applyWeather(); renderStatus(); } }
@@ -1090,13 +1091,13 @@ lureLine.frustumCulled=false; lureLine.visible=false; scene.add(lureLine);
 const FISHC=[0x9a8a4a,0xc05a3a,0x6a7a4a,0xb8b0a0,0x5a6a7a];
 G.setCut=(on,caught)=>{ if(on){ const f=player.yaw, fx=Math.sin(f), fz=Math.cos(f); let dx=fx, dz=fz; for(let i=0;i<8;i++){ const a=i/8*6.28, x=player.pos.x+Math.sin(a)*7, z=player.pos.z+Math.cos(a)*7; if(lakeField(x,z)>.01||(riverAt(x,z)&&riverAt(x,z).d<3)){ dx=Math.sin(a); dz=Math.cos(a); break; } }
     cut.x=player.pos.x+dx*6.5; cut.z=player.pos.z+dz*6.5; cut.sx=dz; cut.sz=-dx; if(lakeField(cut.x+cut.sx*10,cut.z+cut.sz*10)<0){ cut.sx*=-1; cut.sz*=-1; } cut.on=true; player.yaw=Math.atan2(dx,dz);
-    if(!cut.fish.length) for(let i=0;i<9;i++){ const F=makeFish(FISHC[i%5],0xe8e0c8,.9+Math.random()*.8); F.a=Math.random()*6.28; F.r=2+Math.random()*7; F.d=-1.6-Math.random()*2.6; F.sp=.12+Math.random()*.18; scene.add(F.root); cut.fish.push(F); } cut.fish.forEach(F=>F.root.visible=true);
+    if(!cut.fish.length) for(let i=0;i<9;i++){ const F=makeFish(FISHC[i%5],0xe8e0c8,.9+Math.random()*.8); F.a=Math.random()*6.28; F.r=1.4+Math.random()*4.6; F.d=-1.3-Math.random()*1.8; F.sp=.12+Math.random()*.18; scene.add(F.root); cut.fish.push(F); } cut.fish.forEach(F=>F.root.visible=true);
     if(!kelp.length) for(let i=0;i<26;i++){ const m=new THREE.Mesh(new THREE.ConeGeometry(.12+Math.random()*.1,1.6+Math.random()*2.6,4),toonOf({color:i%3?0x1e3a2e:0x2e4a26})); m.geometry.translate(0,1,0); scene.add(m); kelp.push(m); }
     kelp.forEach(k=>{ k.visible=true; const x=cut.x+(Math.random()-.5)*26, z=cut.z+(Math.random()-.5)*14; k.position.set(x,Math.max(terrainH(x,z),WATER_Y-6),z); });
   } else { cut.on=false; lureLine.visible=false; if(caught){ const c=FISH[caught]; toast(c.em); } } };
 function cutCamera(camPos){ const k=cut.k, cx=cut.x+cut.sx*9, cz=cut.z+cut.sz*9, cy=WATER_Y+1.5; camPos.x=lerp(camPos.x,cx,k); camPos.z=lerp(camPos.z,cz,k); camPos.y=lerp(camPos.y,cy,k); camera.position.lerp(camPos,.25); }
 function renderUnder(){ const now=performance.now()*.001; underCam.position.set(camera.position.x,WATER_Y-1.7,camera.position.z); const d=camera.getWorldDirection(new THREE.Vector3()); d.y=0; d.normalize(); underCam.lookAt(underCam.position.x+d.x,WATER_Y-1.9,underCam.position.z+d.z);
-  cut.fish.forEach((F,i)=>{ F.a+=F.sp*.016; const x=cut.x+Math.cos(F.a)*F.r, z=cut.z+Math.sin(F.a)*F.r*.5; F.root.position.set(x,WATER_Y+F.d+Math.sin(now+i)*.14,z); F.root.rotation.y=-F.a+(F.sp>0?0:Math.PI); F.tail.rotation.y=Math.sin(now*9+i)*.5; });
+  cut.fish.forEach((F,i)=>{ F.a+=F.sp*.016; const tx=cut.sz, tz=-cut.sx, u=Math.cos(F.a)*F.r*1.5, w=Math.sin(F.a)*F.r*.3, x=cut.x+tx*u+cut.sx*w, z=cut.z+tz*u+cut.sz*w; const px=F.root.position.x, pz=F.root.position.z; F.root.position.set(x,WATER_Y+F.d+Math.sin(now+i)*.14,z); if(Math.abs(x-px)+Math.abs(z-pz)>.0005) F.root.rotation.y=Math.atan2(x-px,z-pz); F.tail.rotation.y=Math.sin(now*9+i)*.5; });
   const w=water.visible; water.visible=false; setUnderwater(true); const rt=renderer.getRenderTarget(), cc=renderer.getClearAlpha(); renderer.setClearColor(0x000000,1); renderer.setRenderTarget(underRT); renderer.clear(); renderer.render(scene,underCam); renderer.setRenderTarget(rt); renderer.setClearColor(0x000000,cc); setUnderwater(false); water.visible=w;
   kelp.forEach((k,i)=>{ k.rotation.z=Math.sin(now*.8+i)*.12; k.rotation.x=Math.cos(now*.6+i*2)*.1; });
   const a=new THREE.Vector3(player.pos.x,player.pos.y+1.3,player.pos.z), b=new THREE.Vector3(cut.x,WATER_Y-1.6,cut.z), p=lureLine.geometry.attributes.position; p.setXYZ(0,a.x,a.y,a.z); p.setXYZ(1,b.x,WATER_Y,b.z); p.needsUpdate=true; lureLine.visible=cut.on; }

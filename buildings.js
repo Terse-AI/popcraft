@@ -211,7 +211,7 @@ export function cabinRoom(scene){
   K.box('white',.9,1.8,.7,4.0,.9,1.2,{s:9}); K.box('dark',.04,.5,.04,3.6,1.1,1.56);                                                                 // icebox
   windowAt(K,-1,1.7,3.26,1.1,1.1,Math.PI); windowAt(K,2,1.7,3.26,1.1,1.1,Math.PI);
   K.box('door',1.1,2.1,.12,0,1.05,3.3,{s:9});
-  K.bake(G); const lamp=new THREE.PointLight(0xffc888,16,18,1.5); lamp.position.set(1,2.5,0); G.add(lamp); const fire=new THREE.PointLight(0xff8840,8,8,1.6); fire.position.set(2.9,.6,-2.4); G.add(fire); G.add(new THREE.AmbientLight(0x6a5a50,1.5)); G.visible=false; scene.add(G); G.userData.spots={bed:{x:-3.1,z:-.4},tv:{x:-.3,z:-2.4},door:{x:0,z:2.6},fridge:{x:3.3,z:1.2},stove:{x:2.9,z:-2}}; return G;
+  K.bake(G); const lamp=new THREE.PointLight(0xffc888,16,18,1.5); lamp.position.set(1,2.5,0); G.add(lamp); const fire=new THREE.PointLight(0xff8840,8,8,1.6); fire.position.set(2.9,.6,-2.4); G.add(fire); G.add(new THREE.AmbientLight(0x6a5a50,1.5)); G.scale.set(1.4,1.25,1.4); G.visible=false; scene.add(G); G.userData.spots={bed:{x:-4.3,z:-.6},tv:{x:-.4,z:-3.4},door:{x:0,z:3.8},fridge:{x:4.6,z:1.7},stove:{x:4,z:-2.9}}; return G;
 }
 
 /* the lighthouse on its skerry, with a keeper's hut and a slow beam after dark */

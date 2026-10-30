@@ -258,11 +258,11 @@ function buildRing(root){
       void main(){ vec4 t=texture2D(uMap,vUv), mk=texture2D(uMask,vUv); float a=vUv.x*6.28318; vec2 q=t.rg*2.-1.; float crease=t.b-.5;
         vec3 U=vec3(-sin(a),0.,cos(a)), V=vec3(cos(a),0.,sin(a)), n=normalize(U*q.x+V*q.y+vec3(0.,1.,0.)*sqrt(max(.02,1.-dot(q,q))));
         float lam=clamp(dot(n,normalize(uSun+vec3(0.,.32,0.)))*1.1+.1,0.,1.);
-        float brush=texture2D(uTile,vW.xz*.016).b-.5; float v=clamp(lam*.86+crease*.5+brush*.14,0.,1.); v=floor(v*9.+.5)/9.;
+        float brush=texture2D(uTile,vW.xz*.016).b-.5; float v=clamp(lam*.9+crease*.8+brush*.16,0.,1.); v=floor(v*9.+.5)/9.;
         vec3 rock=mix(uRS,uRL,v), sn=mix(uSS,uSL,smoothstep(.1,.72,v));
         float steep=smoothstep(.62,.36,n.y), snow=smoothstep(uLine,uLine+.035,mk.r+crease*.05)*(1.-steep*.72); vec3 c=mix(rock,sn,snow);
         float w=clamp(v*1.5,0.,1.); vec3 fo=mix(uFS,uFL,w); float dec=step(.5,fract(sin(dot(floor(vW.xz*.03),vec2(12.9,78.2)))*43758.5))*uDecAmt; fo=mix(fo,mix(uDS,uDL,w),dec); c=mix(c,fo,mk.g);
-        float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(300.,1300.,d)*.55; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz,clamp(hz+low*low*.3,0.,1.));
+        float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(380.,1400.,d)*.36; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz,clamp(hz+low*low*.3,0.,1.));
         gl_FragColor=vec4(c,1.); }` });
   const o=new THREE.Mesh(g,ringMat); o.frustumCulled=false; root.add(o);
 }
@@ -404,7 +404,7 @@ function buildLake(root,res){
         vec4 uv=vUv; uv.x+=n*.012*uv.w; uv.y+=n*.026*uv.w;
         vec3 c=texture2DProj(tDiffuse,uv).rgb;
         c=mix(c,uTint,uTintAmt+.1*(1.-s.g));
-        float f1=smoothstep(14.,6.,d), f2=smoothstep(60.,20.,d)*(1.-f1*.6), f3=1.-smoothstep(160.,420.,d)*.4;
+        float f1=smoothstep(14.,6.,d), f2=smoothstep(60.,24.,d)*smoothstep(10.,20.,d), f3=(1.-smoothstep(160.,420.,d)*.4)*smoothstep(36.,70.,d);
         float g=0.;
         g+=f1*dash(vec2(p.x*1.9+t*.1,p.y*11.),.92)*.6;
         g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),.91);
