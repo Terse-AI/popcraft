@@ -514,13 +514,14 @@ function renderIcons(){
   const SZ=160, rt=new THREE.WebGLRenderTarget(SZ,SZ);   // no MSAA: readRenderTargetPixels must resolve per-crop
   const isc=new THREE.Scene(); isc.environment=scene.environment;
   const icam=new THREE.PerspectiveCamera(32,1,0.05,30);
-  const key=new THREE.DirectionalLight(0xffffff,2.6); key.position.set(2.5,4,3); isc.add(key);
-  isc.add(new THREE.HemisphereLight(0xffffff,0x6b7a5a,0.7));
+  const key=new THREE.DirectionalLight(0xfff2dc,3.4); key.position.set(2.5,4,3); isc.add(key);
+  isc.add(new THREE.HemisphereLight(0xffffff,0x8a8a70,2.2));
   const cv=document.createElement('canvas'); cv.width=cv.height=SZ; const ctx=cv.getContext('2d');
   const buf=new Uint8Array(SZ*SZ*4);
   const prevRT=renderer.getRenderTarget(), prevA=renderer.getClearAlpha(), prevCC=new THREE.Color(); renderer.getClearColor(prevCC);
   const prevTM=renderer.toneMapping, prevExp=renderer.toneMappingExposure;
-  renderer.toneMapping=THREE.AgXToneMapping; renderer.toneMappingExposure=1.0;   // same filmic grade as the world
+  renderer.toneMapping=THREE.NoToneMapping;
+  const gam=new Uint8Array(256); for(let i=0;i<256;i++) gam[i]=Math.round(Math.pow(i/255,1/2.2)*255);   // the target holds linear light
   renderer.setClearColor(0x000000,0); renderer.setRenderTarget(rt);
   for(const id in CROPS){
     const m=cropMesh(id,CROPS[id].days,CROPS[id].days);
@@ -531,7 +532,7 @@ function renderIcons(){
     renderer.clear(); renderer.render(isc,icam);
     renderer.readRenderTargetPixels(rt,0,0,SZ,SZ,buf);
     const img=ctx.createImageData(SZ,SZ);
-    for(let y=0;y<SZ;y++){ const sy=SZ-1-y; for(let x=0;x<SZ;x++){ const si=(sy*SZ+x)*4,di=(y*SZ+x)*4; img.data[di]=buf[si];img.data[di+1]=buf[si+1];img.data[di+2]=buf[si+2];img.data[di+3]=buf[si+3]; } }
+    for(let y=0;y<SZ;y++){ const sy=SZ-1-y; for(let x=0;x<SZ;x++){ const si=(sy*SZ+x)*4,di=(y*SZ+x)*4; img.data[di]=gam[buf[si]];img.data[di+1]=gam[buf[si+1]];img.data[di+2]=gam[buf[si+2]];img.data[di+3]=buf[si+3]; } }
     ctx.clearRect(0,0,SZ,SZ); ctx.putImageData(img,0,0); ICONS[id]=cv.toDataURL('image/png'); isc.remove(m);
   }
   renderer.setRenderTarget(prevRT); renderer.setClearColor(prevCC,prevA); renderer.toneMapping=prevTM; renderer.toneMappingExposure=prevExp; rt.dispose();
