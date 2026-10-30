@@ -160,7 +160,7 @@ for(const k in RAMP) writeRow(k,RAMP[k]);
 
 /* ---------- shared uniforms ---------- */
 export const U={
-  uLodT:{value:46}, uLodP:{value:28}, uWindAmp:{value:.6}, uWindDir:{value:new THREE.Vector2(.8,.6)}, uNoise:{value:null},
+  uRain:{value:0}, uLodT:{value:46}, uLodP:{value:28}, uWindAmp:{value:.6}, uWindDir:{value:new THREE.Vector2(.8,.6)}, uNoise:{value:null},
   uHeight:{value:null}, uHeightSpan:{value:440}, uPush:{value:new THREE.Vector4(0,0,1.3,0)}, uPush2:{value:new THREE.Vector4(0,0,.8,0)}, uSunDirW:{value:new THREE.Vector3(0,1,0)},
   uTime:{value:0}, uShade:{value:new THREE.Color()}, uLit:{value:new THREE.Color()}, uFog:{value:new THREE.Color()}, uFogD:{value:.0014},
   uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uReveal:{value:new THREE.Vector4(.5,.5,10,1)}, uRes:{value:new THREE.Vector2(1,1)}
@@ -364,11 +364,11 @@ function shoreTex(){
 }
 function buildLake(root,res){
   const shader={ name:'PaintedLake',
-    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.14},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null} },
+    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.14},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null},uRain:{value:0} },
     vertexShader:`uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW;
       void main(){ vUv=textureMatrix*vec4(position,1.); vW=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader:`precision highp float;
-      uniform sampler2D tDiffuse,uShore,uNoise; uniform vec3 uTint,uGlint,uFog; uniform float uGlintAmt,uTimeW,uTintAmt,uFogD; varying vec4 vUv; varying vec3 vW;
+      uniform sampler2D tDiffuse,uShore,uNoise; uniform vec3 uTint,uGlint,uFog; uniform float uGlintAmt,uTimeW,uTintAmt,uFogD,uRain; varying vec4 vUv; varying vec3 vW;
       float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
       float dash(vec2 p,float dens){ vec2 g=floor(p), f=fract(p); float h=h21(g); if(h<dens) return 0.;
         float l=.22+.26*fract(h*7.3), c=.5+(fract(h*13.)-.5)*.4; return (1.-smoothstep(l*.7,l,abs(f.x-c)))*(1.-smoothstep(.12,.34,abs(f.y-.5))); }
@@ -384,6 +384,7 @@ function buildLake(root,res){
         g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),.91);
         g+=f3*dash(vec2(p.x*.13+t*.025,p.y*.9),.92);
         c=mix(c,uGlint,clamp(g,0.,1.)*uGlintAmt*.6);
+        if(uRain>.5&&d<70.){ vec2 cell=floor(p*.9), f=fract(p*.9)-.5; float h=h21(cell), ph=fract(t*.9+h*7.), r=length(f+vec2(h-.5,fract(h*3.)-.5)*.4); c=mix(c,uGlint,(1.-smoothstep(.015,.05,abs(r-ph*.46)))*(1.-ph)*.55*(1.-d/70.)); }
         float foam=smoothstep(.0,.05,s.r)*(1.-smoothstep(.05,.2,s.r+n*.05));
         c=mix(c,uGlint,foam*.55);
         c=mix(c,uFog,(1.-exp(-d*d*uFogD*uFogD))*.8);
@@ -651,7 +652,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;
   setC(waterU.uTint.value,P.water); setC(waterU.uGlint.value,mixc(P.cloudL,[1,1,1],.4)); setC(creekU.uTint.value,mixc(P.water,P.forS,.42)); setC(creekU.uFoam.value,mixc(P.cloudL,[1,1,1],.5)); updateSpray(dt);
   rig.water.copy(waterU.uTint.value); rig.rain=weather==='rain'?1:0;
-  if(waterU.uni){ waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
+  if(waterU.uni){ waterU.uni.uRain.value=U.uRain.value; waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
   setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;
   // the sun side of every sprite, in world XZ
   U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize(); U.uSunDirW.value.copy(rig.sunDir);
