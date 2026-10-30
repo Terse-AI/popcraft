@@ -568,7 +568,7 @@ function buildAvatar(){
 }
 async function loadTwinkle(){
   try{
-    const g=await gltfLoader.loadAsync('twinkle.glb');
+    const g=await gltfLoader.loadAsync('twinkle_sv.glb');
     const m=g.scene; const box=new THREE.Box3().setFromObject(m); const sz=new THREE.Vector3(); box.getSize(sz);
     const s=1.8/(sz.y||1); m.scale.setScalar(s);
     const c=box.getCenter(new THREE.Vector3());
