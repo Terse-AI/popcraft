@@ -1074,8 +1074,7 @@ function retintGround(){ // seasonal tint multiplies the grass texture
   const hueB=[0.26,0.24,0.12,0.28][S.season];
   hemi.groundColor.setHSL(hueB,0.3,[0.3,0.28,0.26,0.5][S.season]);
   seasonWarm=[0.52,0.62,0.9,0.26][S.season];   // fall = warm autumn, winter = cool
-  if(warmGradeFx){ warmGradeFx.uniforms.get('amt').value=0.28+seasonWarm*0.3;
-    warmGradeFx.uniforms.get('tint').value.setRGB(1.0+seasonWarm*0.12, 1.0, 1.0-seasonWarm*0.2); }
+  if(warmGradeFx) warmGradeFx.uniforms.get('warm').value=seasonWarm;
 }
 
 /* ============================ UI ============================ */
@@ -1184,18 +1183,25 @@ function drawMini(){
 
 /* ============================ LOOP ============================ */
 let composer, aoPass, dofEffect;
-// warm "cozy" colour grade (Cast-n-Chill feel): amber multiply + gentle radial falloff
+// CozyGrade — cinematic Cast-n-Chill grade: muted colours, olive greens, cool shadows +
+// warm highlights (split-tone), soft lifted contrast, warm neutral wash, cozy vignette.
 class WarmGrade extends Effect {
-  constructor(){ super('WarmGrade',
-    'uniform vec3 tint; uniform float amt;\n'+
+  constructor(){ super('CozyGrade',
+    'uniform float warm;\n'+
     'void mainImage(const in vec4 c, const in vec2 uv, out vec4 o){\n'+
-    '  vec3 col=c.rgb;\n'+
-    '  col = mix(col, col*tint, amt);\n'+
-    '  float d=distance(uv,vec2(0.5));\n'+
-    '  col *= 1.0 - d*d*0.16;\n'+
-    '  o=vec4(col,c.a);\n'+
+    '  vec3 col=max(c.rgb,0.0);\n'+
+    '  float l=dot(col,vec3(0.2126,0.7152,0.0722));\n'+
+    '  col=mix(vec3(l),col,0.9);\n'+                                  // mute saturation (keep some richness)
+    '  col.g=mix(col.g,(col.r+col.b)*0.5,0.1);\n'+                    // greens → olive
+    '  float sm=1.0-smoothstep(0.0,0.55,l), hm=smoothstep(0.45,1.0,l);\n'+
+    '  col += vec3(-0.015,0.006,0.05)*sm;\n'+                         // cool teal shadows (subtle)
+    '  col += vec3(0.07,0.04,-0.022)*(0.5+0.8*warm)*hm;\n'+           // warm highlights
+    '  col=(col-0.5)*0.9+0.5; col=col*0.95+0.042;\n'+                 // soft contrast + lift (airy)
+    '  col*=vec3(1.0+warm*0.07,1.0,1.0-warm*0.06);\n'+               // warm neutral wash
+    '  float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.2;\n'+          // cozy vignette
+    '  o=vec4(clamp(col,0.0,1.6),c.a);\n'+
     '}',
-    { uniforms:new Map([['tint',new THREE.Uniform(new THREE.Color(1.06,1.0,0.9))],['amt',new THREE.Uniform(0.38)]]) }); }
+    { uniforms:new Map([['warm',new THREE.Uniform(0.5)]]) }); }
 }
 let QUAL = localStorage.getItem('sv_qual')||'med';
 // low = fast path (no post, max fps). med = cinematic post (bloom+grade+vignette, no AO).
@@ -1225,12 +1231,9 @@ function setupPost(){
     try{ aoPass.setQualityMode('Medium'); }catch(e){} composer.addPass(aoPass); } else aoPass=null;
   const fx=[ new BloomEffect({ intensity:0.62, luminanceThreshold:0.72, luminanceSmoothing:0.35, mipmapBlur:true, radius:0.72 }) ];
   if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
-  fx.push(new HueSaturationEffect({ saturation:0.1 }));
-  fx.push(new BrightnessContrastEffect({ brightness:0.012, contrast:0.07 }));
-  warmGradeFx=new WarmGrade(); warmGradeFx.uniforms.get('amt').value=0.28+seasonWarm*0.3;
-  warmGradeFx.uniforms.get('tint').value.setRGB(1.0+seasonWarm*0.12,1.0,1.0-seasonWarm*0.2); fx.push(warmGradeFx);
   fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
-  fx.push(new VignetteEffect({ eskil:false, offset:0.3, darkness:0.5 }));
+  warmGradeFx=new WarmGrade(); warmGradeFx.uniforms.get('warm').value=seasonWarm; fx.push(warmGradeFx);  // grade AFTER tonemap (display-referred)
+  fx.push(new VignetteEffect({ eskil:false, offset:0.3, darkness:0.42 }));
   fx.push(new SMAAEffect());
   dofEffect=null;
   composer.addPass(new EffectPass(camera, ...fx));
@@ -1327,14 +1330,14 @@ function dayNight(){
   const noon=Math.sin(ang);
   const dusk=clamp(1.0-Math.abs(tt-0.5)*2.3,0,1);   // 0 midday → 1 near dawn/dusk
   // Cast-n-Chill: soft MUTED painterly palette, strong atmospheric haze
-  sun.intensity=clamp(noon*2.1+0.5,0.35,2.5)*weatherDim;
+  sun.intensity=clamp(noon*1.8+0.45,0.35,2.15)*weatherDim;   // softer sun → gentler shadows
   sun.color.setHSL(lerp(0.045,0.1,noon),0.55*weatherDim+0.06,0.62);
   // gradient sky dome: pale warm hazy horizon, soft muted blue-grey zenith (warmer+lower at dawn/dusk)
   const horizon=new THREE.Color().setHSL(lerp(0.1,0.07,seasonWarm), lerp(0.14,0.4,dusk)*(0.6+seasonWarm*0.6), clamp((lerp(0.86,0.64,dusk))*(0.5+0.5*noon)+0.18,0.2,0.9));
   const zenith =new THREE.Color().setHSL(0.58, lerp(0.2,0.3,dusk), clamp(lerp(0.58,0.26,1-noon),0.18,0.6));
   skyU.bot.value.copy(horizon); skyU.top.value.copy(zenith); skyU.night.value=clamp(0.8-noon*2.2,0,1); skyDome.position.copy(camera.position);
   hemi.color.copy(horizon);
-  hemi.intensity=clamp(noon*0.45+0.4,0.4,0.9)*(0.55+0.45*weatherDim);
+  hemi.intensity=clamp(noon*0.4+0.6,0.6,1.1)*(0.6+0.4*weatherDim);   // more ambient fill → airy, soft
   scene.fog.color.copy(horizon);                    // ridges melt into the sky
   scene.fog.density = 0.0038*(S.weather==='rain'?1.7:(S.weather==='cloudy'?1.3:1.0));
   if(scene.environmentIntensity!==undefined) scene.environmentIntensity=lerp(0.35,0.82,clamp(noon,0.1,1));
