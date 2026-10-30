@@ -201,21 +201,27 @@ if __name__ == '__main__':
         cv2.imwrite(f'{sys.argv[1]}/mt_{n}.png', out[:, :2048, ::-1].astype(np.uint8))
 
 
-def ring(W=2048, D=320, seed=61):
+def ring(W=4096, D=640, seed=61):
     """Real mountains: a heightfield wrapped into a ring around the valley (x = angle, y = outward).
-    Returns the height (16 bit, for the mesh) and a detail sheet: R=crease light, G=snow, B=forest."""
+    Returns height (16 bit, for the mesh), a relief sheet (R,G = surface normal, B = crease) and a mask
+    sheet (R = snow level, G = forest), so the mesh carries every ridge at full resolution per pixel."""
     rng = np.random.default_rng(seed)
     n = 13
-    peaks = [((i + rng.uniform(-.22, .22)) / n, rng.uniform(.5, .74), rng.uniform(.58, 1.0), rng.uniform(.05, .075), rng.uniform(.4, .56)) for i in range(n)]
-    peaks += [((i + .5 + rng.uniform(-.2, .2)) / n, rng.uniform(.24, .42), rng.uniform(.26, .46), rng.uniform(.04, .06), rng.uniform(.26, .36)) for i in range(n)]
+    peaks = [((i + rng.uniform(-.22, .22)) / n, rng.uniform(.5, .74), rng.uniform(.62, 1.0), rng.uniform(.045, .07), rng.uniform(.34, .5)) for i in range(n)]
+    peaks += [((i + .5 + rng.uniform(-.2, .2)) / n, rng.uniform(.24, .42), rng.uniform(.3, .52), rng.uniform(.035, .055), rng.uniform(.22, .32)) for i in range(n)]
     h = heightfield(W, D, rng, peaks)
     h = np.clip(h, 0, None); h = h / h.max()
     streak = pnoise((D, W), 1.9, rng)
-    sm = gaussian_filter(h, 5, mode=('nearest', 'wrap'))
-    crease = np.clip((h - sm) * 26, -1, 1)
-    snow = np.clip((h + streak * .05 - crease * .05 - .4) / .04, 0, 1)
-    forest = np.clip((.16 - h + streak * .03) / .05, 0, 1)
-    detail = np.dstack([(crease * .5 + .5) * 255, snow * 255, forest * 255]).astype(np.uint8)
-    hi = (h * 65535).astype(np.uint32)
+    sm = gaussian_filter(h, 9, mode=('nearest', 'wrap'))
+    crease = np.clip((h - sm) * 22, -1, 1)
+    hs = gaussian_filter(h, 1.0, mode=('nearest', 'wrap'))
+    gu = np.gradient(hs, axis=1) * 430 / 1.25; gv = np.gradient(hs, axis=0) * 430 / 1.14
+    m = np.sqrt(gu ** 2 + gv ** 2 + 1)
+    relief = np.dstack([(-gu / m * .5 + .5) * 255, (-gv / m * .5 + .5) * 255, (crease * .5 + .5) * 255]).astype(np.uint8)
+    snow = np.clip(h + streak * .055 - crease * .06, 0, 1)
+    forest = np.clip((.15 - h + streak * .03) / .05, 0, 1)
+    mask = np.dstack([snow * 255, forest * 255, np.zeros_like(h)]).astype(np.uint8)
+    small = cv2.resize(h.astype(np.float32), (1024, 160), interpolation=cv2.INTER_AREA)
+    hi = (np.clip(small, 0, 1) * 65535).astype(np.uint32)
     enc = np.dstack([(hi >> 8) & 255, hi & 255, np.zeros_like(hi)]).astype(np.uint8)
-    return enc, detail
+    return enc, relief, mask

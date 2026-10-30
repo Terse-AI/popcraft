@@ -266,21 +266,18 @@ def bough(seed, W=320, H=140):
     return c.finish()
 
 def leaf_clump(seed, S=230):
-    """A loose handful of leaves for the 3D crowns: bright on top, thinning to single dabs at the rim."""
+    """A loose spray of leaves for the 3D crowns: several small bunches with gaps between, no solid disc.
+    Value stays near the middle; the light comes from the 3D crown."""
     rng = np.random.default_rng(seed)
     c = Canvas(S, S)
-    r = S * .4; n = int(S * S * .1)
-    pts = []
-    for _ in range(n):
-        a = rng.uniform(0, math.tau); q = math.sqrt(rng.random()) * rng.uniform(.8, 1.16)
-        dx, dy = math.cos(a) * q, math.sin(a) * q * .9
-        lam = -dx * .42 - dy * .78 + rng.uniform(-.28, .28)
-        pts.append((lam, dx, dy, q))
-    pts.sort(key=lambda p: p[0])
-    for lam, dx, dy, q in pts:
-        if q > .95 and rng.random() < .55: continue
-        d = rng.uniform(2.4, 5.2)
-        c.dab(S / 2 + dx * r, S / 2 + dy * r, d, d * rng.uniform(.5, .85), rng.uniform(0, 180), 118 + 118 * lam + rng.uniform(-12, 12), rng.uniform(70, 186), 255 if lam > 0 else 70)
+    for b in range(rng.integers(6, 10)):
+        a0 = rng.uniform(0, math.tau); d0 = rng.uniform(.1, .68) * S * .42
+        bx, by = S / 2 + math.cos(a0) * d0, S / 2 + math.sin(a0) * d0
+        r = S * rng.uniform(.09, .17); tone = rng.uniform(96, 164)
+        for _ in range(int(r * r * .34)):
+            a = rng.uniform(0, math.tau); q = math.sqrt(rng.random()) * r
+            d = rng.uniform(2.2, 4.8)
+            c.dab(bx + math.cos(a) * q, by + math.sin(a) * q, d, d * rng.uniform(.5, .85), rng.uniform(0, 180), tone + rng.uniform(-30, 30) - math.sin(a) * q / r * 24, rng.uniform(70, 186), 200)
     return c.finish()
 
 def frond(seed, W=320, H=100):
