@@ -199,3 +199,23 @@ if __name__ == '__main__':
         bg = np.array([214, 200, 200.])
         out = col * a + bg * (1 - a)
         cv2.imwrite(f'{sys.argv[1]}/mt_{n}.png', out[:, :2048, ::-1].astype(np.uint8))
+
+
+def ring(W=2048, D=320, seed=61):
+    """Real mountains: a heightfield wrapped into a ring around the valley (x = angle, y = outward).
+    Returns the height (16 bit, for the mesh) and a detail sheet: R=crease light, G=snow, B=forest."""
+    rng = np.random.default_rng(seed)
+    n = 13
+    peaks = [((i + rng.uniform(-.22, .22)) / n, rng.uniform(.5, .74), rng.uniform(.58, 1.0), rng.uniform(.05, .075), rng.uniform(.4, .56)) for i in range(n)]
+    peaks += [((i + .5 + rng.uniform(-.2, .2)) / n, rng.uniform(.24, .42), rng.uniform(.26, .46), rng.uniform(.04, .06), rng.uniform(.26, .36)) for i in range(n)]
+    h = heightfield(W, D, rng, peaks)
+    h = np.clip(h, 0, None); h = h / h.max()
+    streak = pnoise((D, W), 1.9, rng)
+    sm = gaussian_filter(h, 5, mode=('nearest', 'wrap'))
+    crease = np.clip((h - sm) * 26, -1, 1)
+    snow = np.clip((h + streak * .05 - crease * .05 - .4) / .04, 0, 1)
+    forest = np.clip((.16 - h + streak * .03) / .05, 0, 1)
+    detail = np.dstack([(crease * .5 + .5) * 255, snow * 255, forest * 255]).astype(np.uint8)
+    hi = (h * 65535).astype(np.uint32)
+    enc = np.dstack([(hi >> 8) & 255, hi & 255, np.zeros_like(hi)]).astype(np.uint8)
+    return enc, detail

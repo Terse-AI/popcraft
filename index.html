@@ -253,7 +253,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.15, 1600);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.15, 2200);
 camera.layers.enable(1);                     // layer 1: seen by the player, skipped by the lake mirror
 scene.fog = new THREE.FogExp2(0xcfe3f0, 0.0052);
 

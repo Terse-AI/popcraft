@@ -175,10 +175,10 @@ export async function loadScenery(onProgress){
   const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
-  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
+  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_ring',pano],['clouds',pano],['mt_height',null,'png'],
     ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],['surf_fur'],
     ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
-  let done=0; await Promise.all(names.map(([n,f])=>load('assets/paint/'+n+'.webp',f).then(t=>{ TEX[n]=t; onProgress&&onProgress(++done/names.length); })));
+  let done=0; await Promise.all(names.map(([n,f,ext])=>load('assets/paint/'+n+'.'+(ext||'webp'),f).then(t=>{ TEX[n]=t; onProgress&&onProgress(++done/names.length); })));
 }
 
 /* ---------- sky ---------- */
@@ -238,9 +238,31 @@ function buildMountains(root){
     const o=new THREE.Mesh(g,m); o.frustumCulled=false; o.position.y=base+H/2; o.renderOrder=-90; root.add(o);
     layers.push({o,m,base,H});
   };
-  mk(TEX.mt_far,  900,430,2,.08,-6,.26,0,.42);
-  mk(TEX.mt_mid,  760,210,2,.37,-6,.14,0,.42);
-  mk(TEX.mt_forest,600,64,3,.21,-4,.05,1,.3);
+  mk(TEX.mt_far,1450,620,2,.08,-6,.5,0,.5);             // the last, palest range stays a painting
+  buildRing(root);
+}
+/* real mountains: a mesh ring around the valley. Light moves across the faces with the sun, and they shift against each other as you row */
+let ringMat=null;
+function buildRing(root){
+  const tex=TEX.mt_height, c=document.createElement('canvas'), w=tex.image.width, h=tex.image.height; c.width=w; c.height=h; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(tex.image,0,0); const d=x.getImageData(0,0,w,h).data;
+  const H=(i,j)=>{ const o=(j*w+((i%w+w)%w))*4; return (d[o]*256+d[o+1])/65535; };
+  const CX=0, CZ=70, Rin=430, Rout=1160, Top=430, N=720, M=84, P=new Float32Array((N+1)*(M+1)*3), UV=new Float32Array((N+1)*(M+1)*2), I=[];
+  for(let a=0;a<=N;a++) for(let r=0;r<=M;r++){ const u=a/N, v=r/M, ang=u*Math.PI*2, rad=Rin+(Rout-Rin)*Math.pow(v,1.25), fi=u*w, fj=v*(h-1), i0=Math.floor(fi), j0=Math.min(h-2,Math.floor(fj)), tx=fi-i0, ty=fj-j0;
+      const hh=lerp(lerp(H(i0,j0),H(i0+1,j0),tx),lerp(H(i0,j0+1),H(i0+1,j0+1),tx),ty), edge=smooth(0,.12,v), o=(a*(M+1)+r);
+      P.set([CX+Math.cos(ang)*rad,hh*Top*edge+(1-edge)*18-4,CZ+Math.sin(ang)*rad],o*3); UV.set([u,v],o*2); }
+  for(let a=0;a<N;a++) for(let r=0;r<M;r++){ const p=a*(M+1)+r, q=p+M+1; I.push(p,p+1,q,q,p+1,q+1); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setAttribute('uv',new THREE.BufferAttribute(UV,2)); g.setIndex(I); g.computeVertexNormals();
+  ringMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...mtU, uMap:{value:TEX.mt_ring}, uSun:U.uSunDirW, uSnowK:{value:1}, uFogD:U.uFogD, uDecAmt:{value:0}, uTile:{value:TEX.ground_tile} },
+    vertexShader:`varying vec2 vUv; varying vec3 vN,vW; void main(){ vUv=uv; vN=normal; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
+    fragmentShader:`precision highp float; uniform sampler2D uMap,uTile; uniform vec3 uRS,uRL,uSS,uSL,uFS,uFL,uHz,uDL,uDS,uSun; uniform float uSnowK,uDecAmt; varying vec2 vUv; varying vec3 vN,vW;
+      void main(){ vec4 t=texture2D(uMap,vUv); vec3 n=normalize(vN); float crease=t.r-.5;
+        float lam=clamp(dot(n,normalize(uSun+vec3(0.,.25,0.)))*.95+.14,0.,1.);
+        float brush=texture2D(uTile,vW.xz*.012).b-.5; float v=clamp(lam*.9+crease*.75+brush*.16,0.,1.); v=floor(v*8.+.5)/8.;
+        vec3 rock=mix(uRS,uRL,v), sn=mix(uSS,uSL,smoothstep(.12,.8,v)); float steep=smoothstep(.34,.2,n.y); vec3 c=mix(rock,sn,t.g*uSnowK*(1.-steep*.8));
+        float w=clamp(v*1.5,0.,1.); vec3 fo=mix(uFS,uFL,w); float dec=step(.5,fract(sin(dot(floor(vW.xz*.03),vec2(12.9,78.2)))*43758.5))*uDecAmt; fo=mix(fo,mix(uDS,uDL,w),dec); c=mix(c,fo,t.b);
+        float d=length(vW.xz-cameraPosition.xz), hz=smoothstep(280.,1250.,d)*.62; float low=1.-smoothstep(10.,120.,vW.y); c=mix(c,uHz,clamp(hz+low*low*.3,0.,1.));
+        gl_FragColor=vec4(c,1.); }` });
+  const o=new THREE.Mesh(g,ringMat); o.frustumCulled=false; root.add(o);
 }
 
 /* ---------- sprites: instanced camera-facing paintings ---------- */
@@ -629,7 +651,7 @@ export function setSeason(season){
   for(const k in SEASON) writeRow(k,SEASON[k][season]);
   rampTex.needsUpdate=true;
   U.uSnow.value=season===3?1:0;
-  layers.forEach(l=>{ if(l.m.uniforms.uKind.value>.5) l.m.uniforms.uDecAmt.value=[.35,.0,1,.0][season]; l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; });
+  layers.forEach(l=>{ l.m.uniforms.uSnowK.value=[.9,.55,1,1][season]; }); if(ringMat){ ringMat.uniforms.uDecAmt.value=[.3,0,1,0][season]; ringMat.uniforms.uSnowK.value=[.9,.55,1,1][season]; }
 }
 
 // returns the frame's light rig so index.html can drive the directional light and grade
