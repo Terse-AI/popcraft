@@ -984,7 +984,7 @@ function governor(raw){ if(DBG&&!DBG.gov) return;
   govT+=raw; govN++; if(govT<2.5) return;
   const fps=govN/govT; govT=0; govN=0;
   if(fps<42&&govStep<3&&!document.hidden){ govStep++; govScale=[1,.82,.68,.56][govStep];
-    setMirrorEvery(Math.min(3,1+govStep)); sun.shadow.autoUpdate=false;
+    setMirrorEvery(Math.min(3,1+govStep));
     renderer.setPixelRatio(Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr)*govScale); composer.setSize(innerWidth,innerHeight); syncRes(); }
 }
 function syncRes(){ renderer.getDrawingBufferSize(paintU.uRes.value); }
