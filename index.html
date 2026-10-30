@@ -177,6 +177,7 @@ import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { N8AOPostPass } from 'n8ao';
 import {
   EffectComposer, RenderPass, EffectPass,
@@ -583,17 +584,18 @@ function scatterProps(){
 let propMini=[];
 
 /* pond (glossy PBR water) */
+let pondRefl=null;
 function buildPond(){
+  // real planar reflection of the sky/mountains/trees (Cast-n-Chill). Only renders when you're near the pond.
+  pondRefl=new Reflector(new THREE.CircleGeometry(6,64), { textureWidth:512, textureHeight:512, color:0x6f8ea0 });
+  pondRefl.rotateX(-Math.PI/2); pondRefl.position.set(-24,0.055,20); world.add(pondRefl);
+  // transparent rippling overlay for shimmer + depth tint
   const n=texLoader.load('assets/tex/waternormals.jpg'); n.wrapS=n.wrapT=THREE.RepeatWrapping; n.repeat.set(6,6);
-  const geo=new THREE.CircleGeometry(6,64);
-  const col=[]; const c=new THREE.Color(); const p=geo.attributes.position;  // deep center -> shallow rim
-  for(let i=0;i<p.count;i++){ const r=Math.min(1,Math.hypot(p.getX(i),p.getY(i))/6); c.setHSL(0.55,0.62,0.14+r*0.18); col.push(c.r,c.g,c.b); }
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
-  waterMat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.02, metalness:0.25, normalMap:n, envMapIntensity:3.0, transparent:true, opacity:0.92 });
-  waterMat.normalScale.set(0.5,0.5);
-  const pond=new THREE.Mesh(geo, waterMat);
-  pond.rotateX(-Math.PI/2); pond.position.set(-24,0.06,20); world.add(pond);
-  const foam=new THREE.Mesh(new THREE.RingGeometry(5.68,6.15,64), new THREE.MeshBasicMaterial({color:0xe6f1f6,transparent:true,opacity:0.32,side:THREE.DoubleSide}));
+  waterMat=new THREE.MeshStandardMaterial({ color:0x2a5b74, roughness:0.08, metalness:0.1, normalMap:n, envMapIntensity:1.6, transparent:true, opacity:0.4 });
+  waterMat.normalScale.set(0.6,0.6);
+  const pond=new THREE.Mesh(new THREE.CircleGeometry(5.98,64), waterMat);
+  pond.rotateX(-Math.PI/2); pond.position.set(-24,0.07,20); world.add(pond);
+  const foam=new THREE.Mesh(new THREE.RingGeometry(5.68,6.15,64), new THREE.MeshBasicMaterial({color:0xe6f1f6,transparent:true,opacity:0.3,side:THREE.DoubleSide}));
   foam.rotateX(-Math.PI/2); foam.position.set(-24,0.085,20); world.add(foam);
   pondMini={x:-24,z:20,r:6};
 }
@@ -638,7 +640,7 @@ function buildScenery(){
     pine.position.set(x, terrainH(x,z)+ph/2, z); pine.castShadow=true; world.add(pine); }
   // pink blossom trees — cozy colour accents (Cast-n-Chill)
   const trunkM=new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.9}), bcols=[0xffc0d6,0xffd6e2,0xf5b3cc];
-  for(let i=0;i<14;i++){ const a=Math.random()*6.28, R=FARM_HALF+9+Math.random()*42, x=Math.cos(a)*R, z=Math.sin(a)*R;
+  for(let i=0;i<22;i++){ const a=Math.random()*6.28, R=FARM_HALF+9+Math.random()*44, x=Math.cos(a)*R, z=Math.sin(a)*R;
     if(Math.abs(x)>95||Math.abs(z)>95) continue; const g=new THREE.Group(), h=2.2+Math.random()*1.2;
     const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.2,h,7),trunkM); tr.position.y=h/2; tr.castShadow=true; g.add(tr);
     const bm=new THREE.MeshStandardMaterial({color:bcols[i%3],roughness:0.82,flatShading:true});
@@ -653,6 +655,24 @@ function buildScenery(){
 }
 let cloudGroup=null;
 function updateClouds(dt){ if(!cloudGroup) return; for(const c of cloudGroup.children){ c.position.x+=c.userData.sp*dt; if(c.position.x>130) c.position.x=-130; } }
+
+/* ---- fireflies at dusk/night (cozy ambiance) ---- */
+let fireflies=null, ffMat=null;
+function buildFireflies(){
+  const N=70, g=new THREE.BufferGeometry(), pos=new Float32Array(N*3), ph=new Float32Array(N);
+  for(let i=0;i<N;i++){ pos[i*3]=(Math.random()-.5)*52; pos[i*3+1]=0.4+Math.random()*2.6; pos[i*3+2]=(Math.random()-.5)*52; ph[i]=Math.random()*6.28; }
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.userData.base=pos.slice(0); g.userData.ph=ph;
+  ffMat=new THREE.PointsMaterial({ color:0xffe08a, size:0.2, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending });
+  fireflies=new THREE.Points(g,ffMat); fireflies.frustumCulled=false; scene.add(fireflies);
+}
+function updateFireflies(t){
+  if(!fireflies) return;
+  if(S.inMine){ ffMat.opacity=0; return; }
+  const night=skyU.night.value; ffMat.opacity=night*0.95; if(night<0.02) return;
+  const p=fireflies.geometry.attributes.position, base=fireflies.geometry.userData.base, ph=fireflies.geometry.userData.ph;
+  for(let i=0;i<p.count;i++){ p.setXYZ(i, base[i*3]+Math.sin(t*0.6+ph[i])*1.6, base[i*3+1]+Math.sin(t*0.9+ph[i]*2)*0.6, base[i*3+2]+Math.cos(t*0.5+ph[i])*1.6); }
+  p.needsUpdate=true; fireflies.position.set(player.pos.x,0,player.pos.z);
+}
 
 /* farm structures: cottage, bed, shop stall, shipping bin ----------- */
 const BED={x:3,z:-9}, SHOP={x:-6,z:-10}, BIN={x:8,z:-4};
@@ -1027,12 +1047,16 @@ function sleep(){
     setTimeout(()=>{ $('#fade').classList.remove('on'); S.sleeping=false; },1100);
   },700);
 }
+let seasonWarm=0.5, warmGradeFx=null;
 function retintGround(){ // seasonal tint multiplies the grass texture
   const tint=[0xb9e39a,0xcfe79a,0xe3b878,0xe2edf3][S.season]; // spring, summer, fall golden, winter frost
   if(ground) ground.material.color.setHex(tint);
   if(grassIM) grassIM.material.color.setHex([0x5fae4e,0x5aa048,0xc08f3a,0xd4e2ea][S.season]);
   const hueB=[0.26,0.24,0.12,0.28][S.season];
   hemi.groundColor.setHSL(hueB,0.3,[0.3,0.28,0.26,0.5][S.season]);
+  seasonWarm=[0.52,0.62,0.9,0.26][S.season];   // fall = warm autumn, winter = cool
+  if(warmGradeFx){ warmGradeFx.uniforms.get('amt').value=0.28+seasonWarm*0.3;
+    warmGradeFx.uniforms.get('tint').value.setRGB(1.0+seasonWarm*0.12, 1.0, 1.0-seasonWarm*0.2); }
 }
 
 /* ============================ UI ============================ */
@@ -1184,7 +1208,8 @@ function setupPost(){
   if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
   fx.push(new HueSaturationEffect({ saturation:0.1 }));
   fx.push(new BrightnessContrastEffect({ brightness:0.012, contrast:0.07 }));
-  fx.push(new WarmGrade());                                                   // cozy amber cast
+  warmGradeFx=new WarmGrade(); warmGradeFx.uniforms.get('amt').value=0.28+seasonWarm*0.3;
+  warmGradeFx.uniforms.get('tint').value.setRGB(1.0+seasonWarm*0.12,1.0,1.0-seasonWarm*0.2); fx.push(warmGradeFx);
   fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
   fx.push(new VignetteEffect({ eskil:false, offset:0.3, darkness:0.5 }));
   fx.push(new SMAAEffect());
@@ -1201,7 +1226,8 @@ function frame(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   if(grassUniform) grassUniform.value=now*0.001;
   if(waterMat&&waterMat.normalMap){ waterMat.normalMap.offset.x+=dt*0.025; waterMat.normalMap.offset.y+=dt*0.012; }
-  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt); updateClouds(dt);
+  if(pondRefl) pondRefl.visible = !S.inMine && Math.hypot(player.pos.x+24,player.pos.z-20)<26;   // reflect only when at the pond
+  updateRain(dt); updateCritters(now*0.001); updateNPCs(dt); updateAnimals(dt); updateFish(dt); updateClouds(dt); updateFireflies(now*0.001);
   if(S.inMine && mineLight) mineLight.position.set(player.pos.x,4,player.pos.z);
   fCnt++; fAcc+=dt; if(fAcc>=0.5){ const fe=$('#fps'); if(fe) fe.textContent=Math.round(fCnt/fAcc)+' fps'; fCnt=0; fAcc=0; }
 
@@ -1285,7 +1311,7 @@ function dayNight(){
   sun.intensity=clamp(noon*2.1+0.5,0.35,2.5)*weatherDim;
   sun.color.setHSL(lerp(0.045,0.1,noon),0.55*weatherDim+0.06,0.62);
   // gradient sky dome: pale warm hazy horizon, soft muted blue-grey zenith (warmer+lower at dawn/dusk)
-  const horizon=new THREE.Color().setHSL(0.085, lerp(0.16,0.4,dusk), clamp((lerp(0.86,0.64,dusk))*(0.5+0.5*noon)+0.18,0.2,0.9));
+  const horizon=new THREE.Color().setHSL(lerp(0.1,0.07,seasonWarm), lerp(0.14,0.4,dusk)*(0.6+seasonWarm*0.6), clamp((lerp(0.86,0.64,dusk))*(0.5+0.5*noon)+0.18,0.2,0.9));
   const zenith =new THREE.Color().setHSL(0.58, lerp(0.2,0.3,dusk), clamp(lerp(0.58,0.26,1-noon),0.18,0.6));
   skyU.bot.value.copy(horizon); skyU.top.value.copy(zenith); skyU.night.value=clamp(0.8-noon*2.2,0,1); skyDome.position.copy(camera.position);
   hemi.color.copy(horizon);
@@ -1619,7 +1645,7 @@ async function boot(){
   buildGround(); setProgress(18);
   $('#loadsub').textContent='加载 3D 资源 · loading assets…';
   await loadModels(); setProgress(42);
-  scatterRealProps(); buildPond(); buildScenery(); buildGrassField(); buildRain(); buildCritters(); setProgress(55);
+  scatterRealProps(); buildPond(); buildScenery(); buildGrassField(); buildRain(); buildCritters(); buildFireflies(); setProgress(55);
   makeCottage(); makeBed(); makeStall(); makeBin(); buildAnvil(); buildStove(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(62);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(72);
 
