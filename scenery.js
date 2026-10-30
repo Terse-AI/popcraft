@@ -125,7 +125,7 @@ const SEASON={
   ground:[['#1e2a18','#34461e','#566a28','#7e8a38','#a8a450'],['#18251a','#2c4220','#4a642a','#6e8434','#969c44'],['#2c2214','#54421c','#826a2a','#ac8e3c','#d0b05c'],['#8c98b8','#b0bcd4','#d8dfec','#f0f3f9','#ffffff']]
 };
 const ROWS=['spruce','wood','earth','rock','snow','ice','broad1','broad2','broad3','larch','shrub','tuft','ground'];
-const rowV=n=>(ROWS.indexOf(n)+.5)/ROWS.length;
+export const rowV=n=>(ROWS.indexOf(n)+.5)/ROWS.length;
 const rampData=new Uint8Array(256*ROWS.length*4);
 const rampTex=new THREE.DataTexture(rampData,256,ROWS.length,THREE.RGBAFormat);
 rampTex.colorSpace=THREE.SRGBColorSpace; rampTex.minFilter=rampTex.magFilter=THREE.LinearFilter; rampTex.wrapS=rampTex.wrapT=THREE.ClampToEdgeWrapping;
@@ -138,20 +138,23 @@ for(const k in RAMP) writeRow(k,RAMP[k]);
 
 /* ---------- shared uniforms ---------- */
 export const U={
+  uLodT:{value:46}, uLodP:{value:28}, uWindAmp:{value:.6}, uWindDir:{value:new THREE.Vector2(.8,.6)}, uNoise:{value:null},
+  uHeight:{value:null}, uHeightSpan:{value:440}, uPush:{value:new THREE.Vector4(0,0,1.3,0)}, uPush2:{value:new THREE.Vector4(0,0,.8,0)}, uSunDirW:{value:new THREE.Vector3(0,1,0)},
   uTime:{value:0}, uShade:{value:new THREE.Color()}, uLit:{value:new THREE.Color()}, uFog:{value:new THREE.Color()}, uFogD:{value:.0014},
   uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uReveal:{value:new THREE.Vector4(.5,.5,10,1)}, uRes:{value:new THREE.Vector2(1,1)}
 };
 const ramp=`vec3 ramp(float v,float row){ return texture2D(uRamps,vec2(clamp(v,.004,.996),row)).rgb; }`;
+export const RAMP_GLSL=ramp;
 
 /* ---------- loading ---------- */
 const load=(url,fn)=>new Promise((res,rej)=>new THREE.TextureLoader().load(url,t=>{ fn&&fn(t); res(t); },undefined,rej));
-const ATLAS={}; export const TEX={};
+export const ATLAS={}; export const TEX={};
 export async function loadScenery(onProgress){
   const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
-  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_animals',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
-    ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],
+  const names=[['sheet_trees',sheet],['sheet_plants',sheet],['sheet_near',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
+    ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],['surf_fur'],
     ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
   let done=0; await Promise.all(names.map(([n,f])=>load('assets/paint/'+n+'.webp',f).then(t=>{ TEX[n]=t; onProgress&&onProgress(++done/names.length); })));
 }
@@ -227,7 +230,8 @@ export function makeSprites(root,sheet,items,opts={}){
   const P=new Float32Array(n*3), S=new Float32Array(n*2), R=new Float32Array(n*4), M=new Float32Array(n*4);
   items.forEach((it,i)=>{ const a=ATLAS[it.name];
     P.set([it.x,it.y,it.z],i*3); S.set([it.h*a.w/a.h*(it.sx||1),it.h],i*2); R.set([a.u0,a.v0,a.u1,a.v1],i*4);
-    M.set([rowV(it.row),it.tone||0,it.wind===undefined?1:it.wind,it.flip?-1:1],i*4); });
+    const lod=/^(spruce|larch|broad)/.test(it.name)?1:/^(shrub|fern|tuft|reed)/.test(it.name)?3:2;
+    M.set([rowV(it.row),it.tone||0,it.wind===undefined?1:it.wind,(it.flip?-1:1)*lod],i*4); });
   geo.setAttribute('iPos',new THREE.InstancedBufferAttribute(P,3));
   geo.setAttribute('iSize',new THREE.InstancedBufferAttribute(S,2));
   geo.setAttribute('iRect',new THREE.InstancedBufferAttribute(R,4));
@@ -238,12 +242,13 @@ export function makeSprites(root,sheet,items,opts={}){
     defines:opts.colored?{COLORED:1}:{},
     uniforms:{ ...U, uMap:{value:TEX[sheet]}, uSnowRow:{value:rowV('ice')} },
     vertexShader:`attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iRect,iMisc;
-      uniform float uTime,uFogD; uniform vec3 uSide;
-      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear;
+      uniform float uTime,uFogD,uLodT,uLodP,uWindAmp; uniform vec3 uSide;
+      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF;
       void main(){ vec3 tc=cameraPosition-iPos; tc.y=0.; float d=max(length(tc),.001); tc/=d;
         vec3 right=vec3(tc.z,0.,-tc.x);
         float h=position.y*position.y*iMisc.z;
-        float sw=(sin(uTime*1.05+iPos.x*.31+iPos.z*.23)+.5*sin(uTime*2.3+iPos.x*.9))*.018*iSize.y*h;
+        float sw=(sin(uTime*1.05+iPos.x*.31+iPos.z*.23)+.5*sin(uTime*2.3+iPos.x*.9))*.02*(.5+uWindAmp)*iSize.y*h;
+        float lm=abs(iMisc.w), lodR=lm<1.5?uLodT:(lm>2.5?uLodP:1e7); vLodF=cameraPosition.y<-1.15?1.:smoothstep(lodR-10.,lodR-1.,d);
         vec3 wp=iPos+right*(position.x*iSize.x+sw)+vec3(0.,position.y*iSize.y,0.);
         float u=iMisc.w<0.?1.-uv.x:uv.x;
         vUv=vec2(mix(iRect.x,iRect.z,u),mix(iRect.y,iRect.w,uv.y));
@@ -251,10 +256,9 @@ export function makeSprites(root,sheet,items,opts={}){
         gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
     fragmentShader:`precision highp float;
       uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog; uniform float uSnow,uSnowRow; uniform vec4 uReveal; uniform vec2 uRes;
-      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear; ${ramp}
-      void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
-        if(vNear<4.2&&cameraPosition.y>-1.){ vec2 q=mod(floor(gl_FragCoord.xy*.5),4.); if(q.x+q.y*2.>vNear*2.2-.5) discard; }   // foliage against the lens opens up
-        if(vNear<uReveal.z&&cameraPosition.y>-1.){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.3){ vec2 q=mod(floor(gl_FragCoord.xy*.5),3.); if(q.x+q.y>rr/.3*3.2-.2) discard; } }
+      varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF; ${ramp}
+      float dith(vec2 p){ vec2 q=mod(floor(p),4.); return (mod(q.x+q.y*2.,4.)+mod(q.y,2.)*.5)/4.5; }
+      void main(){ if(vLodF<=dith(gl_FragCoord.xy)) discard; vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
         #ifdef COLORED
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
         #else
@@ -289,7 +293,7 @@ function bakeSplat(){
 }
 function groundMaterial(){
   const m=new THREE.MeshLambertMaterial({color:0xffffff});
-  groundU.uSplat.value=bakeSplat(); groundU.uTile.value=TEX.ground_tile;
+  splatT=groundU.uSplat.value=bakeSplat(); groundU.uTile.value=TEX.ground_tile;
   m.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,groundU,{uRamps:U.uRamps,uSnow:U.uSnow});
     sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <worldpos_vertex>',
@@ -436,6 +440,16 @@ function buildRocks(root,obst){
 
 /* ---------- planting the valley ---------- */
 const pick=(a,r)=>a[Math.floor(r()*a.length)];
+let splatT=null, blockT=null;
+export const splatTex=()=>splatT, blockTex=()=>blockT;
+// where grass may not grow: floors, tilled soil. 0.5 unit cells over +-128.
+export function stampBlock(x,z,hx,hz,v=255){ const d=blockT.image.data, S=512, c=S/256; for(let j=Math.max(0,Math.floor((z-hz+128)*c));j<Math.min(S,Math.ceil((z+hz+128)*c));j++) for(let i=Math.max(0,Math.floor((x-hx+128)*c));i<Math.min(S,Math.ceil((x+hx+128)*c));i++) d[j*S+i]=v; blockT.needsUpdate=true; }
+function bakeFields(){
+  const S=512, R=440, d=new Uint16Array(S*S); for(let j=0;j<S;j++) for(let i=0;i<S;i++) d[j*S+i]=THREE.DataUtils.toHalfFloat(terrainH((i+.5)/S*R-R/2,(j+.5)/S*R-R/2));
+  const t=new THREE.DataTexture(d,S,S,THREE.RedFormat,THREE.HalfFloatType); t.minFilter=t.magFilter=THREE.LinearFilter; t.needsUpdate=true; U.uHeight.value=t;
+  blockT=new THREE.DataTexture(new Uint8Array(512*512),512,512,THREE.RedFormat); blockT.minFilter=blockT.magFilter=THREE.NearestFilter; blockT.needsUpdate=true;
+  U.uNoise.value=TEX.clouds;
+}
 function plant(root,obst,qual){
   const plantCount={low:9000,med:17000,high:26000}[qual]||17000;
   const r=rng(1234), trees=[], plants=[], decals=[], mini=[]; let tall=1;
@@ -483,6 +497,7 @@ function plant(root,obst,qual){
   // big framing pines
   [[-36,31],[42,33],[-72,44],[70,40]].forEach(([x,z])=>{ if(lakeField(x,z)<0) trees.push({name:'pine_big',x,y:terrainH(x,z)-.3,z,h:24,row:'spruce',tone:-.02,flip:x>0,wind:.25,sheet:1}); obst.push({x,z,r:1.2}); });
 
+  plantedTrees=trees; plantedPlants=plants;
   const onTrees=[...trees.filter(t=>!t.sheet),...plants.filter(p=>p.trees)], onPlants=[...trees.filter(t=>t.sheet),...plants.filter(p=>!p.trees)];
   makeSprites(root,'sheet_trees',onTrees);
   makeSprites(root,'sheet_plants',onPlants,{mainOnly:true});
@@ -509,7 +524,7 @@ function buildBirds(root){
 }
 
 /* ---------- build + per-frame ---------- */
-export const obstacles=[]; export let miniTrees=[];
+export const obstacles=[]; export let miniTrees=[]; export let plantedTrees=[], plantedPlants=[];
 const grid=new Map(); const CELL=8, gkey=(x,z)=>Math.floor(x/CELL)*4096+Math.floor(z/CELL);
 function indexObstacles(){ grid.clear(); for(const o of obstacles){ const k=gkey(o.x,o.z); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(o); } }
 export function addObstacle(x,z,r){ const o={x,z,r}; obstacles.push(o); const k=gkey(x,z); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(o); return o; }
@@ -525,13 +540,13 @@ export function collide(p,rad){
 export function nearestOf(kind,x,z,reach){ let best=null, bd=reach; const cx=Math.floor(x/CELL), cz=Math.floor(z/CELL);
   for(let i=cx-1;i<=cx+1;i++) for(let j=cz-1;j<=cz+1;j++){ const l=grid.get(i*4096+j); if(!l) continue; for(const o of l){ if(o.kind!==kind) continue; const d=Math.hypot(x-o.x,z-o.z)-o.r; if(d<bd){ bd=d; best=o; } } }
   return best; }
-export function addBoxObstacle(x,z,hx,hz){ const o={x,z,hx,hz,box:true}; obstacles.push(o); const k=gkey(x,z); [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]].forEach(([a,b])=>{ const kk=gkey(x+a*hx,z+b*hz); if(!grid.has(kk)) grid.set(kk,[]); if(!grid.get(kk).includes(o)) grid.get(kk).push(o); }); return o; }
+export function addBoxObstacle(x,z,hx,hz){ const o={x,z,hx,hz,box:true}; obstacles.push(o); if(blockT) stampBlock(x,z,hx,hz); const k=gkey(x,z); [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]].forEach(([a,b])=>{ const kk=gkey(x+a*hx,z+b*hz); if(!grid.has(kk)) grid.set(kk,[]); if(!grid.get(kk).includes(o)) grid.get(kk).push(o); }); return o; }
 
 let mistRings=[], birds=null, birdT=0, root=null;
 export const QUAL_RES={low:[512,320],med:[900,560],high:[1280,800]};
 export function buildScenery(parent,qual){
   root=new THREE.Group(); parent.add(root);
-  buildSky(root); buildMountains(root); buildGround(root);
+  bakeFields(); buildSky(root); buildMountains(root); buildGround(root);
   buildLake(root,QUAL_RES[qual]||QUAL_RES.med);
   mistRings=buildMist(root);
   const rocks=buildRocks(root,obstacles);
@@ -569,7 +584,9 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   if(waterU.uni){ waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
   setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;
   // the sun side of every sprite, in world XZ
-  U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize();
+  U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize(); U.uSunDirW.value.copy(rig.sunDir);
+  const wa=t*.021; U.uWindDir.value.set(Math.cos(wa)*.8+.2,Math.sin(wa)*.6+.5).normalize();    // the breeze wanders, and picks up with the weather
+  const target=(weather==='rain'?1.35:weather==='cloudy'?.95:.6)*(.82+.32*Math.sin(t*.13)); U.uWindAmp.value+=(target-U.uWindAmp.value)*Math.min(1,dt*.6);
   const c=camera.position;
   revealV.copy(player.pos); revealV.y+=1; revealV.project(camera);
   U.uReveal.value.set(revealV.x*.5+.5,revealV.y*.5+.5,c.distanceTo(player.pos)-.8,camera.aspect);
@@ -579,15 +596,6 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value);
   return rig;
 }
-/* wildlife: a small dynamic sprite pool, posed each frame */
-export function animalPool(root,count){
-  const items=Array.from({length:count},()=>({name:'duck_a',x:0,y:-50,z:0,h:1,row:'wood',wind:0}));
-  const m=makeSprites(root,'sheet_animals',items,{colored:true,dynamic:true}), g=m.geometry;
-  return { set(i,name,x,y,z,h,flip){ const a=ATLAS[name];
-      g.attributes.iPos.setXYZ(i,x,y,z); g.attributes.iSize.setXY(i,h*a.w/a.h,h); g.attributes.iRect.setXYZW(i,a.u0,a.v0,a.u1,a.v1); g.attributes.iMisc.setW(i,flip?-1:1); },
-    commit(){ for(const k of ['iPos','iSize','iRect','iMisc']) g.attributes[k].needsUpdate=true; } };
-}
-
 /* tilled soil, painted to sit in the same ground */
 export function paintedSoil(wet){
   const m=toonOf({color:0xffffff});

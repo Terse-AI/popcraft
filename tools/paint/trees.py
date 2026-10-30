@@ -250,3 +250,49 @@ def big_pine(seed, W=900, H=1024):
             for s2 in (-1, 1):
                 _pad(c, rng, ex + ox, ey + oy, s2, L, .26, 34, 92 * lit, 58, 1.0, -s2 * 10)
     return c.finish()
+
+def bough(seed, W=320, H=140):
+    """One conifer bough, spine along +x from the trunk end: laid over 3D cards, so a tree is built from these."""
+    rng = np.random.default_rng(seed)
+    c = Canvas(W, H)
+    y0 = H * .34
+    c.stroke([(2, y0), (W * .5, y0 + 5), (W - 12, y0 + 12)], 3.4, 30, 128, 0)
+    _pad(c, rng, 6, y0 + 8, 1, W - 18, .1, H * .62, 34, 14, .25)
+    for k in range(3):
+        _pad(c, rng, 6 + k * 26, y0 - 2 + k * 2, 1, (W - 20) * (1 - k * .14), .1, H * .5 * (1 - k * .12), 112 + k * 12, 50, 1.0)
+    for _ in range(90):
+        x = rng.uniform(10, W - 16); y = y0 + rng.uniform(-6, 16) + x / W * 10
+        c.dab(x, y, rng.uniform(1.8, 3.6), rng.uniform(.9, 1.5), rng.uniform(40, 130), 150 + rng.uniform(0, 80), rng.uniform(60, 200), 255)
+    return c.finish()
+
+def leaf_clump(seed, S=230):
+    """A loose handful of leaves for the 3D crowns: bright on top, thinning to single dabs at the rim."""
+    rng = np.random.default_rng(seed)
+    c = Canvas(S, S)
+    r = S * .4; n = int(S * S * .1)
+    pts = []
+    for _ in range(n):
+        a = rng.uniform(0, math.tau); q = math.sqrt(rng.random()) * rng.uniform(.8, 1.16)
+        dx, dy = math.cos(a) * q, math.sin(a) * q * .9
+        lam = -dx * .42 - dy * .78 + rng.uniform(-.28, .28)
+        pts.append((lam, dx, dy, q))
+    pts.sort(key=lambda p: p[0])
+    for lam, dx, dy, q in pts:
+        if q > .95 and rng.random() < .55: continue
+        d = rng.uniform(2.4, 5.2)
+        c.dab(S / 2 + dx * r, S / 2 + dy * r, d, d * rng.uniform(.5, .85), rng.uniform(0, 180), 118 + 118 * lam + rng.uniform(-12, 12), rng.uniform(70, 186), 255 if lam > 0 else 70)
+    return c.finish()
+
+def frond(seed, W=320, H=100):
+    """Fern frond, spine along +x, for 3D ferns."""
+    rng = np.random.default_rng(seed)
+    c = Canvas(W, H)
+    y0 = H * .5
+    c.stroke([(2, y0), (W - 6, y0)], 2, 60, 128, 40)
+    n = 34
+    for i in range(n):
+        s = i / n; x = 6 + (W - 16) * s; w = (1 - s) ** .7 * H * .44 + 2
+        for sd in (-1, 1):
+            a = sd * 1.08
+            c.dab(x + math.cos(a) * w * .5, y0 + math.sin(a) * w * .5, w * .54, 2.4, math.degrees(a), 96 + 80 * (1 - s * .3) + rng.uniform(-14, 14), rng.uniform(80, 176), 90)
+    return c.finish()

@@ -25,6 +25,11 @@ SHEETS = {
         ('heron_a', lambda: A.heron()), ('heron_b', lambda: A.heron(True)), ('deer_a', lambda: A.deer()),
         ('duck_a', lambda: A.duck()), ('salmon_a', lambda: A.salmon()),
     ]),
+    'sheet_near': (1024, 1024, [
+        ('bough_a', lambda: T.bough(1)), ('bough_b', lambda: T.bough(2)), ('bough_c', lambda: T.bough(3)),
+        ('clump_a', lambda: T.leaf_clump(1)), ('clump_b', lambda: T.leaf_clump(2)), ('clump_c', lambda: T.leaf_clump(3)), ('clump_d', lambda: T.leaf_clump(4)),
+        ('frond_a', lambda: T.frond(1)), ('frond_b', lambda: T.frond(2)),
+    ]),
     'sheet_plants': (2048, 1536, [
         ('pine_big', lambda: T.big_pine(4)),
         ('snag_a', lambda: T.snag(1)), ('snag_b', lambda: T.snag(2, W=380, H=700)),
@@ -156,6 +161,19 @@ def surfaces(S=512, seed=61):
         y += h
     save(im[:, :, ::-1], 'surf_stone', 86)
 
+def fur(S=512, seed=71):
+    """Soft coat tile for the animals: long overlapping strokes, near-white so vertex colour tints it."""
+    rng = np.random.default_rng(seed)
+    im = np.full((S, S), 205, np.uint8)
+    for _ in range(26000):
+        x, y = rng.uniform(0, S), rng.uniform(0, S); l = rng.uniform(7, 24); a = rng.uniform(-.5, .5) + 1.4
+        v = int(np.clip(rng.normal(208, 34), 110, 255))
+        for ox in (0, -S, S):
+            for oy in (0, -S, S):
+                if (ox and min(x, S - x) > 30) or (oy and min(y, S - y) > 30): continue
+                cv2.line(im, (int(x + ox), int(y + oy)), (int(x + ox + np.cos(a) * l), int(y + oy + np.sin(a) * l)), v, 2, cv2.LINE_AA)
+    save(np.dstack([im] * 3), 'surf_fur', 84)
+
 if __name__ == '__main__':
     which = sys.argv[1:]
     sh = [w for w in which if w.startswith('sheet_')]
@@ -163,3 +181,4 @@ if __name__ == '__main__':
     if not which or 'panos' in which: panos()
     if not which or 'tile' in which: tile()
     if not which or 'surfaces' in which: surfaces()
+    if not which or 'fur' in which: fur()

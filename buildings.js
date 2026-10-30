@@ -2,7 +2,7 @@
    surfaced with the painted tiles so they sit in the same picture as the trees. */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toonOf, TEX, terrainH, lakeField, WATER_Y, addBoxObstacle, addObstacle, DOCK } from './scenery.js';
+import { toonOf, TEX, terrainH, lakeField, WATER_Y, addBoxObstacle, addObstacle, DOCK, stampBlock } from './scenery.js';
 
 const M={};
 function mats(){
@@ -91,7 +91,7 @@ export function logHouse(o){
   G.userData.smoke=chimney?new THREE.Vector3(x-w/2-.31,terrainH(x,z)+h+rh+2.5,z-d*.16):null;
   if(o.world) o.world.add(G);
   const hx=(Math.abs(Math.sin(ry))>.5?d:w)/2+.3, hz=(Math.abs(Math.sin(ry))>.5?w:d)/2+.3;
-  addBoxObstacle(x,z,hx,hz);
+  addBoxObstacle(x,z,hx,hz); if(porch) stampBlock(x,z+d/2+1.6,w/2+1,2.2);
   return G;
 }
 

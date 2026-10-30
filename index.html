@@ -180,8 +180,10 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, animalPool, nearestOf, setMirrorEvery, U as paintU
+  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, U as paintU, plantedTrees, plantedPlants, stampBlock
 } from './scenery.js';
+import { setupFlora, updateFlora } from './flora.js';
+import { makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, poseQuadruped, poseBird, damp, angDamp } from './creatures.js';
 import { logHouse, marketStall, shippingBin, anvilBlock, hearth, fenceRun, mineMouth, buildDock, makeVillager, buildSmoke, addSmoke, updateBuildings } from './buildings.js';
 
 /* ======================================================================
@@ -449,7 +451,7 @@ function makeTileMesh(x,z,wet){
   m.receiveShadow=true; m.userData.cell={x,z}; tileGroup.add(m); return m;
 }
 function refreshTileMesh(x,z){
-  const tl=getTile(x,z); const existing=tileGroup.children.find(m=>m.userData.cell.x===x&&m.userData.cell.z===z);
+  const tl=getTile(x,z); stampBlock(x,z,.52,.52,tl&&tl.tilled?255:0); const existing=tileGroup.children.find(m=>m.userData.cell.x===x&&m.userData.cell.z===z);
   if(!tl||!tl.tilled){ if(existing) tileGroup.remove(existing); return; }
   if(existing){ existing.material = tl.watered?wetMat:soilMat; } else makeTileMesh(x,z,tl.watered);
 }
@@ -542,9 +544,10 @@ function itemIcon(kind,id,px){ px=px||28;
   return metaOf(kind,id).em; }
 
 /* ============================ CHARACTER ============================ */
-const player={ pos:new THREE.Vector3(0,0,4), yaw:0, vel:new THREE.Vector3(), moving:false, walkT:0 };
+const player={ pos:new THREE.Vector3(0,0,4), yaw:0, vel:new THREE.Vector3(), moving:false, walkT:0, speed:0 };
 let avatar, legL, legR, armL, armR, headG;
 let charIsGLB=false, charHolder=null, charYaw=0;
+const walkU={ uBox:{value:new THREE.Vector3(0,1,.3)}, uPhase:{value:0}, uAmp:{value:0}, uRow:{value:0} };
 function buildAvatar(){
   avatar=new THREE.Group();
   const skin=new THREE.MeshStandardMaterial({color:0xffe0bd,roughness:0.6});
@@ -575,7 +578,19 @@ async function loadTwinkle(){
     const c=box.getCenter(new THREE.Vector3());
     m.position.set(-c.x*s, -box.min.y*s, -c.z*s);
     m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false;        // same stepped light as the painted world
-      const src=o.material; o.material=toonOf({ map:src.map||null, color:src.color||0xffffff, transparent:src.transparent, opacity:src.opacity, side:src.side }); } });
+      const src=o.material, mat=toonOf({ map:src.map||null, color:src.color||0xffffff, transparent:src.transparent, opacity:src.opacity, side:src.side });
+      o.geometry.computeBoundingBox(); const bb=o.geometry.boundingBox; walkU.uBox.value.set(bb.min.y,bb.max.y,Math.max(-bb.min.x,bb.max.x));
+      // the model is one solid mesh, so legs and arms swing in the vertex shader around hip and shoulder heights
+      mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,walkU);
+        sh.vertexShader='uniform vec3 uBox; uniform float uPhase,uAmp,uRow;\n'+sh.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+          { float h=(transformed.y-uBox.x)/(uBox.y-uBox.x), xn=transformed.x/uBox.z, sd=xn<0.?-1.:1., scale=uBox.y-uBox.x;
+            float legW=(1.-smoothstep(.12,.25,h))*smoothstep(.015,.1,abs(xn));
+            float a=sin(uPhase)*sd*.72*uAmp*legW, py=uBox.x+.24*scale, y0=transformed.y-py, z0=transformed.z;
+            transformed.y=py+y0*cos(a)-z0*sin(a); transformed.z=z0*cos(a)+y0*sin(a);
+            float armW=smoothstep(.62,.8,abs(xn))*(1.-smoothstep(.5,.6,h))*smoothstep(.18,.26,h);
+            float b=(-sin(uPhase)*sd*.62*uAmp+uRow*(sin(uPhase*1.3)*.7-.5))*armW, sy=uBox.x+.52*scale, y1=transformed.y-sy, z1=transformed.z;
+            transformed.y=sy+y1*cos(b)-z1*sin(b); transformed.z=z1*cos(b)+y1*sin(b); }`); };
+      o.material=mat; } });
     const holder=new THREE.Group(); holder.rotation.y=charYaw; holder.add(m);
     while(avatar.children.length) avatar.remove(avatar.children[0]);
     avatar.add(holder); charIsGLB=true; charHolder=holder;
@@ -688,29 +703,56 @@ function harvest(x,z){
   tl.crop=null; tl.watered=false; rebuildCrop(x,z); refreshTileMesh(x,z);
 }
 function near(p,d){ return Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<d; }
-/* wildlife, sprites posed by small routines */
-let beasts=null; const dog={x:2,z:6,walk:0,moving:false,flip:false,bob:0};
-const herons=[{x:-34,z:0,t:0},{x:62,z:0,t:3},{x:-92,z:0,t:6}], ducks=[{cx:-8,cz:54,r:9,sp:.05,ph:0},{cx:-8,cz:54,r:7.4,sp:.05,ph:.36},{cx:92,cz:64,r:14,sp:.035,ph:2}];
-let bear={x:96,z:0,dir:-1,t:0,w:0}, deer={x:-62,z:-38,t:0};
+/* wildlife: real 3D animals with simple routines. Steering is continuous: speed and heading ease toward
+   what the animal wants, with a gap between "start walking" and "stop", so nothing flickers between poses. */
+const dog={A:null,x:2,z:7,y:0,yaw:0,want:false,still:0,excite:0};
+const herons=[], ducks=[], deers=[]; let bear=null;
 function shoreZ(x){ let z=24; while(lakeField(x,z)<-.008&&z<150) z+=.6; return z-1.5; }
-function setupBeasts(){ beasts=animalPool(world,10); herons.forEach(h=>h.z=shoreZ(h.x)); bear.z=shoreZ(bear.x)-5; }
-const rightV=new THREE.Vector3();
-function updateBeasts(dt,now){ if(!beasts||S.inMine) return; const t=now*.001;
-  rightV.set(1,0,0).applyQuaternion(camera.quaternion);
-  // the dog keeps to heel, sits when you stop, rides in the bow when you row
-  let i=0;
-  if(S.boating){ const bx=player.pos.x+Math.sin(boatYaw)*1.5, bz=player.pos.z+Math.cos(boatYaw)*1.5; dog.x=bx; dog.z=bz; beasts.set(i++,'dog_sit',bx,WATER_Y+.2+Math.sin(now*.0016)*.05,bz,1.15,Math.sin(boatYaw)*rightV.x+Math.cos(boatYaw)*rightV.z<0); }
-  else { const dx=player.pos.x-dog.x, dz=player.pos.z-dog.z, d=Math.hypot(dx,dz);
-    dog.moving=d>2.6; if(dog.moving){ const sp=Math.min(9,2+d*1.2)*dt/d; dog.x+=dx*sp; dog.z+=dz*sp; dog.walk+=dt*9; const side=dx*rightV.x+dz*rightV.z; if(Math.abs(side)>.2) dog.flip=side<0; }
-    if(d>30){ dog.x=player.pos.x-3; dog.z=player.pos.z-3; }
-    const nm=dog.moving?(Math.sin(dog.walk)>0?'dog_w1':'dog_w2'):'dog_sit'; beasts.set(i++,nm,dog.x,walkH(dog.x,dog.z)-.03,dog.z,dog.moving?1.02:1.15,dog.flip); }
-  for(const h of herons){ h.t+=dt; const bow=(h.t%11)>8; beasts.set(i++,bow?'heron_b':'heron_a',h.x,walkH(h.x,h.z)-.06,h.z,2.1,h.x<0); }
-  for(const d of ducks){ const a=t*d.sp+d.ph, x=d.cx+Math.cos(a*6.28)*d.r, z=d.cz+Math.sin(a*6.28)*d.r*.6; beasts.set(i++,'duck_a',x,WATER_Y-.08,z,.62,Math.sin(a*6.28)>0); }
-  bear.t+=dt; bear.x+=bear.dir*dt*.9; if(bear.x<58||bear.x>128) bear.dir*=-1; bear.w+=dt*2.6;
-  if(bear.t>1||!bear.zc){ bear.t=0; bear.zc=shoreZ(bear.x)-6; }
-  const bz=bear.zc; beasts.set(i++,['bear_0','bear_1','bear_0','bear_2'][Math.floor(bear.w)%4],bear.x,walkH(bear.x,bz)-.1,bz,2.3,bear.dir<0);
-  beasts.set(i++,'deer_a',deer.x,walkH(deer.x,deer.z)-.08,deer.z,2.6,(Math.sin(t*.04)>0));
-  beasts.commit();
+function place(A,x,z){ A.x=x; A.z=z; A.y=walkH(x,z); A.yaw=Math.random()*6.28; A.root.position.set(x,A.y,z); A.root.rotation.y=A.yaw; world.add(A.root); return A; }
+function setupBeasts(){
+  dog.A=place(makeDog(),dog.x,dog.z);
+  [[-34,0],[64,3],[-96,1]].forEach(([x,o])=>herons.push({A:place(makeHeron(),x,shoreZ(x)+o),t:Math.random()*9,mode:'stand',tx:0,tz:0}));
+  [[-8,54,9,.05,0],[-8,54,7.4,.05,.36],[-8,54,5.8,.05,.7],[92,64,14,.035,2]].forEach(([cx,cz,r,sp,ph])=>{ const A=makeDuck(); world.add(A.root); ducks.push({A,cx,cz,r,sp,ph,dip:0,t:Math.random()*9}); });
+  bear={A:place(makeBear(),96,shoreZ(96)-7),dir:-1,t:0,mode:'walk'};
+  [[-62,-38],[70,-50],[-118,-20]].forEach(([x,z])=>deers.push({A:place(makeDeer(),x,z),t:Math.random()*8,mode:'graze',hx:x,hz:z,tx:x,tz:z,yawV:0}));
+}
+// advance one walker toward (tx,tz); returns distance left
+function steer(A,tx,tz,speed,dt,turn=5){ const dx=tx-A.x, dz=tz-A.z, d=Math.hypot(dx,dz)||.001; const want=Math.atan2(dx,dz), y0=A.yaw; A.yaw=angDamp(A.yaw,want,turn,dt);
+  A.yawV=damp(A.yawV||0,((A.yaw-y0+Math.PI*3)%(Math.PI*2)-Math.PI)/Math.max(dt,.001),8,dt);
+  const face=Math.max(0,Math.cos(((want-A.yaw+Math.PI*3)%(Math.PI*2))-Math.PI)), v=speed*face;
+  const nx=A.x+Math.sin(A.yaw)*v*dt, nz=A.z+Math.cos(A.yaw)*v*dt; if(!inWater(nx,nz)){ A.x=nx; A.z=nz; } return d; }
+function settle(A,dt){ const h=walkH(A.x,A.z); A.y=damp(A.y,h,12,dt); A.root.position.set(A.x,A.y,A.z); A.root.rotation.y=A.yaw;
+  const k=1.1, f=walkH(A.x+Math.sin(A.yaw)*k,A.z+Math.cos(A.yaw)*k), b=walkH(A.x-Math.sin(A.yaw)*k,A.z-Math.cos(A.yaw)*k); A.root.rotation.x=damp(A.root.rotation.x,Math.atan2(b-f,2*k),8,dt); }
+function updateBeasts(dt,now){ if(!dog.A||S.inMine) return; const t=now*.001, A=dog.A, p=player.pos;
+  paintU.uPush.value.set(p.x,p.z,S.boating?.01:1.25,0); paintU.uPush2.value.set(dog.x,dog.z,.7,0);
+  if(S.boating){ dog.x=p.x+Math.sin(boatYaw)*1.5; dog.z=p.z+Math.cos(boatYaw)*1.5; A.x=dog.x; A.z=dog.z; A.yaw=boatYaw; A.y=p.y-.32; A.root.position.set(A.x,A.y,A.z); A.root.rotation.set(0,A.yaw,0); poseQuadruped(A,dt,{speed:0,sit:1,lookYaw:Math.sin(t*.3)*.6}); }
+  else { const hx=p.x-Math.sin(player.yaw)*1.4+Math.cos(player.yaw)*1.3, hz=p.z-Math.cos(player.yaw)*1.4-Math.sin(player.yaw)*1.3, d=Math.hypot(hx-dog.x,hz-dog.z), pd=Math.hypot(p.x-dog.x,p.z-dog.z);
+    if(d>3)dog.want=true; else if(d<1.1)dog.want=false;                          // a gap between go and stop, so it never dithers
+    if(pd>32){ dog.x=A.x=p.x-3; dog.z=A.z=p.z-2; A.y=walkH(A.x,A.z); }           // came back from the mine or the boat
+    const sp=dog.want?Math.min(9,Math.max(2.4,d*1.8)):0;
+    dog.still=sp>0?0:dog.still+dt; dog.excite=damp(dog.excite,player.moving?1:0,1.5,dt);
+    if(sp>0) steer(A,hx,hz,sp,dt,7); else A.yawV=damp(A.yawV||0,0,8,dt);
+    dog.x=A.x; dog.z=A.z; collide(A,.32); dog.x=A.x; dog.z=A.z;
+    const look=((Math.atan2(p.x-A.x,p.z-A.z)-A.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+    poseQuadruped(A,dt,{speed:sp,sit:dog.still>.8?1:0,lookYaw:look,excite:dog.excite}); settle(A,dt); if(dog.still>.3) A.root.rotation.x=damp(A.root.rotation.x,0,8,dt); }
+  for(const h of herons){ const B=h.A; h.t-=dt; let speed=0, peck=0;
+    if(h.mode==='stand'&&h.t<0){ const r=Math.random(); if(r<.5){ h.mode='peck'; h.t=1.6+Math.random()*1.6; } else { h.mode='walk'; h.tx=B.x+(Math.random()-.5)*14; h.tz=shoreZ(h.tx)+(Math.random()-.5)*2; h.t=9; } }
+    if(h.mode==='peck'){ peck=1; if(h.t<0){ h.mode='stand'; h.t=3+Math.random()*7; } }
+    if(h.mode==='walk'){ speed=.55; if(steer(B,h.tx,h.tz,speed,dt,3)<.5||h.t<0){ h.mode='stand'; h.t=4+Math.random()*7; } }
+    poseBird(B,dt,{speed,peck}); settle(B,dt); }
+  for(const d of ducks){ const a=(t*d.sp+d.ph)*6.283, x=d.cx+Math.cos(a)*d.r, z=d.cz+Math.sin(a)*d.r*.6, B=d.A; d.t-=dt; if(d.t<0){ d.dip=d.dip?0:1; d.t=d.dip?1.2:4+Math.random()*8; }
+    const dx=x-B.x, dz=z-B.z; if(dx||dz) B.yaw=angDamp(B.yaw,Math.atan2(dx,dz),3,dt); B.x=x; B.z=z; B.root.position.set(x,WATER_Y-.02+Math.sin(t*1.4+d.ph*6)*.012,z); B.root.rotation.y=B.yaw; B.body.rotation.x=d.dip?.5:0; poseBird(B,dt,{speed:0,peck:d.dip}); }
+  { const b=bear, A2=b.A; b.t-=dt; let sp=0;
+    if(b.mode==='walk'){ sp=1.2; const tx=A2.x+b.dir*6; steer(A2,tx,shoreZ(tx)-7,sp,dt,2); if(A2.x<58||A2.x>128){ b.dir*=-1; } if(b.t<0){ b.mode='rest'; b.t=5+Math.random()*8; } }
+    else if(b.t<0){ b.mode='walk'; b.t=14+Math.random()*16; }
+    const pd=Math.hypot(p.x-A2.x,p.z-A2.z); if(pd<70||pd>0){ poseQuadruped(A2,dt,{speed:sp,sit:0,graze:b.mode==='rest'?.5:0}); settle(A2,dt); } }
+  for(const d of deers){ const A3=d.A, pd=Math.hypot(p.x-A3.x,p.z-A3.z); d.t-=dt; let sp=0, gz=0;
+    if(pd<13&&d.mode!=='flee'){ d.mode='flee'; const k=22/pd; d.tx=A3.x+(A3.x-p.x)*k; d.tz=A3.z+(A3.z-p.z)*k; d.t=4; }
+    if(d.mode==='flee'){ sp=7.5; if(steer(A3,d.tx,d.tz,sp,dt,5)<1||d.t<0){ d.mode='alert'; d.t=3; } collide(A3,.5); }
+    else if(d.mode==='alert'){ if(d.t<0){ d.mode='graze'; d.t=5+Math.random()*8; } }
+    else if(d.mode==='graze'){ gz=1; if(d.t<0){ d.mode='wander'; d.tx=d.hx+(Math.random()-.5)*22; d.tz=d.hz+(Math.random()-.5)*22; d.t=8; } }
+    else { sp=1.3; if(steer(A3,d.tx,d.tz,sp,dt,3)<.6||d.t<0){ d.mode='graze'; d.t=5+Math.random()*9; } collide(A3,.5); }
+    poseQuadruped(A3,dt,{speed:sp,graze:gz}); settle(A3,dt); }
 }
 // the rowboat: board at the dock, row anywhere on the lake, fish from it, land at any shore
 let boat=null, boatHome=null, boatYaw=Math.PI/2, boatRock=0;
@@ -977,7 +1019,7 @@ function setupPost(){
 function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); }
 function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:'流畅',med:'均衡',high:'极致'}[QUAL]||QUAL); }
 
-const cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.Vector3();
+const camAim=new THREE.Vector3(0,0,4), cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.Vector3();
 let last=performance.now(), miniT=0, statusT=0, fCnt=0, fAcc=0, sTick=0;
 // frame governor: if a machine cannot hold its tier, step resolution and mirror rate down, quietly and for this session
 let govT=0, govN=0, govStep=0, govScale=1;
@@ -1009,11 +1051,15 @@ function frame(now){
   if(keys['KeyW']) moveV.add(cForward); if(keys['KeyS']) moveV.sub(cForward);
   if(keys['KeyA']) moveV.sub(cRight);   if(keys['KeyD']) moveV.add(cRight);
   if(touchMove.lengthSq()>0.01){ moveV.add(cForward.clone().multiplyScalar(-touchMove.y)); moveV.add(cRight.clone().multiplyScalar(touchMove.x)); }
-  player.moving=moveV.lengthSq()>0.001;
+  const wantMove=moveV.lengthSq()>0.001, wantSp=(S.running&&S.energy>0?7.2:4.2)*(S.energy>0?1:0.45)*(S.boating?.72:1);
+  if(wantMove) moveV.normalize().multiplyScalar(wantSp);
+  // weight: you ease into a run and take a step or two to stop
+  const accel=1-Math.exp(-dt*(wantMove?(S.boating?2.6:10):(S.boating?1.3:13)));
+  player.vel.x+=(moveV.x-player.vel.x)*accel; player.vel.z+=(moveV.z-player.vel.z)*accel;
+  player.speed=Math.hypot(player.vel.x,player.vel.z); player.moving=player.speed>.12;
   if(player.moving){
-    moveV.normalize(); const spd=(S.running&&S.energy>0?7.2:4.2)*(S.energy>0?1:0.45);
     const ox=player.pos.x, oz=player.pos.z;
-    player.pos.addScaledVector(moveV, spd*dt*(S.boating?.72:1));
+    player.pos.x+=player.vel.x*dt; player.pos.z+=player.vel.z*dt;
     if(S.boating){                                       // rowing: the lake is the floor and the land is the wall
       if(lakeField(player.pos.x,player.pos.z)<.012){ player.pos.x=ox; player.pos.z=oz; }
     } else if(!S.inMine){
@@ -1023,14 +1069,14 @@ function frame(now){
       }
       player.pos.x=clamp(player.pos.x,-210,210); player.pos.z=clamp(player.pos.z,-190,120);
     }
-    player.yaw=Math.atan2(moveV.x,moveV.z);
-    player.walkT+=dt*(S.running?15:10);
+    player.yaw=Math.atan2(player.vel.x,player.vel.z);
+    player.walkT+=player.speed*dt*2.7;
   }
   player.pos.y=S.inMine?0:S.boating?WATER_Y+.08+Math.sin(now*.0016)*.05:walkH(player.pos.x,player.pos.z);
   updateBoat(dt,now); updateBeasts(dt,now);
   if(S.inMine){ player.pos.x=clamp(player.pos.x,-14.5,14.5); player.pos.z=clamp(player.pos.z,-14.5,14.5); player.pos.y=0; }
   avatar.position.copy(player.pos);
-  avatar.rotation.y = lerpAngle(avatar.rotation.y, player.yaw, 0.2);
+  avatar.rotation.y=angDamp(avatar.rotation.y,player.yaw,S.boating?4:13,dt);
   animateWalk(dt);
 
   // third-person camera
@@ -1041,7 +1087,8 @@ function frame(now){
     player.pos.z - Math.cos(cam.yaw)*cam.dist*cs);
   if(!S.inMine){ const gy=terrainH(camPos.x,camPos.z)+.7; if(camPos.y<gy) camPos.y=gy; }   // never dip under a slope
   camera.position.lerp(camPos,DBG?1:1-Math.pow(.0001,dt));
-  camera.lookAt(player.pos.x, player.pos.y+(cam.look||1.5), player.pos.z);
+  camAim.x=DBG?player.pos.x:damp(camAim.x,player.pos.x,14,dt); camAim.y=DBG?player.pos.y:damp(camAim.y,player.pos.y,9,dt); camAim.z=DBG?player.pos.z:damp(camAim.z,player.pos.z,14,dt);
+  camera.lookAt(camAim.x, camAim.y+(cam.look||1.5), camAim.z);
 
   if((sTick&1)===0) updateTarget();
   // selector pulse
@@ -1050,6 +1097,7 @@ function frame(now){
   // proximity hints
   hintProximity();
 
+  updateFlora(camera.position);
   statusT+=dt; if(statusT>.3){ renderStatus(); statusT=0; }
   miniT+=dt; if(miniT>0.25){ drawMini(); miniT=0; }
   governor(raw);
@@ -1061,20 +1109,21 @@ function frame(now){
 function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI; if(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
 function animateWalk(dt){
   if(!avatar) return;
-  if(charIsGLB){ // real twinkle model — bob + gentle sway
-    const s=Math.sin(player.walkT);
-    const bob=player.moving?Math.abs(Math.cos(player.walkT))*0.1:Math.sin(performance.now()*0.002)*0.03;
-    if(charHolder){ charHolder.position.y=bob; charHolder.rotation.z=player.moving?s*0.06:0; }
-    return;
-  }
+  const v=player.speed, g=Math.min(1,v/4.2), run=Math.max(0,(v-4.4)/2.8), P=player.walkT;
+  walkU.uAmp.value=damp(walkU.uAmp.value,S.boating?0:g,12,dt); walkU.uPhase.value=P; walkU.uRow.value=damp(walkU.uRow.value,S.boating&&player.moving?1:0,6,dt);
+  if(charIsGLB&&charHolder){ const breath=Math.sin(performance.now()*.0021), step=Math.abs(Math.sin(P));
+    charHolder.position.y=S.boating?-.22:step*.075*g+breath*.006*(1-g);
+    charHolder.rotation.x=g*.1+run*.1;                                         // lean into the walk, harder at a run
+    charHolder.rotation.z=Math.sin(P)*.055*g;                                  // toddler's waddle
+    charHolder.rotation.y=charYaw+Math.sin(P)*.09*g;
+    const sq=Math.cos(P*2)*.022*g; charHolder.scale.set(1-sq,1+sq+breath*.004*(1-g),1-sq);
+    return; }
   if(!legL) return;
-  const amt=player.moving?1:0; const s=Math.sin(player.walkT), c=Math.cos(player.walkT);
+  const amt=player.moving?1:0, s=Math.sin(P), c=Math.cos(P);
   legL.rotation.x=lerp(legL.rotation.x, s*0.7*amt, 0.3); legR.rotation.x=lerp(legR.rotation.x,-s*0.7*amt,0.3);
   armL.rotation.x=lerp(armL.rotation.x,-s*0.6*amt,0.3); armR.rotation.x=lerp(armR.rotation.x, s*0.6*amt,0.3);
-  const bob=player.moving?Math.abs(c)*0.08:Math.sin(performance.now()*0.002)*0.03;
-  if(headG) headG.position.y=1.75+bob;
+  if(headG) headG.position.y=1.75+(player.moving?Math.abs(c)*0.08:Math.sin(performance.now()*0.002)*0.03);
 }
-const sunDirL=new THREE.Vector3();
 function dayNight(t,dt){
   if(S.inMine) return;                              // the mine keeps its own dark lighting
   const R=updateScenery(t,dt,S.time,S.weather,camera,player,S.day%9===4); lastRig=R;
@@ -1195,25 +1244,13 @@ function openDialogue(n){ modal(LANG==='zh'?n.nm.zh:n.nm.en, body=>{
 let animals=[], coopStash={egg:0,milk:0};
 function buildCoop(){ logHouse({world,x:COOP.x,z:COOP.z,w:5,d:3.6,h:2,rh:1.5,porch:false,chimney:false,wins:1});
   const a=COOP.x-6,b=COOP.x+6,c=COOP.z+2.4,d=COOP.z+10; fenceRun(world,[[a,c],[a,d],[b,d],[b,c]]); }
-function makeChicken(){ const g=new THREE.Group(); const wht=new THREE.MeshStandardMaterial({color:0xf4efe6,roughness:0.7});
-  const body=new THREE.Mesh(new THREE.SphereGeometry(0.28,12,10),wht); body.position.y=0.3; body.scale.z=1.2;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,8),wht); head.position.set(0,0.55,0.18);
-  const comb=new THREE.Mesh(new THREE.SphereGeometry(0.07,6,6), new THREE.MeshStandardMaterial({color:0xe04040})); comb.position.set(0,0.68,0.18);
-  const beak=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.14,6), new THREE.MeshStandardMaterial({color:0xf0a030})); beak.rotation.x=Math.PI/2; beak.position.set(0,0.54,0.35);
-  g.add(body,head,comb,beak); g.traverse(o=>o.castShadow=true); return g; }
-function makeCow(){ const g=new THREE.Group(); const wht=new THREE.MeshStandardMaterial({color:0xf2efe8,roughness:0.75});
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.7,0.6),wht); body.position.y=0.75;
-  for(const sx of [-0.4,0.4]) for(const sz of [-0.2,0.2]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.5,6), new THREE.MeshStandardMaterial({color:0x3a2f28})); leg.position.set(sx,0.25,sz); g.add(leg); }
-  const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),wht); head.position.set(0.6,0.85,0);
-  const spot=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,6), new THREE.MeshStandardMaterial({color:0x2a2622})); spot.position.set(-0.2,1.0,0.2); spot.scale.set(1,0.5,1);
-  g.add(body,head,spot); g.traverse(o=>o.castShadow=true); return g; }
-function spawnAnimal(type){ const m=type==='cow'?makeCow():makeChicken(); const x=COOP.x+(Math.random()-.5)*6, z=COOP.z+6+(Math.random()-.5)*5; m.position.set(x,terrainH(x,z),z); world.add(m);
-  animals.push({type,mesh:m,x,z,tgt:{x,z},wait:Math.random()*3}); }
+function spawnAnimal(type){ const A=type==='cow'?makeCow():makeChicken(); const x=COOP.x+(Math.random()-.5)*8, z=COOP.z+6+(Math.random()-.5)*5; place(A,x,z);
+  animals.push({type,A,tx:x,tz:z,wait:Math.random()*3,feed:0}); }
 function updateAnimals(dt){ if(S.inMine) return;
-  for(const a of animals){ const dx=a.tgt.x-a.x, dz=a.tgt.z-a.z, d=Math.hypot(dx,dz);
-    if(d<0.3){ a.wait-=dt; if(a.wait<=0){ a.tgt={x:COOP.x+(Math.random()-.5)*7,z:COOP.z+6+(Math.random()-.5)*5}; a.wait=2+Math.random()*4; } }
-    else { const sp=(a.type==='cow'?0.8:1.2)*dt/d; a.x+=dx*sp; a.z+=dz*sp; a.mesh.rotation.y=Math.atan2(dx,dz); }
-    a.mesh.position.set(a.x, terrainH(a.x,a.z), a.z); }
+  for(const a of animals){ const A=a.A, cow=a.type==='cow'; let sp=0, feed=0;
+    if(a.wait>0){ a.wait-=dt; feed=a.feed; if(a.wait<=0){ a.tx=COOP.x+(Math.random()-.5)*9.5; a.tz=COOP.z+6.4+(Math.random()-.5)*5.6; } }
+    else { sp=cow?1.1:.8; if(steer(A,a.tx,a.tz,sp,dt,4)<.3){ a.wait=2+Math.random()*5; a.feed=Math.random()<.65?1:0; } }
+    if(cow) poseQuadruped(A,dt,{speed:sp,graze:feed}); else poseBird(A,dt,{speed:sp,peck:feed&&Math.sin(performance.now()*.012+A.x)>0?1:0}); settle(A,dt); }
 }
 function animalsProduce(){ for(const a of animals){ if(a.type==='cow') coopStash.milk++; else coopStash.egg++; } }
 function openCoop(){ modal(L('🐔 鸡舍 / 牧场','🐔 Coop & Barn'), body=>{
@@ -1392,7 +1429,7 @@ async function boot(){
   $('#loadsub').textContent=t('gen');
   $('#loadsub').textContent='正在铺开湖谷 · painting the valley…';
   await loadScenery(p=>setProgress(5+p*35)); setProgress(42);
-  buildScenery(world,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
+  buildScenery(world,QUAL); setupFlora(world,plantedTrees,plantedPlants,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
   buildRain(); buildCritters(); buildFireflies(); buildPetals();
   buildFarmstead(); buildTown(); buildCoop(); buildMine(); buildNPCs(); boat=buildDock(world); buildSmoke(world); setupBeasts(); setProgress(70);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(84);
@@ -1417,7 +1454,7 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={S,player,cam,camera,renderer,setSeason,keys,NPCS,interact,useTool,toggleBoat,tryFish,fishPress,saveGame,loadGame,sleep,enterMine,leaveMine,mineSwing,descendMine,openShop,openCraft,openCoop,openCook,openBlacksmith,openDialogue,advanceDay,placeCraftable,harvest,invAdd,invCount,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH};
+  window.__sv={S,player,cam,camera,renderer,setSeason,keys,scene,NPCS,interact,useTool,toggleBoat,tryFish,fishPress,saveGame,loadGame,sleep,enterMine,leaveMine,mineSwing,descendMine,openShop,openCraft,openCoop,openCook,openBlacksmith,openDialogue,advanceDay,placeCraftable,harvest,invAdd,invCount,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH};
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
 boot();
