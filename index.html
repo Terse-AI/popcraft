@@ -180,7 +180,7 @@ import { N8AOPostPass } from 'n8ao';
 import {
   EffectComposer, RenderPass, EffectPass,
   BloomEffect, SMAAEffect, VignetteEffect, ToneMappingEffect, ToneMappingMode,
-  DepthOfFieldEffect, BlendFunction
+  DepthOfFieldEffect, BrightnessContrastEffect, HueSaturationEffect, GodRaysEffect, KernelSize, BlendFunction, Effect
 } from 'postprocessing';
 
 /* ======================================================================
@@ -342,6 +342,9 @@ sun.shadow.camera.near = 1; sun.shadow.camera.far = 180;
 const sc = 48; Object.assign(sun.shadow.camera,{left:-sc,right:sc,top:sc,bottom:-sc});
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun); scene.add(sun.target);
+// bright sun disc (god-ray source in 极致; hidden otherwise)
+const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(7,20,16), new THREE.MeshBasicMaterial({color:0xfff4d6}));
+sunMesh.frustumCulled=false; sunMesh.visible=false; scene.add(sunMesh);
 const hemi = new THREE.HemisphereLight(0xbfe0ff, 0x4a6b3a, 0.55);
 scene.add(hemi);
 
@@ -580,6 +583,36 @@ function buildPond(){
 }
 let pondMini=null, waterMat=null;
 
+/* ---- Cast-n-Chill scenery: cozy dock + reeds + lily pads + layered distant mountains ---- */
+function buildScenery(){
+  const PX=-24, PZ=20;                               // pond centre
+  // wooden dock reaching into the pond from the near shore
+  const dock=new THREE.Group();
+  const plankMat=new THREE.MeshStandardMaterial({color:0x8a5a34,roughness:0.9});
+  const postMat=new THREE.MeshStandardMaterial({color:0x5a3f28,roughness:0.95});
+  for(let i=0;i<6;i++){ const pl=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,0.5),plankMat); pl.position.set(0,0.2,i*0.56); pl.castShadow=true; pl.receiveShadow=true; dock.add(pl); }
+  [[-1,0],[1,0],[-1,2.8],[1,2.8]].forEach(p=>{ const po=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,1.0,7),postMat); po.position.set(p[0],-0.1,p[1]); po.castShadow=true; dock.add(po); });
+  dock.position.set(PX, 0.0, PZ+6.4); world.add(dock);
+  // a little lantern post at the dock end (cozy)
+  const lamp=new THREE.Group(); const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.3,6),postMat); pole.position.y=0.65; lamp.add(pole);
+  const glow=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,8), new THREE.MeshStandardMaterial({color:0xffd27a,emissive:0xffa028,emissiveIntensity:1.6})); glow.position.y=1.35; lamp.add(glow); lamp.add(new THREE.PointLight(0xffb857,5,9).translateY(1.35));
+  lamp.position.set(PX+1.2,0,PZ+3.8); lamp.traverse(o=>{if(o.isMesh)o.castShadow=true;}); world.add(lamp);
+  // cattail reeds around the shoreline
+  const reedMat=new THREE.MeshStandardMaterial({color:0x5f8f4a,roughness:0.8}), tipMat=new THREE.MeshStandardMaterial({color:0x7a4a28,roughness:0.8});
+  for(let i=0;i<40;i++){ const a=Math.random()*6.28, r=6.0+Math.random()*1.4, x=PX+Math.cos(a)*r, z=PZ+Math.sin(a)*r;
+    const h=0.8+Math.random()*0.7; const st=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.035,h,5),reedMat); st.position.set(x,h/2,z); st.rotation.z=(Math.random()-.5)*0.3; st.castShadow=true; world.add(st);
+    if(Math.random()<0.6){ const tip=new THREE.Mesh(new THREE.CapsuleGeometry(0.05,0.18,3,6),tipMat); tip.position.set(x,h+0.05,z); world.add(tip); } }
+  // lily pads floating on the water
+  const padMat=new THREE.MeshStandardMaterial({color:0x4f9a52,roughness:0.6,side:THREE.DoubleSide});
+  for(let i=0;i<7;i++){ const a=Math.random()*6.28, r=Math.random()*4.2, pad=new THREE.Mesh(new THREE.CircleGeometry(0.35+Math.random()*0.25,12,0.5,5.8),padMat);
+    pad.rotation.x=-Math.PI/2; pad.position.set(PX+Math.cos(a)*r,0.09,PZ+Math.sin(a)*r); world.add(pad);
+    if(Math.random()<0.4){ const fl=new THREE.Mesh(new THREE.IcosahedronGeometry(0.08,0),new THREE.MeshStandardMaterial({color:0xffc0d6,roughness:0.6})); fl.position.set(pad.position.x,0.14,pad.position.z); world.add(fl);} }
+  // layered distant mountain ridges (silhouette depth, like Cast-n-Chill backdrops)
+  const mtnMat=new THREE.MeshStandardMaterial({color:0x5b6b72,roughness:1,metalness:0});
+  for(let i=0;i<10;i++){ const a=i/10*6.28+0.3, R=118+Math.random()*26, h=22+Math.random()*26, rad=34+Math.random()*22;
+    const m=new THREE.Mesh(new THREE.ConeGeometry(rad,h,6,1), mtnMat); m.position.set(Math.cos(a)*R, h/2-6, Math.sin(a)*R); m.rotation.y=Math.random()*6; world.add(m); }
+}
+
 /* farm structures: cottage, bed, shop stall, shipping bin ----------- */
 const BED={x:3,z:-9}, SHOP={x:-6,z:-10}, BIN={x:8,z:-4};
 function makeCottage(){
@@ -643,31 +676,90 @@ function refreshTileMesh(x,z){
 }
 
 /* crop stage mesh */
+const CROP_FORM={parsnip:'root',radish:'root',potato:'tuber',yam:'tuber',cauliflower:'head',kale:'head',
+ tomato:'fruiting',pepper:'fruiting',eggplant:'fruiting',strawberry:'berry',blueberry:'berry',cranberry:'berry',
+ pumpkin:'vine',melon:'vine',grape:'vine',corn:'grain',wheat:'grain'};
+function _lmat(col){ return new THREE.MeshStandardMaterial({color:col,roughness:0.55,metalness:0,side:THREE.DoubleSide}); }
+function _leaf(mat,len,wid){ const geo=new THREE.SphereGeometry(1,8,5); geo.scale(wid,len,0.04); geo.translate(0,len,0); return new THREE.Mesh(geo,mat); }
+// detailed, distinct per-crop plant model (used in-field AND rendered to the shop/inventory icons)
 function cropMesh(id,stage,days){
-  const c=CROPS[id]; const g=new THREE.Group();
-  const frac=stage/days;
-  const stemMat=new THREE.MeshStandardMaterial({color:c.col,roughness:0.75,flatShading:true});
-  if(stage<=1){ // sprout
-    const s=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.25,5),stemMat); s.position.y=0.18; g.add(s);
-  } else {
-    const h=0.3+frac*0.8;
-    const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,h,6),stemMat); stem.position.y=h/2+0.06; g.add(stem);
-    const leaves=2+Math.floor(frac*3);
-    for(let i=0;i<leaves;i++){ const lf=new THREE.Mesh(new THREE.IcosahedronGeometry(0.12+frac*0.08,0),stemMat);
-      lf.position.set(Math.cos(i*2.1)*0.14,0.2+i*(h/leaves),Math.sin(i*2.1)*0.14); lf.scale.y=0.5; g.add(lf);}
-    if(stage>=days){ // ripe fruit
-      const fruitMat=new THREE.MeshStandardMaterial({color:c.fruit,roughness:0.5,metalness:0.05,flatShading:true});
-      for(let i=0;i<3;i++){ const fr=new THREE.Mesh(new THREE.IcosahedronGeometry(0.15,0),fruitMat);
-        fr.position.set(Math.cos(i*2.2)*0.16,0.18+Math.random()*h*0.6,Math.sin(i*2.2)*0.16); g.add(fr);}
-    }
+  const c=CROPS[id], form=CROP_FORM[id]||'fruiting', g=new THREE.Group();
+  const frac=clamp(stage/days,0,1), ripe=stage>=days;
+  const lm=_lmat(c.col), lm2=_lmat(new THREE.Color(c.col).multiplyScalar(0.78).getHex());
+  const fm=new THREE.MeshStandardMaterial({color:c.fruit,roughness:0.4,metalness:0.03});
+  if(stage<=1){ const st=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.03,0.1,5),lm); st.position.y=0.05; g.add(st);
+    const a=_leaf(lm,0.1,0.05); a.position.y=0.08; a.rotation.z=0.6; g.add(a); const b=_leaf(lm,0.1,0.05); b.position.y=0.08; b.rotation.z=-0.6; g.add(b);
+    g.scale.setScalar(0.6+frac*0.5); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g; }
+  const sc=0.55+frac*0.6;
+  if(form==='root'||form==='tuber'){
+    const n=5+Math.floor(frac*4);
+    for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(form==='root'?lm:lm2,0.3+frac*0.22,0.045+frac*0.03);
+      l.position.set(Math.cos(a)*0.05,0.12,Math.sin(a)*0.05); l.rotation.y=a; l.rotation.z=0.95-frac*0.35; g.add(l); }
+    if(ripe){ const root=new THREE.Mesh(new THREE.SphereGeometry(0.12,12,10),fm); root.scale.set(1,form==='root'?1.6:1.1,1); root.position.y=0.04; g.add(root);
+      if(form==='tuber'){ for(let i=0;i<3;i++){ const tbr=new THREE.Mesh(new THREE.SphereGeometry(0.09,10,8),fm); tbr.position.set((Math.random()-.5)*0.22,0.04,(Math.random()-.5)*0.22); tbr.scale.y=0.85; g.add(tbr);} } }
+  } else if(form==='head'){
+    const n=8; for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(lm2,0.26+frac*0.18,0.14+frac*0.06); l.position.set(Math.cos(a)*0.12,0.06,Math.sin(a)*0.12); l.rotation.y=a; l.rotation.z=0.75; g.add(l);}
+    const ball=new THREE.Mesh(new THREE.IcosahedronGeometry(0.1+frac*0.11,1), id==='kale'?lm:fm); ball.position.y=0.16+frac*0.08; if(id==='kale')ball.scale.y=0.7; g.add(ball);
+  } else if(form==='fruiting'){
+    const h=0.3+frac*0.7; const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.04,h,6),lm2); stem.position.y=h/2; g.add(stem);
+    const nl=3+Math.floor(frac*4); for(let i=0;i<nl;i++){ const l=_leaf(lm,0.15,0.09); l.position.y=0.14+i*(h/nl); l.rotation.y=i*1.35; l.rotation.z=0.35; g.add(l);}
+    if(frac>0.6){ const nf=1+Math.floor(frac*3); for(let i=0;i<nf;i++){ let fr;
+      if(id==='pepper'){ fr=new THREE.Mesh(new THREE.ConeGeometry(0.055,0.2,8),fm); fr.rotation.x=Math.PI; }
+      else if(id==='eggplant'){ fr=new THREE.Mesh(new THREE.SphereGeometry(0.08,12,10),fm); fr.scale.set(0.8,1.6,0.8); }
+      else { fr=new THREE.Mesh(new THREE.SphereGeometry(0.095,14,12),fm); }
+      const a=i/nf*6.28; fr.position.set(Math.cos(a)*0.1,0.2+Math.random()*h*0.5,Math.sin(a)*0.1); g.add(fr);} }
+  } else if(form==='berry'){
+    const n=5+Math.floor(frac*3); for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(lm,0.14,0.08); l.position.set(Math.cos(a)*0.1,0.05,Math.sin(a)*0.1); l.rotation.y=a; l.rotation.z=1.0; g.add(l);}
+    if(frac>0.55){ const nb=3+Math.floor(frac*4); for(let i=0;i<nb;i++){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.045,10,8),fm); b.position.set((Math.random()-.5)*0.24,0.07+Math.random()*0.07,(Math.random()-.5)*0.24); g.add(b);} }
+  } else if(form==='vine'){
+    const n=6; for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(lm2,0.2,0.16); l.position.set(Math.cos(a)*0.18,0.03,Math.sin(a)*0.18); l.rotation.y=a; l.rotation.z=1.3; g.add(l);}
+    if(ripe){ let fr; if(id==='grape'){ fr=new THREE.Group(); for(let i=0;i<12;i++){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),fm); b.position.set((Math.random()-.5)*0.14,-Math.random()*0.14,(Math.random()-.5)*0.14); fr.add(b);} fr.position.y=0.2; }
+      else { fr=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),fm); if(id==='pumpkin'){ fr.scale.set(1,0.78,1);} fr.position.y=0.15; } g.add(fr); }
+  } else if(form==='grain'){
+    const stalks=3+Math.floor(frac*3), sm=_lmat(ripe?0xd8c25a:c.col);
+    for(let i=0;i<stalks;i++){ const h=0.5+frac*0.8, a=i/stalks*6.28; const st=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.025,h,5),sm); st.position.set(Math.cos(a)*0.08,h/2,Math.sin(a)*0.08); st.rotation.z=(Math.random()-.5)*0.2; g.add(st);
+      if(id==='corn'&&ripe){ const cob=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.045,0.2,8),fm); cob.position.set(st.position.x,h*0.65,st.position.z); g.add(cob); }
+      if(id==='wheat'&&frac>0.6){ const hd=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.18,6),fm); hd.position.set(st.position.x,h+0.04,st.position.z); g.add(hd); } }
   }
-  g.traverse(o=>{o.castShadow=true;}); return g;
+  g.scale.setScalar(sc); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g;
 }
 function rebuildCrop(x,z){
   const tl=getTile(x,z); const old=cropGroup.children.find(m=>m.userData.cell&&m.userData.cell.x===x&&m.userData.cell.z===z);
   if(old) cropGroup.remove(old);
   if(tl&&tl.crop){ const m=cropMesh(tl.crop.id,tl.crop.stage,CROPS[tl.crop.id].days); m.position.set(x,0.12,z); m.userData.cell={x,z}; cropGroup.add(m); }
 }
+
+/* ---- render each crop's 3D model to a transparent icon (shop/inventory/hotbar) ---- */
+const ICONS={};
+function renderIcons(){
+  const SZ=160, rt=new THREE.WebGLRenderTarget(SZ,SZ);   // no MSAA: readRenderTargetPixels must resolve per-crop
+  const isc=new THREE.Scene(); isc.environment=scene.environment;
+  const icam=new THREE.PerspectiveCamera(32,1,0.05,30);
+  const key=new THREE.DirectionalLight(0xffffff,2.6); key.position.set(2.5,4,3); isc.add(key);
+  isc.add(new THREE.HemisphereLight(0xffffff,0x6b7a5a,0.7));
+  const cv=document.createElement('canvas'); cv.width=cv.height=SZ; const ctx=cv.getContext('2d');
+  const buf=new Uint8Array(SZ*SZ*4);
+  const prevRT=renderer.getRenderTarget(), prevA=renderer.getClearAlpha(), prevCC=new THREE.Color(); renderer.getClearColor(prevCC);
+  const prevTM=renderer.toneMapping, prevExp=renderer.toneMappingExposure;
+  renderer.toneMapping=THREE.AgXToneMapping; renderer.toneMappingExposure=1.0;   // same filmic grade as the world
+  renderer.setClearColor(0x000000,0); renderer.setRenderTarget(rt);
+  for(const id in CROPS){
+    const m=cropMesh(id,CROPS[id].days,CROPS[id].days);
+    const box=new THREE.Box3().setFromObject(m), ctr=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
+    m.position.sub(ctr); isc.add(m);
+    const rad=Math.max(sz.x,sz.y,sz.z)||0.5, d=rad*2.3;
+    icam.position.set(d*0.55,d*0.45,d); icam.lookAt(0,0,0);
+    renderer.clear(); renderer.render(isc,icam);
+    renderer.readRenderTargetPixels(rt,0,0,SZ,SZ,buf);
+    const img=ctx.createImageData(SZ,SZ);
+    for(let y=0;y<SZ;y++){ const sy=SZ-1-y; for(let x=0;x<SZ;x++){ const si=(sy*SZ+x)*4,di=(y*SZ+x)*4; img.data[di]=buf[si];img.data[di+1]=buf[si+1];img.data[di+2]=buf[si+2];img.data[di+3]=buf[si+3]; } }
+    ctx.clearRect(0,0,SZ,SZ); ctx.putImageData(img,0,0); ICONS[id]=cv.toDataURL('image/png'); isc.remove(m);
+  }
+  renderer.setRenderTarget(prevRT); renderer.setClearColor(prevCC,prevA); renderer.toneMapping=prevTM; renderer.toneMappingExposure=prevExp; rt.dispose();
+}
+function itemIcon(kind,id,px){ px=px||28;
+  if((kind==='seed'||kind==='crop')&&ICONS[id]) return '<img src="'+ICONS[id]+'" style="width:'+px+'px;height:'+px+'px;object-fit:contain;display:inline-block;vertical-align:middle">';
+  return metaOf(kind,id).em; }
 
 /* ============================ CHARACTER ============================ */
 const player={ pos:new THREE.Vector3(0,0,4), yaw:0, vel:new THREE.Vector3(), moving:false, walkT:0 };
@@ -923,7 +1015,7 @@ function renderHotbar(){
     s.onclick=()=>{S.tool=i;S.heldSeed=null;S.heldPlace=null;renderHotbar();}; hot.appendChild(s); }
   // held item slot (seed or placeable)
   const hs=document.createElement('div'); hs.className='slot'+((S.heldSeed||S.heldPlace)?' on':'');
-  if(S.heldSeed){ hs.innerHTML='<span class="em">'+CROPS[S.heldSeed].em+'</span><span class="nm">'+cropName(S.heldSeed)+'</span><span class="cnt">'+invCount('seed',S.heldSeed)+'</span>'; }
+  if(S.heldSeed){ hs.innerHTML='<span class="em">'+itemIcon('seed',S.heldSeed,24)+'</span><span class="nm">'+cropName(S.heldSeed)+'</span><span class="cnt">'+invCount('seed',S.heldSeed)+'</span>'; }
   else if(S.heldPlace){ const mt=metaOf('craft',S.heldPlace); hs.innerHTML='<span class="em">'+mt.em+'</span><span class="nm">'+mt.name+'</span><span class="cnt">'+invCount('craft',S.heldPlace)+'</span>'; }
   else { hs.innerHTML='<span class="em" style="opacity:.3">🌰</span><span class="nm" style="opacity:.5">'+t('seedsuf')+'</span>'; }
   hs.onclick=openInv; hot.appendChild(hs);
@@ -937,7 +1029,7 @@ function openShop(){
   closeAll(); const g=$('#shopg'); g.innerHTML='';
   for(const id in CROPS){ const c=CROPS[id]; if(c.season.indexOf(S.season)<0) continue;
     const b=document.createElement('div'); b.className='buy'+(S.gold<c.seed?' dim':'');
-    b.innerHTML='<div class="em">'+c.em+'</div><div class="nm">'+cropName(id)+'</div><div class="pr">'+c.seed+'g</div>';
+    b.innerHTML='<div class="em">'+itemIcon('seed',id,34)+'</div><div class="nm">'+cropName(id)+'</div><div class="pr">'+c.seed+'g</div>';
     b.onclick=()=>{ if(S.gold<c.seed){toast(t('nomoney'));return;} S.gold-=c.seed; invAdd('seed',id,1); renderStatus(); toast(t('buy')+cropName(id)); openShop(); };
     g.appendChild(b); }
   $('#shop').classList.remove('hidden');
@@ -950,7 +1042,7 @@ function openInv(){
     const mt=metaOf(kind,id);
     const sub = kind==='craft' ? ('×'+n+' · '+t('place')) : kind==='food' ? ('×'+n+' · '+L('食用','eat')+' ⚡'+FOOD[id].energy) : (mt.price?('×'+n+' · '+mt.price+'g'):('×'+n));
     const b=document.createElement('div'); b.className='buy';
-    b.innerHTML='<div class="em">'+mt.em+'</div><div class="nm">'+mt.name+'</div><div class="pr">'+sub+'</div>';
+    b.innerHTML='<div class="em">'+itemIcon(kind,id,34)+'</div><div class="nm">'+mt.name+'</div><div class="pr">'+sub+'</div>';
     if(kind==='seed'){ b.onclick=()=>{ S.heldSeed=id; S.heldPlace=null; renderHotbar(); closeAll(); toast(t('hold')+cropName(id)); }; }
     else if(kind==='craft'){ b.onclick=()=>{ S.heldPlace=id; S.heldSeed=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); }; }
     else if(kind==='food'){ b.onclick=()=>{ eat(id); openInv(); }; }
@@ -1007,38 +1099,54 @@ function drawMini(){
 
 /* ============================ LOOP ============================ */
 let composer, aoPass, dofEffect;
+// warm "cozy" colour grade (Cast-n-Chill feel): amber multiply + gentle radial falloff
+class WarmGrade extends Effect {
+  constructor(){ super('WarmGrade',
+    'uniform vec3 tint; uniform float amt;\n'+
+    'void mainImage(const in vec4 c, const in vec2 uv, out vec4 o){\n'+
+    '  vec3 col=c.rgb;\n'+
+    '  col = mix(col, col*tint, amt);\n'+
+    '  float d=distance(uv,vec2(0.5));\n'+
+    '  col *= 1.0 - d*d*0.16;\n'+
+    '  o=vec4(col,c.a);\n'+
+    '}',
+    { uniforms:new Map([['tint',new THREE.Uniform(new THREE.Color(1.12,1.0,0.82))],['amt',new THREE.Uniform(0.55)]]) }); }
+}
 let QUAL = localStorage.getItem('sv_qual')||'med';
-// default (med) stays AO/DOF-free so it holds ~60fps even on throttled hardware;
-// N8AO is opt-in via 极致 for stronger GPUs.
-const QSET={ low:{dpr:0.85,shadow:1024,ao:false,aoHalf:true,dof:false},
-            med:{dpr:1.0,shadow:1024,ao:false,aoHalf:true,dof:false},   // DEFAULT = the config that held 60fps
-            high:{dpr:1.3,shadow:2048,ao:true,aoHalf:true,dof:false} };
+// low = fast path (no post, max fps). med = cinematic post (bloom+grade+vignette, no AO).
+// high = + N8AO contact shadows + volumetric god rays.
+const QSET={ low:{dpr:0.9,shadow:1024,post:false,ao:false,god:false},
+            med:{dpr:1.0,shadow:1536,post:true,ao:false,god:false},
+            high:{dpr:1.3,shadow:2048,post:true,ao:true,god:true} };
 function setupPost(){
   const q=QSET[QUAL]||QSET.med;
   renderer.setPixelRatio(Math.min(devicePixelRatio,q.dpr));
   sun.shadow.mapSize.set(q.shadow,q.shadow); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
   renderer.shadowMap.needsUpdate=true;
+  if(sunMesh) sunMesh.visible=!!q.god;
   if(composer){ composer.dispose(); composer=null; }
-  if(!q.ao){
-    // FAST PATH: no composer — native AgX tonemap + MSAA. Far cheaper (skips ~4 fullscreen passes).
+  if(!q.post){
+    // FAST PATH: no composer — native AgX tonemap + MSAA.
     aoPass=null; dofEffect=null;
     renderer.toneMapping=THREE.AgXToneMapping; renderer.toneMappingExposure=1.0;
     return;
   }
-  // QUALITY PATH: EffectComposer with N8AO + bloom + AgX + DOF
+  // CINEMATIC PATH
   renderer.toneMapping=THREE.NoToneMapping;
   composer=new EffectComposer(renderer,{ frameBufferType:THREE.HalfFloatType });
   composer.addPass(new RenderPass(scene,camera));
-  aoPass=new N8AOPostPass(scene,camera,innerWidth,innerHeight);
-  aoPass.configuration.aoRadius=1.3; aoPass.configuration.distanceFalloff=1.0; aoPass.configuration.intensity=2.6;
-  aoPass.configuration.halfRes=q.aoHalf;
-  try{ aoPass.setQualityMode('Medium'); }catch(e){}
-  composer.addPass(aoPass);
-  const fx=[ new BloomEffect({ intensity:0.5, luminanceThreshold:0.8, luminanceSmoothing:0.3, mipmapBlur:true, radius:0.58 }) ];
-  if(q.dof){ dofEffect=new DepthOfFieldEffect(camera,{ worldFocusDistance:8, worldFocusRange:10, bokehScale:2.0, resolutionScale:0.6 }); fx.push(dofEffect); } else dofEffect=null;
+  if(q.ao){ aoPass=new N8AOPostPass(scene,camera,innerWidth,innerHeight);
+    aoPass.configuration.aoRadius=1.3; aoPass.configuration.distanceFalloff=1.0; aoPass.configuration.intensity=2.4; aoPass.configuration.halfRes=true;
+    try{ aoPass.setQualityMode('Medium'); }catch(e){} composer.addPass(aoPass); } else aoPass=null;
+  const fx=[ new BloomEffect({ intensity:0.62, luminanceThreshold:0.72, luminanceSmoothing:0.35, mipmapBlur:true, radius:0.72 }) ];
+  if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
+  fx.push(new HueSaturationEffect({ saturation:0.1 }));
+  fx.push(new BrightnessContrastEffect({ brightness:0.04, contrast:0.05 }));  // soft, airy, lifted shadows
+  fx.push(new WarmGrade());                                                   // cozy amber cast
   fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
-  fx.push(new VignetteEffect({ eskil:false, offset:0.32, darkness:0.46 }));
+  fx.push(new VignetteEffect({ eskil:false, offset:0.3, darkness:0.5 }));
   fx.push(new SMAAEffect());
+  dofEffect=null;
   composer.addPass(new EffectPass(camera, ...fx));
 }
 function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); }
@@ -1128,15 +1236,17 @@ function dayNight(){
   const ang=tt*Math.PI;                            // 0..PI across sky
   sun.position.set(player.pos.x+Math.cos(ang)*55, Math.max(14,Math.sin(ang)*82), player.pos.z+28);
   sun.target.position.copy(player.pos); sun.target.updateMatrixWorld();
+  if(sunMesh.visible){ const dir=sun.position.clone().sub(player.pos).normalize(); sunMesh.position.copy(player.pos).addScaledVector(dir,360).setY(Math.max(30,player.pos.y+dir.y*360)); }
   const noon=Math.sin(ang);
-  sun.intensity=clamp(noon*2.6+0.5,0.35,3.1)*weatherDim;
-  const warm=new THREE.Color().setHSL(lerp(0.07,0.13,noon),0.6*weatherDim,0.62);
-  sun.color.copy(warm);
-  hemi.intensity=clamp(noon*0.5+0.3,0.3,0.85)*(0.55+0.45*weatherDim);
+  // Cast-n-Chill cozy palette: golden sun all day, warm peach ambient, soft warm haze
+  sun.intensity=clamp(noon*2.3+0.55,0.4,2.8)*weatherDim;
+  sun.color.setHSL(lerp(0.05,0.1,noon),0.72*weatherDim+0.02,0.6);
+  hemi.color.setHSL(lerp(0.08,0.52,noon),0.42,0.68);     // warm-peach dawn → soft blue midday
+  hemi.intensity=clamp(noon*0.5+0.38,0.38,0.92)*(0.55+0.45*weatherDim);
   const skyLight=clamp(noon,0.12,1)*(0.5+0.5*weatherDim);
-  scene.fog.color.setHSL(0.57, 0.36, lerp(0.30,0.82,skyLight));
-  scene.fog.density = 0.0052*(S.weather==='rain'?1.9:(S.weather==='cloudy'?1.3:1.0));
-  if(scene.background&&scene.backgroundIntensity!==undefined){ scene.backgroundIntensity=lerp(0.25,1.0,skyLight); scene.environmentIntensity=lerp(0.3,1.0,skyLight); }
+  scene.fog.color.setHSL(lerp(0.065,0.1,skyLight), 0.4, lerp(0.36,0.78,skyLight));  // warm golden haze
+  scene.fog.density = 0.0058*(S.weather==='rain'?1.8:(S.weather==='cloudy'?1.3:1.0));
+  if(scene.background&&scene.backgroundIntensity!==undefined){ scene.backgroundIntensity=lerp(0.3,1.0,skyLight); scene.environmentIntensity=lerp(0.35,1.02,skyLight); }
 }
 function hintProximity(){
   // show a one-shot toast when first approaching a landmark
@@ -1241,7 +1351,7 @@ function openDialogue(n){ modal(LANG==='zh'?n.nm.zh:n.nm.en, body=>{
   else { const lab=document.createElement('div'); lab.className='hint'; lab.textContent=L('点击赠送（+好感）：','Click to gift (+friendship):'); body.appendChild(lab);
     const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
     giftables.forEach(k=>{ const [kind,id]=k.split(':'); const mt=metaOf(kind,id); const b=document.createElement('div'); b.className='buy';
-      b.innerHTML='<div class="em">'+mt.em+'</div><div class="nm">'+mt.name+'</div><div class="pr">×'+S.inv[k]+'</div>';
+      b.innerHTML='<div class="em">'+itemIcon(kind,id,34)+'</div><div class="nm">'+mt.name+'</div><div class="pr">×'+S.inv[k]+'</div>';
       b.onclick=()=>{ invTake(kind,id,1); n.gifted=true; n.hearts=Math.min(10,n.hearts+(Math.random()<0.5?2:1)); toast('❤ '+(LANG==='zh'?n.nm.zh:n.nm.en)+' +'+L('好感','friendship')); openDialogue(n); };
       g.appendChild(b); }); }
 }); }
@@ -1432,7 +1542,7 @@ async function boot(){
   buildGround(); setProgress(18);
   $('#loadsub').textContent='加载 3D 资源 · loading assets…';
   await loadModels(); setProgress(42);
-  scatterRealProps(); buildPond(); buildGrassField(); buildRain(); buildCritters(); setProgress(55);
+  scatterRealProps(); buildPond(); buildScenery(); buildGrassField(); buildRain(); buildCritters(); setProgress(55);
   makeCottage(); makeBed(); makeStall(); makeBin(); buildAnvil(); buildStove(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(62);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(72);
 
@@ -1445,6 +1555,7 @@ async function boot(){
     scene.environment=env; scene.background=hdr; scene.backgroundBlurriness=0.25; scene.environmentIntensity=1.0; scene.backgroundIntensity=1.0;
     hdr.dispose(); pmrem.dispose();
   }catch(e){ scene.background=new THREE.Color(0x9fc9e8); }
+  try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
   setProgress(90);
 
   // starter kit
