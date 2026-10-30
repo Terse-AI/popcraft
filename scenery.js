@@ -400,7 +400,7 @@ function buildLake(root,res){
 }
 
 /* ---------- the creek: flowing ribbon, white over the falls and rapids ---------- */
-const creekU={ uTint:{value:new THREE.Color()}, uFoam:{value:new THREE.Color()}, uTime:U.uTime, uN:{value:null}, uFog:U.uFog, uFogD:U.uFogD };
+const creekU={ uDeep:{value:new THREE.Color()}, uTint:{value:new THREE.Color()}, uFoam:{value:new THREE.Color()}, uTime:U.uTime, uN:{value:null}, uFog:U.uFog, uFogD:U.uFogD };
 function buildCreek(root){
   creekU.uN.value=TEX.clouds;
   const pts=RIVER.map(p=>new THREE.Vector3(p[0],p[2],p[1])), curve=new THREE.CatmullRomCurve3(pts,false,'catmullrom',.12), N=160, P=[],UV=[],F=[],I=[];
@@ -413,11 +413,12 @@ function buildCreek(root){
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2)); g.setAttribute('aF',new THREE.Float32BufferAttribute(F,1)); g.setIndex(I);
   const m=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:creekU,
     vertexShader:`attribute float aF; varying vec2 vUv; varying float vF; varying float vD; void main(){ vUv=uv; vF=aF; vec4 w=modelMatrix*vec4(position,1.); vD=length(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader:`precision highp float; uniform sampler2D uN; uniform vec3 uTint,uFoam,uFog; uniform float uTime,uFogD; varying vec2 vUv; varying float vF,vD;
+    fragmentShader:`precision highp float; uniform sampler2D uN; uniform vec3 uTint,uDeep,uFoam,uFog; uniform float uTime,uFogD; varying vec2 vUv; varying float vF,vD;
       void main(){ float sp=1.6+vF*3.4; vec2 q=vec2(vUv.x*.42,vUv.y*.026-uTime*sp*.012), q2=vec2(vUv.x*.9+.3,vUv.y*.06-uTime*sp*.021);
-        float a=texture2D(uN,q).b, b=texture2D(uN,q2).b, e=abs(vUv.x-.5)*2.;
-        float streak=smoothstep(.62-vF*.5,.86-vF*.42,a*.66+b*.56+e*e*.2);
-        vec3 c=mix(uTint,uTint*.62,b); c=mix(c,uFoam,clamp(streak+vF*.26,0.,1.));
+        float a=texture2D(uN,q).b, b=texture2D(uN,q2).b, f3=texture2D(uN,vec2(vUv.x*1.8,vUv.y*.11-uTime*sp*.03)).b, e=abs(vUv.x-.5)*2.;
+        float streak=smoothstep(.6-vF*.46,.74-vF*.34,a*.5+b*.34+f3*.34+e*e*.22);
+        float dash=smoothstep(.62,.66,f3)*(1.-vF)*.55;
+        vec3 c=mix(uDeep,uTint,smoothstep(.25,.7,b+e*.3)); c=mix(c,uFoam,clamp(max(streak,dash)+vF*.3,0.,1.));
         c=mix(c,uFog,1.-exp(-vD*vD*uFogD*uFogD));
         gl_FragColor=vec4(c,1.); }` });
   const o=new THREE.Mesh(g,m); o.frustumCulled=false; root.add(o);
@@ -650,7 +651,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   setC(mtU.uRS.value,P.rockS); setC(mtU.uRL.value,P.rockL); setC(mtU.uSS.value,P.snowS); setC(mtU.uSL.value,P.snowL); setC(mtU.uFS.value,P.forS); setC(mtU.uFL.value,P.forL); setC(mtU.uHz.value,P.haze);
   setC(mtU.uDS.value,mixc(P.forS,[.46,.2,.08],.55)); setC(mtU.uDL.value,mixc(P.forL,[.98,.66,.2],.7));
   setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;
-  setC(waterU.uTint.value,P.water); setC(waterU.uGlint.value,mixc(P.cloudL,[1,1,1],.4)); setC(creekU.uTint.value,mixc(P.water,P.forS,.42)); setC(creekU.uFoam.value,mixc(P.cloudL,[1,1,1],.5)); updateSpray(dt);
+  setC(waterU.uTint.value,P.water); setC(waterU.uGlint.value,mixc(P.cloudL,[1,1,1],.4)); setC(creekU.uTint.value,mixc(P.water,P.mid,.25)); setC(creekU.uFoam.value,mixc(P.cloudL,[1,1,1],.6)); setC(creekU.uDeep.value,mixc(P.water,P.forS,.6)); updateSpray(dt);
   rig.water.copy(waterU.uTint.value); rig.rain=weather==='rain'?1:0;
   if(waterU.uni){ waterU.uni.uRain.value=U.uRain.value; waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
   setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;

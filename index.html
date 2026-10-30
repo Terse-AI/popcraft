@@ -936,7 +936,8 @@ function frame(now){
   if(cut.k>.001) { cutCamera(camPos); } if(shakeT>0){ shakeT-=dt; camPos.x+=(Math.random()-.5)*shakeT*.6; camPos.y+=(Math.random()-.5)*shakeT*.6; }
   camera.position.lerp(camPos,DBG?1:1-Math.pow(.0001,dt));
   camAim.x=DBG?player.pos.x:damp(camAim.x,player.pos.x,14,dt); camAim.y=DBG?player.pos.y:damp(camAim.y,player.pos.y,9,dt); camAim.z=DBG?player.pos.z:damp(camAim.z,player.pos.z,14,dt);
-  camera.lookAt(camAim.x, camAim.y+(cam.look||1.5), camAim.z);
+  if(cut.k>.001){ const k=cut.k; camera.lookAt(lerp(camAim.x,cut.x,k),lerp(camAim.y+(cam.look||1.5),WATER_Y+1.1,k),lerp(camAim.z,cut.z,k)); }
+  else camera.lookAt(camAim.x, camAim.y+(cam.look||1.5), camAim.z);
 
   if((sTick&1)===0) updateTarget();
   // selector pulse
@@ -1074,7 +1075,7 @@ G.setCut=(on,caught)=>{ if(on){ const f=player.yaw, fx=Math.sin(f), fz=Math.cos(
     cut.x=player.pos.x+dx*6.5; cut.z=player.pos.z+dz*6.5; cut.sx=dz; cut.sz=-dx; if(lakeField(cut.x+cut.sx*10,cut.z+cut.sz*10)<0){ cut.sx*=-1; cut.sz*=-1; } cut.on=true; player.yaw=Math.atan2(dx,dz);
     if(!cut.fish.length) for(let i=0;i<9;i++){ const F=makeFish(FISHC[i%5],0xe8e0c8,.5+Math.random()*.5); F.a=Math.random()*6.28; F.r=2+Math.random()*7; F.d=-1.6-Math.random()*2.6; F.sp=.12+Math.random()*.18; scene.add(F.root); cut.fish.push(F); } cut.fish.forEach(F=>F.root.visible=true);
   } else { cut.on=false; lureLine.visible=false; if(caught){ const c=FISH[caught]; toast(c.em); } } };
-function cutCamera(camPos){ const k=cut.k, cx=cut.x+cut.sx*9, cz=cut.z+cut.sz*9, cy=WATER_Y+1.5; camPos.x=lerp(camPos.x,cx,k); camPos.z=lerp(camPos.z,cz,k); camPos.y=lerp(camPos.y,cy,k); }
+function cutCamera(camPos){ const k=cut.k, cx=cut.x+cut.sx*9, cz=cut.z+cut.sz*9, cy=WATER_Y+1.5; camPos.x=lerp(camPos.x,cx,k); camPos.z=lerp(camPos.z,cz,k); camPos.y=lerp(camPos.y,cy,k); camera.position.lerp(camPos,.25); }
 function renderUnder(){ const now=performance.now()*.001; underCam.position.set(camera.position.x,WATER_Y-1.7,camera.position.z); const d=camera.getWorldDirection(new THREE.Vector3()); d.y=0; d.normalize(); underCam.lookAt(underCam.position.x+d.x,WATER_Y-1.9,underCam.position.z+d.z);
   cut.fish.forEach((F,i)=>{ F.a+=F.sp*.016; const x=cut.x+Math.cos(F.a)*F.r, z=cut.z+Math.sin(F.a)*F.r*.5; F.root.position.set(x,WATER_Y+F.d+Math.sin(now+i)*.14,z); F.root.rotation.y=-F.a+(F.sp>0?0:Math.PI); F.tail.rotation.y=Math.sin(now*9+i)*.5; });
   const w=water.visible; water.visible=false; const rt=renderer.getRenderTarget(); renderer.setRenderTarget(underRT); renderer.render(scene,underCam); renderer.setRenderTarget(rt); water.visible=w;
@@ -1083,7 +1084,7 @@ function renderUnder(){ const now=performance.now()*.001; underCam.position.set(
 const fxPts=[]; const fxGeo=new THREE.BufferGeometry(); fxGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(60*3),3)); fxGeo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(60*3),3)); const fx=new THREE.Points(fxGeo,new THREE.PointsMaterial({size:.14,vertexColors:true,toneMapped:false,transparent:true,map:dotTex(),alphaTest:.3,depthWrite:false})); fx.frustumCulled=false; scene.add(fx);
 function burst(x,y,z,col,n=10){ const c=new THREE.Color(col); for(let i=0;i<n;i++){ fxPts.push({x,y,z,vx:(Math.random()-.5)*3,vy:1.5+Math.random()*2.4,vz:(Math.random()-.5)*3,t:.7,c}); if(fxPts.length>60) fxPts.shift(); } }
 let swingT=0, shakeT=0;
-function updateFx(dt){ const p=fxGeo.attributes.position, c=fxGeo.attributes.color; let n=0; for(let i=fxPts.length-1;i>=0;i--){ const f=fxPts[i]; f.t-=dt; if(f.t<=0){ fxPts.splice(i,1); continue; } f.vy-=9*dt; f.x+=f.vx*dt; f.y+=f.vy*dt; f.z+=f.vz*dt; } for(const f of fxPts){ p.setXYZ(n,f.x,f.y,f.z); c.setXYZ(n,f.c.r,f.c.g,f.c.b); n++; } fxGeo.setDrawRange(0,n); p.needsUpdate=true; c.needsUpdate=true;
+function updateFx(dt){ cut.k=damp(cut.k,cut.on?1:0,cut.on?3.2:5,dt); if(cut.k<.01){ cut.k=cut.on?cut.k:0; if(!cut.on) cut.fish.forEach(F=>F.root.visible=false); } const p=fxGeo.attributes.position, c=fxGeo.attributes.color; let n=0; for(let i=fxPts.length-1;i>=0;i--){ const f=fxPts[i]; f.t-=dt; if(f.t<=0){ fxPts.splice(i,1); continue; } f.vy-=9*dt; f.x+=f.vx*dt; f.y+=f.vy*dt; f.z+=f.vz*dt; } for(const f of fxPts){ p.setXYZ(n,f.x,f.y,f.z); c.setXYZ(n,f.c.r,f.c.g,f.c.b); n++; } fxGeo.setDrawRange(0,n); p.needsUpdate=true; c.needsUpdate=true;
   if(swingT>0){ swingT=Math.max(0,swingT-dt*3.4); const q=Math.sin((1-swingT)*Math.PI); toolMesh.visible=true; toolMesh.rotation.x=-1.9+q*2.6; walkU.uSwing.value=q; } else { toolMesh.visible=false; walkU.uSwing.value=0; } }
 const toolMesh=new THREE.Group(); toolMesh.visible=false; { const h=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.9,6),toonOf({color:0x7a5a3a})); h.position.y=.45; const b=new THREE.Mesh(new THREE.BoxGeometry(.26,.12,.12),toonOf({color:0x9aa0a8})); b.position.y=.88; toolMesh.add(h,b); toolMesh.position.set(.36,.8,.14); }
 G.swing=()=>{ swingT=1; };
