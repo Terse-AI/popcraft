@@ -180,8 +180,9 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, U as sceneryU, paintedSoil, water, QUAL_RES
+  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK
 } from './scenery.js';
+import { logHouse, marketStall, shippingBin, anvilBlock, hearth, fenceRun, mineMouth, buildDock, makeVillager, buildSmoke, addSmoke, updateBuildings } from './buildings.js';
 
 /* ======================================================================
    StarVale · 星星人露谷 — a Stardew-Valley-style farming life sim.
@@ -206,7 +207,7 @@ const T = {
     noenergy:'太累了…该睡觉了', harvest:'收获 ', ship:'已装船 ', sold:'卖出作物 +', buy:'购买了 ',
     nomoney:'金币不足', needtill:'先用锄头犁地', needsoil:'要种在犁过的土上', occupied:'这里已经种了',
     wrongseason:'不是当季作物', sleep:'睡觉了…', wake:'新的一天！', seedsuf:'种子',
-    nearbed:'靠近床按 E 睡觉', nearshop:'按 B 打开商店', nearbin:'按 E 装船卖作物',
+    nearbed:'在门口按 E 回屋睡觉', nearshop:'按 B 打开商店', nearbin:'按 E 装船卖作物',
     hold:'手持：', shippedall:'作物已装船，明早卖出', emptyship:'背包里没有可卖的作物' },
   en:{ gen:'StarVale · generating the world…', season:['Spring','Summer','Fall','Winter'], map:'MAP', energy:'Energy',
     ops:'Controls', move:'move', run:'run', mouse:'Mouse', view:'look', tool:'tool', use:'use tool',
@@ -218,7 +219,7 @@ const T = {
     noenergy:'Too tired… time to sleep', harvest:'Harvest ', ship:'Shipped ', sold:'Sold crops +', buy:'Bought ',
     nomoney:'Not enough gold', needtill:'Till the soil first', needsoil:'Plant on tilled soil', occupied:'Already planted here',
     wrongseason:'Not this season', sleep:'Sleeping…', wake:'A new day!', seedsuf:'Seeds',
-    nearbed:'Press E to sleep', nearshop:'Press B to shop', nearbin:'Press E to ship crops',
+    nearbed:'Press E at the door to sleep', nearshop:'Press B to shop', nearbin:'Press E to ship crops',
     hold:'Holding: ', shippedall:'Crops shipped — sold tomorrow', emptyship:'No sellable crops in bag' }
 };
 const t = k => (T[LANG][k] ?? T.en[k] ?? k);
@@ -311,7 +312,7 @@ const S = {
   weather:'clear',                   // clear | cloudy | rain
   heldPlace:null,                    // craftable id when placing
   inMine:false, mineLevel:0, festival:null,
-  sleeping:false, running:false
+  sleeping:false, running:false, boating:false
 };
 const invKey=(kind,id)=>kind+':'+id;
 function invAdd(kind,id,n){ const k=invKey(kind,id); S.inv[k]=(S.inv[k]||0)+n; }
@@ -382,13 +383,15 @@ function updateCritters(t){
 
 let propMini=[];
 
+function dotTex(){ const c=document.createElement('canvas'); c.width=c.height=32; const g=c.getContext('2d'), r=g.createRadialGradient(16,16,2,16,16,15);
+  r.addColorStop(0,'#fff'); r.addColorStop(.55,'#fff'); r.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=r; g.fillRect(0,0,32,32); return new THREE.CanvasTexture(c); }
 /* ---- fireflies at dusk/night (cozy ambiance) ---- */
 let fireflies=null, ffMat=null;
 function buildFireflies(){
   const N=70, g=new THREE.BufferGeometry(), pos=new Float32Array(N*3), ph=new Float32Array(N);
   for(let i=0;i<N;i++){ pos[i*3]=(Math.random()-.5)*52; pos[i*3+1]=0.4+Math.random()*2.6; pos[i*3+2]=(Math.random()-.5)*52; ph[i]=Math.random()*6.28; }
   g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.userData.base=pos.slice(0); g.userData.ph=ph;
-  ffMat=new THREE.PointsMaterial({ color:0xffe08a, size:0.2, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending });
+  ffMat=new THREE.PointsMaterial({ color:0xffe08a, size:0.16, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending, map:dotTex() });
   fireflies=new THREE.Points(g,ffMat); fireflies.frustumCulled=false; scene.add(fireflies);
 }
 function updateFireflies(t){
@@ -406,7 +409,7 @@ function buildPetals(){
   const N=130, g=new THREE.BufferGeometry(), pos=new Float32Array(N*3), vel=new Float32Array(N);
   for(let i=0;i<N;i++){ pos[i*3]=(Math.random()-.5)*60; pos[i*3+1]=Math.random()*18; pos[i*3+2]=(Math.random()-.5)*60; vel[i]=0.5+Math.random()*0.9; }
   g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.userData.vel=vel;
-  petalMat=new THREE.PointsMaterial({ color:0xffc0d6, size:0.24, transparent:true, opacity:0, depthWrite:false });
+  petalMat=new THREE.PointsMaterial({ color:0xffc0d6, size:0.18, transparent:true, opacity:0, depthWrite:false, map:dotTex(), alphaTest:.3 });
   petals=new THREE.Points(g,petalMat); petals.frustumCulled=false; scene.add(petals);
 }
 function updatePetals(dt){
@@ -419,57 +422,13 @@ function updatePetals(dt){
   p.needsUpdate=true; petals.position.set(player.pos.x,0,player.pos.z);
 }
 
-/* farm structures: cottage, bed, shop stall, shipping bin ----------- */
-const BED={x:3,z:-9}, SHOP={x:-6,z:-10}, BIN={x:8,z:-4};
-// proper two-sided gable roof (slanted planes + triangular gable ends)
-function gableRoof(w,d,rh,col){
-  const g=new THREE.Group(), m=new THREE.MeshStandardMaterial({color:col,roughness:0.78,flatShading:true});
-  const ang=Math.atan2(rh,w/2), slope=Math.hypot(w/2,rh)+0.28;
-  const L=new THREE.Mesh(new THREE.BoxGeometry(slope,0.14,d+0.5),m); L.rotation.z=ang;  L.position.set(-w/4,rh/2,0); g.add(L);
-  const R=new THREE.Mesh(new THREE.BoxGeometry(slope,0.14,d+0.5),m); R.rotation.z=-ang; R.position.set( w/4,rh/2,0); g.add(R);
-  const tri=new THREE.BufferGeometry(); tri.setAttribute('position',new THREE.Float32BufferAttribute([-w/2,0,0, w/2,0,0, 0,rh,0],3)); tri.computeVertexNormals();
-  const gm=new THREE.MeshStandardMaterial({color:new THREE.Color(col).multiplyScalar(0.88).getHex(),roughness:0.82,side:THREE.DoubleSide,flatShading:true});
-  [d/2,-d/2].forEach(z=>{ const t=new THREE.Mesh(tri,gm); t.position.z=z; g.add(t); });
-  g.traverse(o=>o.castShadow=true); return g;
-}
-function makeCottage(){
-  const g=new THREE.Group(), W=6,D=5,WH=3;
-  const wall=new THREE.MeshStandardMaterial({color:0xece0cb,roughness:0.85});
-  const base=new THREE.Mesh(new THREE.BoxGeometry(W,WH,D),wall); base.position.y=WH/2; base.castShadow=base.receiveShadow=true; g.add(base);
-  const roof=gableRoof(W+0.5,D,2.0,0xb7533e); roof.position.y=WH; g.add(roof);
-  const chim=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.5,0.6),new THREE.MeshStandardMaterial({color:0x8a5a4a,roughness:0.9})); chim.position.set(-1.7,WH+1.3,-1); chim.castShadow=true; g.add(chim);
-  const frameM=new THREE.MeshStandardMaterial({color:0x5a3f28,roughness:0.8});
-  const df=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.2,0.12),frameM); df.position.set(0,1.1,D/2+0.01); g.add(df);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.9,0.14),new THREE.MeshStandardMaterial({color:0x7a4a2e,roughness:0.7})); door.position.set(0,0.95,D/2+0.05); g.add(door);
-  const knob=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),new THREE.MeshStandardMaterial({color:0xd8b24a,metalness:0.6,roughness:0.3})); knob.position.set(0.33,0.95,D/2+0.14); g.add(knob);
-  const glow=new THREE.MeshStandardMaterial({color:0xffe3a6,emissive:0xffb24a,emissiveIntensity:0.9,roughness:0.35});
-  const shut=new THREE.MeshStandardMaterial({color:0x5a7a9a,roughness:0.8});
-  [-1.9,1.9].forEach(x=>{ const wf=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.1,0.1),frameM); wf.position.set(x,1.7,D/2+0.02); g.add(wf);
-    const win=new THREE.Mesh(new THREE.BoxGeometry(0.82,0.82,0.12),glow); win.position.set(x,1.7,D/2+0.05); g.add(win);
-    [-0.66,0.66].forEach(sx=>{ const s=new THREE.Mesh(new THREE.BoxGeometry(0.22,1.1,0.08),shut); s.position.set(x+sx,1.7,D/2+0.03); g.add(s); }); });
-  g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); g.position.set(0,0,-12); world.add(g);
-}
-function makeBed(){
-  const g=new THREE.Group();
-  const frame=new THREE.Mesh(new THREE.BoxGeometry(2,0.5,3),new THREE.MeshStandardMaterial({color:0x7a5230,roughness:0.8})); frame.position.y=0.25; g.add(frame);
-  const quilt=new THREE.Mesh(new THREE.BoxGeometry(2.05,0.3,2.2),new THREE.MeshStandardMaterial({color:0x6a9bd8,roughness:0.7})); quilt.position.set(0,0.55,0.3); g.add(quilt);
-  const pillow=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.3,0.7),new THREE.MeshStandardMaterial({color:0xf3ece0,roughness:0.8})); pillow.position.set(0,0.55,-1); g.add(pillow);
-  g.traverse(o=>o.castShadow=true); g.position.set(BED.x,0,BED.z); world.add(g);
-}
-function makeStall(){
-  const g=new THREE.Group();
-  const counter=new THREE.Mesh(new THREE.BoxGeometry(3,1,1.4),new THREE.MeshStandardMaterial({color:0x8a5a34,roughness:0.85})); counter.position.y=0.5; g.add(counter);
-  const posts=new THREE.MeshStandardMaterial({color:0x6b4a2e});
-  [[-1.4,-0.6],[1.4,-0.6]].forEach(p=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.4,6),posts); m.position.set(p[0],1.2,p[1]); g.add(m);});
-  const awn=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.2,1.6),new THREE.MeshStandardMaterial({color:0x3fae8f,roughness:0.6})); awn.position.set(0,2.4,-0.6); g.add(awn);
-  const sign=new THREE.Mesh(new THREE.CircleGeometry(0.4,20),new THREE.MeshStandardMaterial({color:0xffd66b,emissive:0x5a4410})); sign.position.set(0,1.7,0.72); g.add(sign);
-  g.traverse(o=>o.castShadow=true); g.position.set(SHOP.x,0,SHOP.z); world.add(g);
-}
-function makeBin(){
-  const g=new THREE.Group();
-  const box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.1,1.1),new THREE.MeshStandardMaterial({color:0x8a6a3a,roughness:0.85})); box.position.y=0.55; g.add(box);
-  const lid=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.18,1.2),new THREE.MeshStandardMaterial({color:0x6b4a2e})); lid.position.y=1.12; lid.rotation.z=0.06; g.add(lid);
-  g.traverse(o=>o.castShadow=true); g.position.set(BIN.x,0,BIN.z); world.add(g);
+/* farm layout -------------------------------------------------------- */
+const BED={x:0,z:-11.4}, SHOP={x:-13,z:-8}, BIN={x:8.5,z:-7.5}, CABIN={x:0,z:-16};
+function buildFarmstead(){
+  addSmoke(logHouse({world,x:CABIN.x,z:CABIN.z,w:9,d:6,h:3.1,rh:2.7}).userData.smoke);
+  marketStall(world,SHOP.x,SHOP.z); shippingBin(world,BIN.x,BIN.z);
+  anvilBlock(world,ANVIL.x,ANVIL.z); hearth(world,STOVE.x,STOVE.z);
+  fenceRun(world,[[-13,-6],[-13,14],[-4,14]]); fenceRun(world,[[4,14],[13,14],[13,-6]]);
 }
 
 /* ============================ FARM TILES ============================ */
@@ -614,7 +573,8 @@ async function loadTwinkle(){
     const s=1.8/(sz.y||1); m.scale.setScalar(s);
     const c=box.getCenter(new THREE.Vector3());
     m.position.set(-c.x*s, -box.min.y*s, -c.z*s);
-    m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false; } });
+    m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false;        // same stepped light as the painted world
+      const src=o.material; o.material=toonOf({ map:src.map||null, color:src.color||0xffffff, transparent:src.transparent, opacity:src.opacity, side:src.side }); } });
     const holder=new THREE.Group(); holder.rotation.y=charYaw; holder.add(m);
     while(avatar.children.length) avatar.remove(avatar.children[0]);
     avatar.add(holder); charIsGLB=true; charHolder=holder;
@@ -622,7 +582,7 @@ async function loadTwinkle(){
 }
 
 /* ============================ CAMERA / CONTROLS ============================ */
-const cam={ dist:8.5, height:2.9, yaw:0, pitch:0.26 };   // lower/further → more cozy horizon vista in frame
+const cam={ dist:8.5, height:2.6, yaw:0, pitch:0.16, look:2 };   // lower/further → more cozy horizon vista in frame
 let pointerLocked=false;
 const keys={};
 addEventListener('keydown',e=>{
@@ -647,7 +607,7 @@ document.addEventListener('pointerlockchange',()=>{ pointerLocked=(document.poin
 addEventListener('mousemove',e=>{
   if(!pointerLocked) return;
   cam.yaw   -= e.movementX*0.0025;
-  cam.pitch  = clamp(cam.pitch - e.movementY*0.0022, -0.15, 1.1);
+  cam.pitch  = clamp(cam.pitch - e.movementY*0.0022, -0.05, 1.1);
 });
 
 // touch (mobile): left half move, right half look
@@ -670,7 +630,7 @@ function updateTarget(){
   if(hit && Math.hypot(hit.x-player.pos.x,hit.z-player.pos.z)<6.5){
     const x=Math.round(hit.x), z=Math.round(hit.z);
     // only farmable on flat farmland
-    if(Math.abs(x)<=FARM_HALF && Math.abs(z)<=FARM_HALF){
+    if(Math.abs(x)<=FARM_HALF && z<=FARM_HALF && z>=-5.5){
       targetCell={x,z}; selector.position.set(x,0.14,z); selector.visible=true; return;
     }
   }
@@ -699,7 +659,7 @@ function useTool(){
   }
   const tool=S.tool, lvl=S.toolLvl[tool], ec=Math.max(1,(tool===2||tool===3?3:2)-lvl);
   if(tool===0){ // hoe (upgrades widen the area tilled per swing)
-    let did=0; for(const [dx,dz] of aoe(lvl)){ const cx=x+dx,cz=z+dz; if(Math.abs(cx)>FARM_HALF||Math.abs(cz)>FARM_HALF) continue;
+    let did=0; for(const [dx,dz] of aoe(lvl)){ const cx=x+dx,cz=z+dz; if(Math.abs(cx)>FARM_HALF||cz>FARM_HALF||cz<-5.5) continue;
       let t2=getTile(cx,cz); if(!t2){ t2={tilled:true,watered:false,crop:null}; S.tiles.set(tkey(cx,cz),t2); did++; } else if(!t2.tilled){ t2.tilled=true; did++; } refreshTileMesh(cx,cz); }
     if(did){ spendEnergy(ec); toast('⛏️ '+t('till')+(lvl?' ×'+aoe(lvl).length:'')); }
   } else if(tool===1){ // watering can (upgrades widen the area watered)
@@ -723,8 +683,25 @@ function harvest(x,z){
   tl.crop=null; tl.watered=false; rebuildCrop(x,z); refreshTileMesh(x,z);
 }
 function near(p,d){ return Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<d; }
+// the rowboat: board at the dock, row anywhere on the lake, fish from it, land at any shore
+let boat=null, boatHome=null, boatYaw=Math.PI/2, boatRock=0;
+function nearBoat(){ return boat&&Math.hypot(player.pos.x-boat.position.x,player.pos.z-boat.position.z)<4.2; }
+function updateBoat(dt,now){ if(!boat) return;
+  if(!boatHome){ boatHome={x:DOCK.x+DOCK.w/2+1.4,z:DOCK.z1-6}; boat.position.set(boatHome.x,WATER_Y+.14,boatHome.z); boat.rotation.y=0; }
+  if(S.boating){ boat.position.x=player.pos.x; boat.position.z=player.pos.z; if(player.moving) boatYaw=lerpAngle(boatYaw,player.yaw,.06); boat.rotation.y=boatYaw; avatar.rotation.y=boatYaw; }
+  boat.position.y=WATER_Y+.14+Math.sin(now*.0016)*.05; boat.rotation.z=Math.sin(now*.0011)*.022; boat.rotation.x=Math.sin(now*.0014+1)*.012;
+}
+function toggleBoat(){
+  if(S.boating){ // step out onto the nearest solid ground within reach
+    for(let r=2;r<8;r+=.5) for(let a=0;a<6.3;a+=.4){ const x=player.pos.x+Math.sin(a)*r, z=player.pos.z+Math.cos(a)*r;
+      if(onDock(x,z)||lakeField(x,z)<-.012){ S.boating=false; player.pos.x=x; player.pos.z=z; toast(L('上岸了','Stepped ashore')); return true; } }
+    toast(L('靠岸或靠近码头才能下船','Row to the shore or dock to get out')); return true; }
+  if(nearBoat()){ S.boating=true; player.pos.x=boat.position.x; player.pos.z=boat.position.z; boatYaw=boat.rotation.y; toast(L('上船了 · WASD 划船 · F 钓鱼 · E 靠岸下船','Aboard · WASD to row · F to fish · E to land')); return true; }
+  return false;
+}
 function interact(){
   if(S.inMine) return;
+  if(toggleBoat()) return;
   if(S.festival && !S.festDone && near(PLAZA,11)){ openFestival(); return; }
   if(near(ANVIL,2.8)){ openBlacksmith(); return; }
   if(near(STOVE,2.8)){ openCook(); return; }
@@ -923,7 +900,7 @@ function drawMini(){
     mx.fillRect(p[0]-sc*0.4,p[1]-sc*0.4,sc*0.8,sc*0.8); }
   // landmarks
   const mark=(pp,col,lab)=>{ const p=toPx(pp.x,pp.z); mx.fillStyle=col; mx.beginPath(); mx.arc(p[0],p[1],3,0,7); mx.fill(); mx.fillStyle='#fff'; mx.font='7px sans-serif'; mx.fillText(lab,p[0]+4,p[1]+2); };
-  mark(BED,'#6a9bd8','🛏'); mark(SHOP,'#ffd66b','🏪'); mark(BIN,'#c89a5a','📦'); mark({x:0,z:-12},'#e9dcc5','🏠');
+  mark(BED,'#6a9bd8','🛏'); mark(SHOP,'#ffd66b','🏪'); mark(BIN,'#c89a5a','📦'); mark(CABIN,'#e9dcc5','🏠');
   // player arrow
   mx.save(); mx.translate(cx,cy); mx.rotate(-cam.yaw+Math.PI);
   mx.fillStyle='#5bd1ff'; mx.beginPath(); mx.moveTo(0,-6); mx.lineTo(4,5); mx.lineTo(0,2); mx.lineTo(-4,5); mx.closePath(); mx.fill();
@@ -997,8 +974,10 @@ function frame(now){
   if(player.moving){
     moveV.normalize(); const spd=(S.running&&S.energy>0?7.2:4.2)*(S.energy>0?1:0.45);
     const ox=player.pos.x, oz=player.pos.z;
-    player.pos.addScaledVector(moveV, spd*dt);
-    if(!S.inMine){
+    player.pos.addScaledVector(moveV, spd*dt*(S.boating?.72:1));
+    if(S.boating){                                       // rowing: the lake is the floor and the land is the wall
+      if(lakeField(player.pos.x,player.pos.z)<.012){ player.pos.x=ox; player.pos.z=oz; }
+    } else if(!S.inMine){
       collide(player.pos,.45);
       if(inWater(player.pos.x,player.pos.z)){            // slide along the shore rather than stop dead
         if(!inWater(player.pos.x,oz)) player.pos.z=oz; else if(!inWater(ox,player.pos.z)) player.pos.x=ox; else { player.pos.x=ox; player.pos.z=oz; }
@@ -1008,7 +987,8 @@ function frame(now){
     player.yaw=Math.atan2(moveV.x,moveV.z);
     player.walkT+=dt*(S.running?15:10);
   }
-  player.pos.y=S.inMine?0:terrainH(player.pos.x,player.pos.z);
+  player.pos.y=S.inMine?0:S.boating?WATER_Y+.08+Math.sin(now*.0016)*.05:walkH(player.pos.x,player.pos.z);
+  updateBoat(dt,now);
   if(S.inMine){ player.pos.x=clamp(player.pos.x,-14.5,14.5); player.pos.z=clamp(player.pos.z,-14.5,14.5); player.pos.y=0; }
   avatar.position.copy(player.pos);
   avatar.rotation.y = lerpAngle(avatar.rotation.y, player.yaw, 0.2);
@@ -1021,7 +1001,7 @@ function frame(now){
     player.pos.y + cam.height + Math.sin(cam.pitch)*cam.dist,
     player.pos.z - Math.cos(cam.yaw)*cam.dist*cs);
   if(!S.inMine){ const gy=terrainH(camPos.x,camPos.z)+.7; if(camPos.y<gy) camPos.y=gy; }   // never dip under a slope
-  camera.position.lerp(camPos,DBG?1:0.18);
+  camera.position.lerp(camPos,DBG?1:1-Math.pow(.0001,dt));
   camera.lookAt(player.pos.x, player.pos.y+(cam.look||1.5), player.pos.z);
 
   updateTarget();
@@ -1064,6 +1044,7 @@ function dayNight(t,dt){
   sun.intensity=R.sunI; sun.color.copy(R.sunCol);
   hemi.color.copy(R.ambCol); hemi.intensity=R.ambI;
   scene.fog.color.copy(R.fogCol); scene.fog.density=R.fog;
+  updateBuildings(t,dt,R.night,clamp((S.time-1100)/120,0,1));
   if(gradeFx){ const u=gradeFx.uniforms; u.get('gS').value.copy(R.gS); u.get('gM').value.copy(R.gM); u.get('gH').value.copy(R.gH); u.get('amt').value=R.gAmt; }
 }
 function hintProximity(){
@@ -1076,7 +1057,7 @@ function hintProximity(){
 /* ============================ GAMEPLAY DEPTH ============================ */
 T.zh.place='放置'; T.en.place='Place';
 const L=(zh,en)=>LANG==='zh'?zh:en;
-const COOP={x:-9,z:7}, MINE_ENT={x:-40,z:-40};
+const COOP={x:-19,z:-1}, MINE_ENT={x:-40,z:-40};
 function modal(title, fill){
   if(document.pointerLockElement) document.exitPointerLock();
   closeAll();
@@ -1143,22 +1124,12 @@ const NPC_LINES={
   mid:{zh:['你的农场越来越好了！','有空常来聊聊。','谢谢你的礼物~'],en:['Your farm is thriving!','Come chat anytime.','Thanks for the gifts!']},
   high:{zh:['见到你真高兴！','我们是好朋友啦~','你是小镇的骄傲。'],en:['So glad to see you!',"We're great friends now~","You're the pride of the town."]}
 };
-function makeCottageLike(wallc,roofc){ const g=new THREE.Group();
-  const base=new THREE.Mesh(new THREE.BoxGeometry(5,3,4), new THREE.MeshStandardMaterial({color:wallc,roughness:0.85})); base.position.y=1.5; g.add(base);
-  const roof=gableRoof(5.5,4,1.7,roofc); roof.position.y=3; g.add(roof);
-  const win=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.1), new THREE.MeshStandardMaterial({color:0xffe3a6,emissive:0xffb24a,emissiveIntensity:0.55,roughness:0.4})); win.position.set(0,1.6,2.02); g.add(win);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.7,0.12), new THREE.MeshStandardMaterial({color:0x6b4a2e,roughness:0.8})); door.position.set(-1.4,0.85,2.01); g.add(door);
-  g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g; }
-function makeVillager(col){ const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.25,0.45,4,8), new THREE.MeshStandardMaterial({color:col,roughness:0.7})); body.position.y=1.0;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.26,12,10), new THREE.MeshStandardMaterial({color:0xffe0bd,roughness:0.6})); head.position.y=1.55;
-  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.27,12,8,0,6.28,0,1.8), new THREE.MeshStandardMaterial({color:0x4a3324})); hair.position.y=1.6;
-  g.add(body,head,hair); g.traverse(o=>o.castShadow=true); return g; }
 function buildTown(){
-  const plaza=new THREE.Mesh(new THREE.CircleGeometry(9,32), new THREE.MeshStandardMaterial({color:0xc9b79a,roughness:1})); plaza.rotateX(-Math.PI/2); plaza.position.set(34,0.02,-24); world.add(plaza);
-  for(let i=0;i<3;i++){ const h=makeCottageLike(0xe6d7bf,[0x7a8c5a,0xb7533e,0x5a7a9a][i]); h.position.set(24+i*8,0,-33); world.add(h); }
+  logHouse({world,x:24,z:-33,w:6.4,d:5,h:2.6,rh:2.1,porch:false});
+  logHouse({world,x:34,z:-35,w:7,d:5,h:2.9,rh:2.3});
+  addSmoke(logHouse({world,x:45,z:-33,w:6.4,d:5,h:2.6,rh:2.1,porch:false}).userData.smoke);
 }
-function buildNPCs(){ for(const n of NPCS){ n.hearts=0; n.gifted=false; n.mesh=makeVillager(n.col); n.x=n.home.x; n.z=n.home.z; n.tgt={x:n.x,z:n.z}; n.wait=Math.random()*3; n.mesh.position.set(n.x,terrainH(n.x,n.z),n.z); world.add(n.mesh); } }
+function buildNPCs(){ for(const n of NPCS){ n.hearts=0; n.gifted=false; n.mesh=makeVillager(n.col,NPCS.indexOf(n)); n.x=n.home.x; n.z=n.home.z; n.tgt={x:n.x,z:n.z}; n.wait=Math.random()*3; n.mesh.position.set(n.x,terrainH(n.x,n.z),n.z); world.add(n.mesh); } }
 function updateNPCs(dt){ if(S.inMine) return;
   for(const n of NPCS){ if(!n.mesh) continue; const dx=n.tgt.x-n.x, dz=n.tgt.z-n.z, d=Math.hypot(dx,dz);
     if(d<0.3){ n.wait-=dt; if(n.wait<=0){ n.tgt={x:n.home.x+(Math.random()-.5)*12,z:n.home.z+(Math.random()-.5)*12}; n.wait=2+Math.random()*4; } }
@@ -1182,8 +1153,8 @@ function openDialogue(n){ modal(LANG==='zh'?n.nm.zh:n.nm.en, body=>{
 
 /* ---- animals + coop ---- */
 let animals=[], coopStash={egg:0,milk:0};
-function buildCoop(){ const g=makeCottageLike(0xd8c39a,0x9a5a3a); g.scale.set(1.1,0.9,1.1); g.position.set(COOP.x,0,COOP.z); world.add(g);
-  for(let i=0;i<10;i++){ const f=fenceMesh(); const a=i/10*6.28; f.position.set(COOP.x+Math.cos(a)*5,0,COOP.z+6+Math.sin(a)*4); f.rotation.y=a; world.add(f); } }
+function buildCoop(){ logHouse({world,x:COOP.x,z:COOP.z,w:5,d:3.6,h:2,rh:1.5,porch:false,chimney:false,wins:1});
+  const a=COOP.x-6,b=COOP.x+6,c=COOP.z+2.4,d=COOP.z+10; fenceRun(world,[[a,c],[a,d],[b,d],[b,c]]); }
 function makeChicken(){ const g=new THREE.Group(); const wht=new THREE.MeshStandardMaterial({color:0xf4efe6,roughness:0.7});
   const body=new THREE.Mesh(new THREE.SphereGeometry(0.28,12,10),wht); body.position.y=0.3; body.scale.z=1.2;
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,8),wht); head.position.set(0,0.55,0.18);
@@ -1225,10 +1196,7 @@ function openCoop(){ modal(L('🐔 鸡舍 / 牧场','🐔 Coop & Barn'), body=>{
 /* ---- mining ---- */
 let mineGroup=null, mineNodes=[], mineLight=null, mineBtns=null, mineSavedBg=null;
 function buildMine(){
-  const ent=new THREE.Group();
-  const frame=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.4,8,16,Math.PI), new THREE.MeshStandardMaterial({color:0x6b6f74,roughness:0.9})); frame.position.y=1.6;
-  const dark=new THREE.Mesh(new THREE.CircleGeometry(1.5,20), new THREE.MeshBasicMaterial({color:0x05070a})); dark.position.set(0,1.5,0.05);
-  ent.add(frame,dark); ent.position.set(MINE_ENT.x, terrainH(MINE_ENT.x,MINE_ENT.z), MINE_ENT.z); ent.traverse(o=>{if(o.isMesh)o.castShadow=true;}); world.add(ent);
+  mineMouth(world,MINE_ENT.x,MINE_ENT.z);
   mineGroup=new THREE.Group(); mineGroup.visible=false; scene.add(mineGroup);
   const floor=new THREE.Mesh(new THREE.CircleGeometry(16,40), new THREE.MeshStandardMaterial({color:0x3a3330,roughness:1})); floor.rotateX(-Math.PI/2); floor.receiveShadow=true; mineGroup.add(floor);
   const wall=new THREE.Mesh(new THREE.CylinderGeometry(16,16,8,40,1,true), new THREE.MeshStandardMaterial({color:0x2a2420,roughness:1,side:THREE.BackSide})); wall.position.y=4; mineGroup.add(wall);
@@ -1273,9 +1241,9 @@ function showMineBtns(on){ if(!mineBtns){ mineBtns=document.createElement('div')
 
 /* ---- fishing ---- */
 let fishUI=null, fishState=null;
-function nearWater(){ for(let a=0;a<6.3;a+=.8) if(lakeField(player.pos.x+Math.sin(a)*4.5,player.pos.z+Math.cos(a)*4.5)>0) return true; return false; }
+function nearWater(){ if(S.boating) return true; for(let a=0;a<6.3;a+=.8) if(lakeField(player.pos.x+Math.sin(a)*4.5,player.pos.z+Math.cos(a)*4.5)>0) return true; return false; }
 function tryFish(){ if(S.inMine||fishUI) return;
-  if(!nearWater()){ toast(L('到湖边按 F 钓鱼','Stand by the lake, press F')); return; }
+  if(!nearWater()){ toast(L('到湖边或船上按 F 钓鱼','Stand by the lake or in the boat, press F')); return; }
   if(S.energy<=0){ toast(t('noenergy')); return; }
   if(document.pointerLockElement) document.exitPointerLock();
   fishUI=document.createElement('div'); fishUI.style.cssText='position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;pointer-events:none';
@@ -1306,21 +1274,13 @@ function checkFestival(){ const f=FESTIVALS[S.season+','+S.day]; S.festival=f?(L
   if(f){ NPCS.forEach(n=>{ n.tgt={x:34+(Math.random()-.5)*6,z:-24+(Math.random()-.5)*6}; }); const bonus=200+S.season*50; S.gold+=bonus; renderStatus(); toast('🎉 '+(LANG==='zh'?f.zh:f.en)+' · +'+bonus+'g · '+L('去广场参加活动','join the plaza event')); } }
 
 /* ---- blacksmith: tool upgrades ---- */
-const ANVIL={x:-3,z:-14}, STOVE={x:3.4,z:-13.6}, PLAZA={x:34,z:-24};
+const ANVIL={x:-7.2,z:-11.6}, STOVE={x:7.2,z:-11.8}, PLAZA={x:34,z:-24};
 const TOOL_TIERS=[
   {ab:'Cu',nm:{zh:'铜',en:'Copper'},gold:500,ore:'copper',n:3},
   {ab:'Fe',nm:{zh:'铁',en:'Iron'},gold:1200,ore:'iron',n:3},
   {ab:'Au',nm:{zh:'金',en:'Gold'},gold:3000,ore:'gold_ore',n:3},
   {ab:'Ir',nm:{zh:'铱',en:'Iridium'},gold:6000,ore:'gem',n:2}
 ];
-function buildAnvil(){ const g=new THREE.Group();
-  const block=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.5,0.5), new THREE.MeshStandardMaterial({color:0x44484d,metalness:0.7,roughness:0.4})); block.position.y=0.75;
-  const stump=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.35,0.5,10), new THREE.MeshStandardMaterial({color:0x5a3f28})); stump.position.y=0.25;
-  g.add(block,stump); g.traverse(o=>o.castShadow=true); g.position.set(ANVIL.x,terrainH(ANVIL.x,ANVIL.z),ANVIL.z); world.add(g); }
-function buildStove(){ const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.7), new THREE.MeshStandardMaterial({color:0x6a6e73,metalness:0.5,roughness:0.5})); body.position.y=0.45;
-  const top=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.08,0.75), new THREE.MeshStandardMaterial({color:0x2a2a2e,emissive:0xff5a1a,emissiveIntensity:0.5})); top.position.y=0.92;
-  g.add(body,top); g.traverse(o=>o.castShadow=true); g.position.set(STOVE.x,terrainH(STOVE.x,STOVE.z),STOVE.z); world.add(g); }
 function openBlacksmith(){ modal(L('🔨 铁匠铺 · 工具升级','🔨 Blacksmith · Upgrades'), body=>{
   body.innerHTML='<div class="hint">'+L('用矿石和金币升级工具：锄头/水壶范围变大，所有工具更省体力。','Upgrade tools with ore + gold: bigger hoe/can area, all tools cost less energy.')+'</div>';
   const g=document.createElement('div'); g.className='grid'; body.appendChild(g);
@@ -1394,7 +1354,7 @@ async function boot(){
   await loadScenery(p=>setProgress(5+p*35)); setProgress(42);
   buildScenery(world,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
   buildRain(); buildCritters(); buildFireflies(); buildPetals();
-  makeCottage(); makeBed(); makeStall(); makeBin(); buildAnvil(); buildStove(); buildTown(); buildCoop(); buildMine(); buildNPCs(); setProgress(70);
+  buildFarmstead(); buildTown(); buildCoop(); buildMine(); buildNPCs(); boat=buildDock(world); buildSmoke(world); setProgress(70);
   buildAvatar(); await loadTwinkle(); setupPost(); setProgress(84);
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
   setProgress(90);

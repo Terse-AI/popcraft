@@ -21,36 +21,47 @@ function rng(seed){ let s=seed>>>0; return ()=>{ s=(s+0x6D2B79F5)|0; let t=Math.
 
 /* ---------- land and lake ---------- */
 export const FARM_HALF=13, WATER_Y=-1.15;
-export const ISLANDS=[[-58,104,26,.24],[46,132,34,.3],[120,98,20,.2],[-132,150,30,.26],[8,70,9,.13],[-14,214,24,.2]];
+const LAKE={cz:128,rx:250,rz:100};
+export const ISLANDS=[[-52,96,18],[64,124,22],[-26,68,5],[-118,134,16],[138,86,11],[-8,176,11]];     // x,z,radius
+const CAPES=[[214,128,92],[-226,116,96],[92,214,66],[-96,216,74],[10,244,80]];                        // headlands reaching in from the shore
 export function lakeField(x,z){            // > 0 is water
-  const dx=x/312, dz=(z-176)/142;
+  const dx=x/LAKE.rx, dz=(z-LAKE.cz)/LAKE.rz;
   let f=1-Math.hypot(dx,dz);
-  f+=(vnoise(x*.011+3,z*.011+7)-.5)*.3+(vnoise(x*.043,z*.043)-.5)*.05;
-  for(const [ix,iz,ir,ia] of ISLANDS){ const q=((x-ix)*(x-ix)+(z-iz)*(z-iz))/(ir*ir); if(q<9) f-=ia*Math.exp(-q)*(1+.3*vnoise(x*.09,z*.09)); }
+  f+=(vnoise(x*.012+3,z*.012+7)-.5)*.22+(vnoise(x*.043,z*.043)-.5)*.05;
+  for(const [ix,iz,ir] of CAPES){ const d=Math.hypot(x-ix,z-iz); if(d<ir*2) f=Math.min(f,(d/ir-1+(vnoise(x*.03,z*.03)-.5)*.5)*.5); }
+  for(const [ix,iz,ir] of ISLANDS){ const d=Math.hypot(x-ix,z-iz); if(d<ir*3) f=Math.min(f,(d/(ir*(.75+.5*vnoise(x*.07+5,z*.07)))-1)*.16); }
   return Math.min(f,(z-27)/70);
 }
 export function terrainH(x,z){
   const e=clamp((Math.max(Math.abs(x),Math.abs(z))-FARM_HALF)/18,0,1);
   let h=((vnoise(x*.035,z*.035)-.5)*8+(vnoise(x*.11,z*.11)-.5)*1.5)*e*e;
-  const r=Math.hypot(x/312,(z-176)/142);
-  h+=smooth(1.2,2.3,r)*46*(.55+.9*vnoise(x*.016+9,z*.016+2));      // the valley walls
+  const r=Math.hypot(x/LAKE.rx,(z-LAKE.cz)/LAKE.rz);
+  h+=smooth(1.02,1.75,r)*78*(.45+1.1*vnoise(x*.012+9,z*.012+2))*smooth(60,170,Math.hypot(x,z))*lerp(.2,1,smooth(90,250,Math.abs(x)));   // valley walls: high at the sides, low at the far end so the peaks show
+  h+=smooth(70,210,Math.hypot(x,z+6))*34*vnoise(x*.014+3,z*.014)*smooth(40,-30,z);          // wooded ridges behind the farm
+  for(const [ix,iz,ir] of ISLANDS){ const d=Math.hypot(x-ix,z-iz); if(d<ir*1.4) h=Math.max(h,WATER_Y+(1-d/(ir*1.2))*ir*.34); }
   const f=lakeField(x,z);
-  if(f>-.1){ const s=smooth(-.1,0,f); h=lerp(h,WATER_Y+.25,s); if(f>0) h=WATER_Y+.25-Math.min(5,f*34); }
+  if(f>-.07){ const s=smooth(-.07,0,f); h=lerp(h,WATER_Y+.25,s); if(f>0) h=WATER_Y+.25-Math.min(5,f*34); }
   return h;
 }
-export const inWater=(x,z)=>lakeField(x,z)>-.004;
+// the dock reaches from the end of the farm path into the lake
+export const DOCK={x:15,z0:0,z1:0,w:2.5,y:.02};
+(()=>{ let z=20; while(lakeField(DOCK.x,z)<-.012&&z<60) z+=.4; DOCK.z0=z-3; DOCK.z1=z+15; })();
+export const onDock=(x,z)=>(Math.abs(x-DOCK.x)<DOCK.w/2+.15&&z>DOCK.z0&&z<DOCK.z1+2)||(Math.abs(x-DOCK.x)<DOCK.w/2+1.6&&z>DOCK.z1-.3&&z<DOCK.z1+2.1);
+export const inWater=(x,z)=>lakeField(x,z)>-.004&&!onDock(x,z);
+export const walkH=(x,z)=>onDock(x,z)?Math.max(DOCK.y+.05,terrainH(x,z)):terrainH(x,z);
 
 /* walking paths; kept clear of trees and painted into the ground */
 export const PATHS=[
-  [[0,-11],[0,13],[4,20],[14,28],[15,34]],                 // cottage → dock
-  [[3,-13],[14,-16],[26,-22],[34,-24]],                    // farm → town plaza
-  [[-3,-13],[-14,-20],[-28,-30],[-40,-37]],                // farm → mine
-  [[-4,8],[-9,8]]
+  [[0,-9.5],[1,-2],[0,13],[4,20],[14,25],[15,31]],         // cabin → dock
+  [[4,-9],[14,-13],[26,-20],[34,-24]],                     // farm → town plaza
+  [[-4,-9],[-16,-18],[-28,-30],[-40,-37]],                 // farm → mine
+  [[-2,-8.5],[-13,-6]],                                    // → market stall
+  [[-1,3],[-13,4]]                                         // → coop
 ];
 function segDist(px,pz,a,b){ const vx=b[0]-a[0],vz=b[1]-a[1],t=clamp(((px-a[0])*vx+(pz-a[1])*vz)/(vx*vx+vz*vz),0,1); return Math.hypot(px-a[0]-vx*t,pz-a[1]-vz*t); }
 function pathDist(x,z){ let d=1e9; for(const p of PATHS) for(let i=0;i<p.length-1;i++) d=Math.min(d,segDist(x,z,p[i],p[i+1])); return d; }
 function keepClear(x,z){
-  if(x>-23&&x<23&&z>-27&&z<25) return true;               // farm + yard
+  if(x>-28&&x<23&&z>-27&&z<25) return true;               // farm + yard
   if(x>14&&x<54&&z>-44&&z<-10) return true;               // town
   if(Math.hypot(x+40,z+40)<9) return true;                // mine mouth
   return pathDist(x,z)<3.2;
@@ -105,9 +116,9 @@ const RAMP={
   ice:   ['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']
 };
 const SEASON={
-  broad1:[['#3a1420','#7a2c3a','#c25a58','#ea8f7c','#f6b8a0','#fcdcc8'],['#101f18','#1c3a26','#2e5a30','#4e7c38','#7c9c44','#b4c060'],['#2c0f0f','#5a1a14','#9c2c18','#d24e1a','#ec7c24','#f4a93a','#fbd66a'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
-  broad2:[['#2e2410','#5c5018','#92862a','#c4b03c','#e6d25c','#f6ea94'],['#14241a','#22402a','#386434','#5c8840','#8cac50','#c0cc70'],['#3a2410','#6e4414','#b07a1c','#dca52c','#f2cc4c','#fbe88a'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
-  broad3:[['#2c1a10','#603014','#a65a1c','#dc8a2c','#f2b44c','#fbdc88'],['#121f16','#1e3824','#32562e','#527838','#80a044','#b4bc5c'],['#250a10','#4c1016','#821c1c','#b4301e','#d8542a','#ec8a3e'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
+  broad1:[['#2a0f18','#5c1f2c','#963a42','#c86458','#e8926c','#f4bc90'],['#101f18','#1c3a26','#2e5a30','#4e7c38','#7c9c44','#b4c060'],['#2c0f0f','#5a1a14','#9c2c18','#d24e1a','#ec7c24','#f4a93a','#fbd66a'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
+  broad2:[['#1e1a0c','#44380f','#766420','#a88c2c','#d4b440','#ecd872'],['#14241a','#22402a','#386434','#5c8840','#8cac50','#c0cc70'],['#3a2410','#6e4414','#b07a1c','#dca52c','#f2cc4c','#fbe88a'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
+  broad3:[['#22120c','#4e2410','#8a4416','#c06c20','#e49a38','#f4c870'],['#121f16','#1e3824','#32562e','#527838','#80a044','#b4bc5c'],['#250a10','#4c1016','#821c1c','#b4301e','#d8542a','#ec8a3e'],['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']],
   larch: [['#1e1a0e','#46401a','#7c7028','#b0a03c','#d8c85c','#f2e690'],['#14241c','#20402a','#34603a','#4e7f44','#7ca04e','#b4c268'],['#1e1410','#4f2c14','#8a5a1e','#c28a2a','#e4b23e','#f6d670','#fff0b0'],['#2a2230','#4a4050','#8080a0','#d4d8e8','#ffffff']],
   shrub: [['#1c2a16','#3a5022','#648030','#94a844','#c4c868'],['#14241a','#22402a','#3a6434','#608840','#90ac50'],['#250a10','#4c1016','#821c1c','#b4301e','#d8542a','#ec8a3e'],['#3a3044','#5c4c60','#8c7c90','#c8c0d0','#f4f4f8']],
   tuft:  [['#1a2010','#3c4a1c','#6c7a2c','#a0a040','#d0c464'],['#141e10','#28401c','#4c6c2a','#7c9238','#b0b450'],['#1e1410','#4f2c14','#8a5a1e','#c28a2a','#e4b23e','#f6d670'],['#3c3640','#6a6270','#a8a4b4','#dcdce8','#ffffff']],
@@ -134,12 +145,13 @@ const ramp=`vec3 ramp(float v,float row){ return texture2D(uRamps,vec2(clamp(v,.
 
 /* ---------- loading ---------- */
 const load=(url,fn)=>new Promise((res,rej)=>new THREE.TextureLoader().load(url,t=>{ fn&&fn(t); res(t); },undefined,rej));
-const ATLAS={}, TEX={};
+const ATLAS={}; export const TEX={};
 export async function loadScenery(onProgress){
   const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
   const names=[['sheet_trees',sheet],['sheet_plants',sheet],['mt_far',pano],['mt_mid',pano],['mt_forest',pano],['clouds',pano],
+    ['surf_log'],['surf_boards'],['surf_shingle'],['surf_stone'],
     ['ground_tile',t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; }]];
   await Promise.all(names.map(([n,f],i)=>load('assets/paint/'+n+'.webp',f).then(t=>{ TEX[n]=t; onProgress&&onProgress(i/names.length); })));
 }
@@ -174,8 +186,8 @@ function buildSky(root){
         float sd=acos(clamp(dot(d,uSunD),-1.,1.)); float above=1.-uNight;                                      // sun: hard concentric rings
         c=mix(c,mix(c,uSunC,.1),step(sd,.26)*above); c=mix(c,mix(c,uSunC,.18),step(sd,.17)*above); c=mix(c,uSunC,step(sd,.075)*above);
         c+=uSunC*.12*above*exp(-sd*sd*3.);
-        vec2 uv=vec2(az/6.28318*2.+uTime*.00028,clamp(asin(h)/1.5708/.55,0.,1.)); vec3 t=texture2D(uClouds,uv).rgb;
-        float e=mix(.74,.42,uCover), m=smoothstep(e,e+.012,t.g), sm=smoothstep(e-.08,e+.1,t.b)*.72;
+        vec2 uv=vec2(az/6.28318*3.+uTime*.00028,clamp(asin(h)/1.5708/.42,0.,1.)); vec3 t=texture2D(uClouds,uv).rgb;
+        float e=mix(.8,.44,uCover), m=smoothstep(e,e+.01,t.g), sm=smoothstep(e-.02,e+.16,t.b)*.72;
         vec3 cc=mix(uCS,uCL,t.r); c=mix(c,mix(uCS,uCL,.56),sm*(1.-m)); c=mix(c,cc,m);
         c=mix(c,uLow,smoothstep(.05,.0,h)*.7);
         gl_FragColor=vec4(c,1.); }` });
@@ -278,7 +290,7 @@ function groundMaterial(){
       sh.fragmentShader.replace('#include <map_fragment>',`
         vec2 suv=vWP.xz/840.+.5; vec4 sp=texture2D(uSplat,suv);
         vec3 t1=texture2D(uTile,vWP.xz/9.).rgb, t2=texture2D(uTile,vWP.xz/31.).rgb, t3=texture2D(uTile,vWP.xz/157.).rgb;
-        float g=t1.r*.5+t2.r*.3+t3.r*.42-.14;
+        float g=(t1.r*.62+t2.r*.3+t3.r*.5-.21)*1.24-.1;
         vec3 grass=ramp(g,uGroundRow);
         vec3 earth=ramp(t1.g*.6+t2.g*.3+.05,uEarthRow);
         vec3 rock=ramp(t1.b*.42+t2.b*.42+t3.b*.2,uRockRow);
@@ -286,7 +298,7 @@ function groundMaterial(){
         float wet=smoothstep(.1,-.55,vWP.y+1.15);
         float steep=smoothstep(.72,.5,normalize(vWN).y);
         c=mix(c,rock,clamp(max(sp.b,steep)+t2.b*.3-.15,0.,1.));
-        c*=1.-sp.r*.34;
+        c*=1.28-sp.r*.4;
         c*=mix(1.,.55,wet);
         if(uSnow>.01){ c=mix(c,ramp(.62+g*.42,uIceRow),uSnow*smoothstep(.15,.4,g+.3-sp.g*.4)); }
         diffuseColor.rgb*=c;`);
@@ -296,7 +308,7 @@ function groundMaterial(){
 export let groundMesh=null;
 function buildGround(root){
   const warp=(g,S)=>{ const p=g.attributes.position; for(let i=0;i<p.count;i++){ const u=p.getX(i), v=p.getY(i);
-      const x=Math.sign(u)*Math.pow(Math.abs(u),1.45)*S, z=Math.sign(v)*Math.pow(Math.abs(v),1.45)*S;
+      const x=Math.sign(u)*Math.pow(Math.abs(u),1.45)*S, z=-Math.sign(v)*Math.pow(Math.abs(v),1.45)*S;
       p.setXYZ(i,x,terrainH(x,z),z); } g.computeVertexNormals(); return g; };
   const mat=groundMaterial();
   const hi=warp(new THREE.PlaneGeometry(2,2,260,260),640);
@@ -331,17 +343,17 @@ function buildLake(root,res){
         c=mix(c,uTint,uTintAmt+.1*(1.-s.g));
         float f1=smoothstep(14.,6.,d), f2=smoothstep(60.,20.,d)*(1.-f1*.6), f3=1.-smoothstep(160.,420.,d)*.4;
         float g=0.;
-        g+=f1*dash(vec2(p.x*.45+t*.1,p.y*3.2),.82);
-        g+=f2*dash(vec2(p.x*.16-t*.06,p.y*1.3),.84);
-        g+=f3*dash(vec2(p.x*.05+t*.025,p.y*.42),.87)*.9;
-        c=mix(c,uGlint,clamp(g,0.,1.)*uGlintAmt*.72);
+        g+=f1*dash(vec2(p.x*1.1+t*.1,p.y*6.),.9);
+        g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),.91);
+        g+=f3*dash(vec2(p.x*.13+t*.025,p.y*.9),.92);
+        c=mix(c,uGlint,clamp(g,0.,1.)*uGlintAmt*.6);
         float foam=smoothstep(.0,.05,s.r)*(1.-smoothstep(.05,.2,s.r+n*.05));
         c=mix(c,uGlint,foam*.55);
         c=mix(c,uFog,(1.-exp(-d*d*uFogD*uFogD))*.8);
         gl_FragColor=vec4(c,1.); }` };
-  const geo=new THREE.PlaneGeometry(760,460); geo.rotateX(-Math.PI/2); geo.translate(0,0,180);
+  const geo=new THREE.PlaneGeometry(760,460);
   water=new Reflector(geo,{ textureWidth:res[0], textureHeight:res[1], shader, multisample:0, clipBias:.002 });
-  water.position.y=WATER_Y; water.frustumCulled=false; water.camera.layers.enable(2); root.add(water);
+  water.rotation.x=-Math.PI/2; water.position.set(0,WATER_Y,180); water.frustumCulled=false; water.camera.layers.enable(2); root.add(water);
   const u=water.material.uniforms;
   u.uTint.value=waterU.uTint.value; u.uGlint.value=waterU.uGlint.value; u.uFog.value=U.uFog.value; u.uShore.value=shoreTex(); u.uNoise.value=TEX.clouds;
   waterU.uni=u;
@@ -368,7 +380,7 @@ function buildMist(root){
 /* ---------- rocks ---------- */
 function vn3(x,y,z){ return (vnoise(x+z*.7,y-z*.4)+vnoise(y*1.3+5,z*1.3-x*.5))*.5; }
 function rockGeo(seed,flat){
-  const g=new THREE.IcosahedronGeometry(1,3), p=g.attributes.position, s=seed*7.3;
+  const g=new THREE.IcosahedronGeometry(1,2), p=g.attributes.position, s=seed*7.3;
   for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
     const n=1+(vn3(x*1.1+s,y*1.1,z*1.1)-.5)*1.1+(vn3(x*3+s,y*3,z*3)-.5)*.3; let yy=y*n*flat; if(yy<-.2) yy=-.2;
     p.setXYZ(i,x*n,yy,z*n); }
@@ -381,7 +393,7 @@ function buildRocks(root,obst){
   const mat=toonOf({color:0xffffff});
   mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uRockRow:{value:rowV('rock')},uMossRow:{value:rowV('ground')},uIceRow:{value:rowV('ice')},uSnow:U.uSnow});
     sh.vertexShader='varying vec3 vWN; varying vec3 vWP;\n'+sh.vertexShader.replace('#include <defaultnormal_vertex>',
-      `#include <defaultnormal_vertex>\n mat3 im=mat3(instanceMatrix); vWN=normalize(im*(objectNormal/vec3(dot(im[0],im[0]),dot(im[1],im[1]),dot(im[2],im[2]))));`).replace('#include <project_vertex>',
+      `#include <defaultnormal_vertex>\n mat3 svM=mat3(instanceMatrix); vWN=normalize(svM*(objectNormal/vec3(dot(svM[0],svM[0]),dot(svM[1],svM[1]),dot(svM[2],svM[2]))));`).replace('#include <project_vertex>',
       `#include <project_vertex>\n vWP=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;`);
     sh.fragmentShader=`varying vec3 vWN; varying vec3 vWP; uniform sampler2D uRamps,uTile; uniform float uRockRow,uMossRow,uIceRow,uSnow; ${ramp}\n`+sh.fragmentShader.replace('#include <map_fragment>',`
       vec3 tb=texture2D(uTile,vWP.xz/4.+vWP.y*.17).rgb, tc=texture2D(uTile,vec2(vWP.x+vWP.z,vWP.y*1.6)/7.).rgb;
@@ -396,8 +408,8 @@ function buildRocks(root,obst){
   const spots=[[],[],[],[]];
   const add=(x,z,s,sy)=>{ const y=terrainH(x,z); spots[Math.floor(r()*4)].push({x,y:y-.1*s,z,s,sy,ry:r()*6.28}); if(s>1.1) obst.push({x,z,r:s*.82}); };
   // along the shore, in groups, big ones half in the water
-  for(let i=0;i<5000;i++){ const x=(r()-.5)*640, z=20+r()*340, f=lakeField(x,z); if(Math.abs(f+.006)>.012) continue; if(keepClear(x,z)&&Math.hypot(x-14,z-30)<9) continue;
-    if(vnoise(x*.05+2,z*.05)<.46) continue; add(x,z,.7+r()*r()*5.4,.7+r()*.5); }
+  for(let i=0;i<40000;i++){ const x=(r()-.5)*560, z=24+r()*250, f=lakeField(x,z); if(f<-.016||f>.01) continue; if(Math.hypot(x-15,z-34)<8) continue;
+    if(vnoise(x*.06+2,z*.06)<.44) continue; add(x,z,.5+r()*r()*r()*6.5,.62+r()*.5); }
   // scattered in the meadows and woods
   for(let i=0;i<620;i++){ const x=(r()-.5)*500, z=(r()-.5)*500-50, f=lakeField(x,z); if(f>-.02||keepClear(x,z)) continue; if(vnoise(x*.03,z*.03)<.55) continue; add(x,z,.5+r()*r()*3.4,.65+r()*.4); }
   // reefs off the shore
@@ -412,12 +424,12 @@ function buildRocks(root,obst){
 /* ---------- planting the valley ---------- */
 const pick=(a,r)=>a[Math.floor(r()*a.length)];
 function plant(root,obst){
-  const r=rng(1234), trees=[], plants=[], decals=[], mini=[];
+  const r=rng(1234), trees=[], plants=[], decals=[], mini=[]; let tall=1;
   const tree=(x,z,kind)=>{
     const y=terrainH(x,z)-.25;
-    if(kind==='spruce'){ const h=12+r()*13; trees.push({name:pick(['spruce_a','spruce_b','spruce_c','spruce_d'],r),x,y,z,h,row:'spruce',tone:(r()-.5)*.16,flip:r()<.5,wind:.7}); decals.push({x,z,r:h*.18}); obst.push({x,z,r:.75}); mini.push({x,z,c:0}); }
-    else if(kind==='larch'){ const h=11+r()*11; trees.push({name:pick(['larch_a','larch_b'],r),x,y,z,h,row:'larch',tone:(r()-.5)*.14,flip:r()<.5,wind:.8}); decals.push({x,z,r:h*.16}); obst.push({x,z,r:.6}); mini.push({x,z,c:1}); }
-    else if(kind==='broad'){ const h=8.5+r()*6.5; trees.push({name:pick(['broad_a','broad_b','broad_c'],r),x,y,z,h,row:pick(['broad1','broad1','broad2','broad3'],r),tone:(r()-.5)*.1,flip:r()<.5,wind:.5}); decals.push({x,z,r:h*.34}); obst.push({x,z,r:.7}); mini.push({x,z,c:2}); }
+    if(kind==='spruce'){ const h=(12+r()*13)*tall; trees.push({name:pick(['spruce_a','spruce_b','spruce_c','spruce_d'],r),x,y,z,h,row:'spruce',tone:(r()-.5)*.16,flip:r()<.5,wind:.7}); decals.push({x,z,r:h*.18}); obst.push({x,z,r:.75}); mini.push({x,z,c:0}); }
+    else if(kind==='larch'){ const h=(11+r()*11)*tall; trees.push({name:pick(['larch_a','larch_b'],r),x,y,z,h,row:'larch',tone:(r()-.5)*.14,flip:r()<.5,wind:.8}); decals.push({x,z,r:h*.16}); obst.push({x,z,r:.6}); mini.push({x,z,c:1}); }
+    else if(kind==='broad'){ const h=(7+r()*5.5)*tall; trees.push({name:pick(['broad_a','broad_b','broad_c'],r),x,y,z,h,row:pick(['broad1','broad1','broad2','broad3'],r),tone:(r()-.5)*.1,flip:r()<.5,wind:.5}); decals.push({x,z,r:h*.34}); obst.push({x,z,r:.7}); mini.push({x,z,c:2}); }
     else if(kind==='snag'){ const h=7+r()*6; trees.push({name:'snag_a',x,y,z,h,row:'wood',tone:.1,flip:r()<.5,wind:.15,sheet:1}); obst.push({x,z,r:.5}); }
   };
   // forest: jittered grid thinned by a density field, species in drifts
@@ -437,19 +449,19 @@ function plant(root,obst){
     if(r()<.012) tree(x+3,z+2,'snag');
   }
   // islands: rock cap and a crown of trees
-  for(const [ix,iz,ir] of ISLANDS){ for(let i=0;i<ir*2.2;i++){ const a=r()*6.28, q=Math.sqrt(r())*ir*.85, x=ix+Math.cos(a)*q, z=iz+Math.sin(a)*q; if(lakeField(x,z)>-.012) continue; tree(x,z,r()<.45?'larch':r()<.5?'spruce':'broad'); } }
+  for(const [ix,iz,ir] of ISLANDS){ for(let i=0;i<ir*2.2;i++){ const a=r()*6.28, q=Math.sqrt(r())*ir*.85, x=ix+Math.cos(a)*q, z=iz+Math.sin(a)*q; if(lakeField(x,z)>-.012) continue; tall=.72; tree(x,z,r()<.45?'larch':r()<.5?'spruce':'broad'); tall=1; } }
   // framing groups by the farm: the view from the yard is composed, not left to chance
   [[-27,19,'broad'],[-31,23,'broad'],[-24,25,'larch'],[-34,17,'spruce'],[-38,22,'spruce'],[-29,27,'broad'],[29,16,'broad'],[33,22,'larch'],[27,24,'broad'],[36,14,'spruce'],[40,20,'spruce'],[31,29,'broad'],[-44,12,'larch'],[46,8,'broad'],[-50,4,'spruce'],[50,3,'spruce']]
     .forEach(([x,z,k])=>{ if(lakeField(x,z)<-.008) tree(x,z,k); });
   // understory
-  for(let i=0;i<9000;i++){ const x=(r()-.5)*420, z=(r()-.5)*300-20, f=lakeField(x,z); if(f>-.004) continue;
+  for(let i=0;i<26000;i++){ const nearby=i<16000, a=r()*6.28, qr=nearby?16+r()*r()*84:0, x=nearby?Math.cos(a)*qr*1.3:(r()-.5)*420, z=nearby?12+Math.sin(a)*qr:(r()-.5)*300-20, f=lakeField(x,z); if(f>-.004) continue;
     const y=terrainH(x,z), kp=keepClear(x,z);
     if(x>-11&&x<11&&z>-11&&z<14) continue;
     if(pathDist(x,z)<2) continue;
     const q=r();
     if(q<.1&&!kp){ const h=1.3+r()*1.5; plants.push({name:pick(['shrub_a','shrub_b','shrub_c'],r),x,y:y-.1,z,h,row:'shrub',tone:(r()-.5)*.12,flip:r()<.5,wind:.5,trees:true}); }
     else if(q<.2){ plants.push({name:pick(['fern_a','fern_b'],r),x,y:y-.05,z,h:.5+r()*.4,row:'tuft',tone:-.1+r()*.1,flip:r()<.5,wind:1.2}); }
-    else { plants.push({name:pick(['tuft_a','tuft_b','tuft_c'],r),x,y:y-.05,z,h:.45+r()*.6,row:'tuft',tone:(r()-.5)*.2,flip:r()<.5,wind:1.6}); }
+    else { const big=f>-.02||r()<.12; plants.push({name:pick(['tuft_a','tuft_b','tuft_c'],r),x,y:y-.05,z,h:(big?.9:.45)+r()*.7,row:'tuft',tone:(r()-.5)*.2,flip:r()<.5,wind:1.6}); }
   }
   // reeds in the shallows
   for(let i=0;i<7000;i++){ const x=(r()-.5)*520, z=24+r()*300, f=lakeField(x,z); if(f<-.012||f>.012) continue; if(vnoise(x*.09,z*.09)<.5) continue; if(Math.hypot(x-14,z-34)<9) continue;
@@ -532,7 +544,7 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   skyU.uMoonD.value.set(Math.cos(ma)*.75,Math.sin(ma)*.6+.12,.62).normalize();
   skyU.uSunD.value.copy(rig.sunDir);
   setC(skyU.uTop.value,P.top); setC(skyU.uMid.value,P.mid); setC(skyU.uLow.value,P.low); setC(skyU.uCL.value,P.cloudL); setC(skyU.uCS.value,P.cloudS); setC(skyU.uSunC.value,P.sun);
-  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.8:.42; skyU.uAurora.value=aurora?1:0;
+  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.78:.4; skyU.uAurora.value=aurora?1:0;
   setC(mtU.uRS.value,P.rockS); setC(mtU.uRL.value,P.rockL); setC(mtU.uSS.value,P.snowS); setC(mtU.uSL.value,P.snowL); setC(mtU.uFS.value,P.forS); setC(mtU.uFL.value,P.forL); setC(mtU.uHz.value,P.haze);
   setC(mtU.uDS.value,mixc(P.forS,[.46,.2,.08],.55)); setC(mtU.uDL.value,mixc(P.forL,[.98,.66,.2],.7));
   setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;
@@ -545,7 +557,7 @@ export function updateScenery(t,dt,minutes,weather,camera,player,aurora){
   layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
   mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
   if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }
-  rig.sunI=P.sunI; rig.ambI=P.ambI; setC(rig.sunCol,P.lit); setC(rig.ambCol,P.mid); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value);
+  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.1); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value);
   return rig;
 }
 export function setScenerySun(){ return sunTmp; }

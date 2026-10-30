@@ -89,9 +89,71 @@ def tile(size=1024, seed=51):
     out = np.dstack([wrapped(grass, 60000), wrapped(earth, 22000), wrapped(rock, 9000)])
     save(out, 'ground_tile', 88)
 
+def surfaces(S=512, seed=61):
+    """Tiling building surfaces, painted in colour: shingles, boards, fieldstone."""
+    rng = np.random.default_rng(seed)
+    from lib import hex2rgb
+    def jit(c, a=14):
+        d = rng.uniform(-a, a)                       # brightness varies stone to stone; hue barely does
+        return tuple(float(np.clip(v + d + rng.uniform(-2.5, 2.5), 0, 255)) for v in c[::-1])
+
+    # shingles: staggered rows, each tile darker at its lower lip
+    im = np.zeros((S, S, 3), np.uint8); im[:] = (40, 44, 52)
+    rows, cols = 10, 7; rh = S / rows; cw = S / cols
+    for r in range(rows):
+        for c in range(cols + 1):
+            x0 = (c + (r % 2) * .5) * cw + rng.uniform(-3, 3); y0 = r * rh
+            base = hex2rgb(rng.choice(['#585c6c', '#50546a', '#5e6072', '#565a6c']))
+            w = cw * rng.uniform(.9, 1.0)
+            for ox in (0, -S, S):
+                cv2.rectangle(im, (int(x0 + ox), int(y0)), (int(x0 + ox + w), int(y0 + rh + 3)), jit(base), -1)
+                cv2.rectangle(im, (int(x0 + ox), int(y0 + rh * .76)), (int(x0 + ox + w), int(y0 + rh + 3)), jit(base * .62, 6), -1)
+                cv2.line(im, (int(x0 + ox), int(y0)), (int(x0 + ox), int(y0 + rh + 3)), (30, 26, 26), 2, cv2.LINE_AA)
+    for _ in range(1400):
+        x, y = rng.uniform(0, S), rng.uniform(0, S); v = rng.uniform(-22, 22)
+        cv2.line(im, (int(x), int(y)), (int(x + rng.uniform(-3, 3)), int(y + rng.uniform(6, 16))), tuple(float(np.clip(q + v, 0, 255)) for q in im[int(y) % S, int(x) % S]), 1, cv2.LINE_AA)
+    save(im[:, :, ::-1], 'surf_shingle', 86)
+
+    # boards: vertical planks with grain and dark gaps
+    im = np.zeros((S, S, 3), np.uint8)
+    n = 7; bw = S / n
+    for i in range(n):
+        base = hex2rgb(rng.choice(['#6e4e36', '#74543a', '#684a34', '#7a583c']))
+        cv2.rectangle(im, (int(i * bw), 0), (int((i + 1) * bw), S), jit(base), -1)
+        for _ in range(170):
+            x = i * bw + rng.uniform(2, bw - 2); y = rng.uniform(0, S); l = rng.uniform(26, 110); v = rng.uniform(-30, 26)
+            cv2.line(im, (int(x), int(y)), (int(x + rng.uniform(-2, 2)), int(y + l)), tuple(float(np.clip(q + v, 0, 255)) for q in base[::-1]), 1, cv2.LINE_AA)
+        cv2.line(im, (int(i * bw), 0), (int(i * bw), S), (22, 28, 34), 3, cv2.LINE_AA)
+    save(im[:, :, ::-1], 'surf_boards', 86)
+
+    # bark and log end grain share one tile: long horizontal strokes
+    im = np.zeros((S, S, 3), np.uint8); im[:] = (46, 66, 92)
+    for _ in range(3800):
+        x, y = rng.uniform(0, S), rng.uniform(0, S); l = rng.uniform(22, 90)
+        base = hex2rgb(rng.choice(['#6a4a32', '#7c5a3e', '#54392a', '#8a6848', '#44301f']))
+        for ox in (0, -S):
+            cv2.line(im, (int(x + ox), int(y)), (int(x + ox + l), int(y + rng.uniform(-2, 2))), jit(base, 10), int(rng.uniform(1, 3)), cv2.LINE_AA)
+    save(im[:, :, ::-1], 'surf_log', 86)
+
+    # fieldstone: rounded stones over dark mortar
+    im = np.zeros((S, S, 3), np.uint8); im[:] = (34, 34, 38)
+    y = 0
+    while y < S:
+        h = rng.uniform(44, 74); x = rng.uniform(-30, 0)
+        while x < S:
+            w = rng.uniform(60, 120)
+            base = hex2rgb(rng.choice(['#8a7f7a', '#7a7270', '#938478', '#857874']))
+            for ox in (0, -S, S):
+                cv2.ellipse(im, (int(x + w / 2 + ox), int(y + h / 2)), (int(w / 2 - 2), int(h / 2 - 2)), 0, 0, 360, jit(base), -1, cv2.LINE_AA)
+                cv2.ellipse(im, (int(x + w / 2 + ox), int(y + h * .36)), (int(w * .36), int(h * .22)), 0, 0, 360, jit(base * 1.14), -1, cv2.LINE_AA)
+            x += w
+        y += h
+    save(im[:, :, ::-1], 'surf_stone', 86)
+
 if __name__ == '__main__':
     which = sys.argv[1:]
     sh = [w for w in which if w.startswith('sheet_')]
     if not which or sh: sheets(sh)
     if not which or 'panos' in which: panos()
     if not which or 'tile' in which: tile()
+    if not which or 'surfaces' in which: surfaces()

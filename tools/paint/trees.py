@@ -53,11 +53,11 @@ def spruce(seed, W=340, H=1024, width=0.44, droop=0.62, fill=1.0, base=96, dv=62
         for side in (-1, 1):
             if rng.random() < (0.28 * (1 - t) ** 2 + 0.05) / fill: continue
             L = Lmax * rng.uniform(0.62, 1.1)
-            lit = rng.choice([0.55, 0.8, 1.0, 1.25, 1.55], p=[.2, .28, .26, .16, .1])
-            lit *= 1 + 0.35 * math.sin(y * 0.013 + seed * 2.1 + side)     # large patches of light
+            lit = rng.choice([0.72, 0.88, 1.0, 1.16, 1.38], p=[.2, .28, .26, .16, .1])
+            lit *= 1 + 0.2 * math.sin(y * 0.009 + seed * 2.1 + side)     # large patches of light
             up = base * (0.72 + 0.34 * (1 - t)) * lit
             sl = -side * 20
-            _pad(c, rng, tx(y), y + rng.uniform(-5, 5), side, L, droop * rng.uniform(.75, 1.25), T, up, dv * (0.8 + 0.4 * lit), 1.0, sl)
+            _pad(c, rng, tx(y), y + rng.uniform(-5, 5), side, L, droop * rng.uniform(.75, 1.25), T, up, dv * .78, 1.0, sl)
             if lit > 1.05:
                 for _ in range(int(L * 0.55)):
                     s = rng.random()
@@ -75,7 +75,7 @@ def spruce(seed, W=340, H=1024, width=0.44, droop=0.62, fill=1.0, base=96, dv=62
     return c.finish()
 
 def larch(seed, W=340, H=1024):
-    return spruce(seed, W, H, width=0.36, droop=0.34, fill=0.82, base=128, dv=70)
+    return spruce(seed, W, H, width=0.34, droop=0.5, fill=1.0, base=118, dv=58)
 
 def _clump(c, rng, cx, cy, r, lx, ly, gain, jbias):
     """Leaf mass: dabs scattered in a disc, lit from the upper left, deep pockets toward lower right."""
@@ -101,7 +101,7 @@ def _branch(c, rng, x, y, ang, ln, w, depth):
     for k in range(2 + (rng.random() < .35)):
         _branch(c, rng, ex, ey, ang + rng.uniform(-.7, .7), ln * rng.uniform(.62, .84), w * .66, depth - 1)
 
-def broadleaf(seed, W=720, H=860, rx=.36, ry=.35, n_scale=1.0, lobes=34):
+def broadleaf(seed, W=720, H=860, rx=.38, ry=.37, n_scale=1.0, lobes=64):
     """Maple / aspen crown. The silhouette is a noise-warped blob; inflating it gives lobes at every
     scale, lit from upper left, and small dabs carry the light so it reads as brushwork."""
     rng = np.random.default_rng(seed)
@@ -121,21 +121,21 @@ def broadleaf(seed, W=720, H=860, rx=.36, ry=.35, n_scale=1.0, lobes=34):
         a, rr = rng.uniform(0, math.tau), math.sqrt(rng.random()) * 1.02
         lim = 1 + .12 * math.sin(3 * a + ph[0]) + .08 * math.sin(5 * a + ph[1])
         x, y = cx + math.cos(a) * rr * rx * lim, cy + math.sin(a) * rr * ry * lim
-        r = rng.uniform(.13, .24) * W * (1.1 - .45 * rr)
+        r = rng.uniform(.085, .17) * W * (1.1 - .4 * rr)
         if x - r < 14 or x + r > W - 14 or y - r < 14 or y + r > H - 40: continue
-        if any((x - p[0]) ** 2 + (y - p[1]) ** 2 < (.55 * (r + p[2])) ** 2 for p in pts): continue
+        if any((x - p[0]) ** 2 + (y - p[1]) ** 2 < (.5 * (r + p[2])) ** 2 for p in pts): continue
         pts.append((x, y, r))
     h = np.full((H, W), -1e3, np.float32)
     for x, y, r in pts:
         h = np.maximum(h, np.sqrt(np.maximum(r * r - (xx - x) ** 2 - (yy - y) ** 2, 0)) + (r * .5) * (y < cy) - 1e3 * ((xx - x) ** 2 + (yy - y) ** 2 > r * r))
     mask = ((h > -500) & (n1 * 40 + np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) * 0 > -60)).astype(np.float32)
     h = np.where(h > -500, h, 0).astype(np.float32)
-    hs = (cv2.GaussianBlur(h, (0, 0), 3) + n2 * 5 + n1 * 9).astype(np.float32)
+    hs = (cv2.GaussianBlur(h, (0, 0), 2.2) + n2 * 7 + n1 * 11).astype(np.float32)
     gx = cv2.Sobel(hs, cv2.CV_32F, 1, 0, ksize=3) / 8; gy = cv2.Sobel(hs, cv2.CV_32F, 0, 1, ksize=3) / 8
     nz = 1 / np.sqrt(gx ** 2 + gy ** 2 + 1)
     lam = (gx * .52 + gy * .74 + .42) * nz                   # sun upper left
-    ao = np.clip((cv2.GaussianBlur(h, (0, 0), 26) - h) / 34, 0, 1)
-    val = np.clip(.2 + .62 * lam - .2 * w - .08 * u - .55 * ao + .06 * n2, 0, 1)
+    ao = np.clip((cv2.GaussianBlur(h, (0, 0), 20) - h) / 40, 0, 1)
+    val = np.clip(.3 + .5 * lam - .22 * w - .1 * u - .38 * ao + .1 * n2, 0, 1)
     val = cv2.GaussianBlur(val.astype(np.float32), (0, 0), 1.5)
     val = np.floor(val * 7 + .5 + n2 * .22) / 7
     ys, xs = np.nonzero(mask)
