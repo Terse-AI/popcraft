@@ -509,6 +509,8 @@ Noise.prototype.ridge2=function(x,y,oct){   // 1-|n| stacked: sharp crests
    pass gives a climate and a surface height, then a 3D pass carves.
    ------------------------------------------------------------------- */
 var WSEED=0, N={};
+// per-world terrain "flavor", derived from the seed in initWorld (see below)
+var WV_amp=1, WV_hilly=0.5, WV_tshift=0, WV_hshift=0, WV_detail=1;
 function initWorld(seed){
   WSEED=seed|0;
   N.cont =new Noise(WSEED+1);  N.ero  =new Noise(WSEED+2);
@@ -518,6 +520,15 @@ function initWorld(seed){
   N.surf =new Noise(WSEED+9);  N.cld  =new Noise(WSEED+10);
   N.vary =new Noise(WSEED+11); N.var  =new Noise(WSEED+12);
   N.var2 =new Noise(WSEED+13); N.river=new Noise(WSEED+14);
+  // Every seed now makes a genuinely different world: some flat plains, some
+  // mountainous, some drier/colder/warmer, with different biome mixes — instead
+  // of every map feeling the same. Deterministic from the seed so it is shareable.
+  function _hs(k){ return hash3(k*97+1,k*57+7,k*31+13,WSEED); }
+  WV_amp    = 0.62 + _hs(1)*1.25;      // 0.62 flat .. 1.87 mountainous
+  WV_hilly  = _hs(2);                  // extra ridge weight for dramatic peaks
+  WV_tshift = (_hs(3)-0.5)*0.55;       // climate shift
+  WV_hshift = (_hs(4)-0.5)*0.55;       // humidity shift -> more desert/forest/swamp
+  WV_detail = 0.7 + _hs(5)*0.8;        // surface roughness
 }
 function sstep(a,b,x){ x=(x-a)/(b-a); x=x<0?0:(x>1?1:x); return x*x*(3-2*x); }
 function mix(a,b,t){ return a+(b-a)*t; }
@@ -538,17 +549,17 @@ function column(x,z){
   var c =N.cont.fbm2(x/900,  z/900,  4,2.0,0.5);
   var e =N.ero .fbm2(x/330,  z/330,  3,2.0,0.5);
   var w =N.weird.ridge2(x/230, z/230, 4);
-  var t =N.temp.fbm2(x/1400, z/1400, 2,2.0,0.5);
-  var hm=N.humid.fbm2(x/950,  z/950,  2,2.0,0.5);
+  var t =N.temp.fbm2(x/1400, z/1400, 2,2.0,0.5)+WV_tshift;
+  var hm=N.humid.fbm2(x/950,  z/950,  2,2.0,0.5)+WV_hshift;
   var v =N.vary.fbm2(x/260,  z/260,  2,2.0,0.5);
 
   var land=sstep(-0.26,0.10,c);
   var base=16+land*16;
   var flat=sstep(-0.10,0.45,e);
-  var amp=(1-flat)*34*land+3*land;
+  var amp=((1-flat)*34*land+3*land)*WV_amp;
   var det=(N.surf.fbm2(x/60,z/60,5,2.1,0.60)*7.0
           +N.surf.n2(x/7.0+90,z/7.0+90)*1.45)*land;
-  var h=base+amp*(0.25+0.75*w)+det;
+  var h=base+amp*(0.25+0.75*w*(0.7+WV_hilly*0.7))+det*WV_detail;
 
   var bandH=5.0+N.ero.n2(x/180,z/180)*2.0;
   var f=h/bandH, fi=Math.floor(f), fr=f-fi;
@@ -1006,7 +1017,7 @@ var DIMS=[SX,SY,SZ];
 /* Scratch, allocated once and reused for every chunk. It is several
    megabytes, so it is built on first use: the page usually never meshes
    anything itself and should not pay for the buffers. */
-var MAXQ=26000, WMAXQ=6000;
+var MAXQ=32000, WMAXQ=6000;   // more headroom for lusher grass + foliage
 var blocks=null, sky=null, blk=null, lqueue=null;
 var oPos,oNrm,oCol,oLt,oFx,oIdx, wPos,wNrm,wCol,wLt,wFx,wIdx, mKey,mAO;
 var oV=0,oI=0,wV=0,wI=0;
@@ -1257,8 +1268,9 @@ COVER[B_DESERT] ={d:0.08,c0:[0.44,0.38,0.21],c1:[0.64,0.57,0.33],h:[0.28,0.58],f
 COVER[B_BADLANDS]={d:0.05,c0:[0.42,0.32,0.18],c1:[0.60,0.48,0.28],h:[0.26,0.52],fl:0.0};
 COVER[B_PEAK]   ={d:0.05,c0:[0.44,0.50,0.58],c1:[0.64,0.70,0.80],h:[0.22,0.40],fl:0.0};
 COVER[B_STONY]  ={d:0.06,c0:[0.34,0.40,0.34],c1:[0.52,0.60,0.50],h:[0.24,0.46],fl:0.0};
-var PETALS=[[0.96,0.66,0.78],[1.00,0.94,0.66],[0.78,0.70,0.95],
-            [0.98,0.98,0.96],[0.98,0.74,0.56]];
+var PETALS=[[0.98,0.52,0.66],[1.00,0.88,0.42],[0.70,0.58,0.96],
+            [1.00,1.00,0.98],[1.00,0.62,0.40],[0.58,0.76,1.00],
+            [0.96,0.46,0.52],[0.86,0.60,0.98]];
 function emitCover(cx,cz){
   var ox=cx*SX, oz=cz*SZ, lx,lz,y,i;
   for(lz=0;lz<SZ;lz++) for(lx=0;lx<SX;lx++){
@@ -1284,7 +1296,7 @@ function emitCover(cx,cz){
     var by=ytop+1;
     // Up to two tufts per cell, each a cluster of four tapered blades. Denser
     // and more varied than a single sprig: this is most of "草地更多细节".
-    var tufts=(hash3(wx,19,wz,WSEED)<0.62)?2:1;
+    var _tr=hash3(wx,19,wz,WSEED); var tufts=(_tr<0.42)?3:((_tr<0.80)?2:1);
     for(var tf=0;tf<tufts;tf++){
       var j1=hash3(wx,31+tf*7,wz,WSEED), j2=hash3(wx,37+tf*7,wz,WSEED),
           j3=hash3(wx,41+tf*7,wz,WSEED), j4=hash3(wx,43+tf*7,wz,WSEED);
@@ -1301,14 +1313,33 @@ function emitCover(cx,cz){
       blade(bx,by,bz, Math.cos(a+1.05),Math.sin(a+1.05), 0.23,0.045,h*0.84,-lean,c0,c1,sl,bl);
       blade(bx,by,bz, Math.cos(a+2.1),Math.sin(a+2.1), 0.21,0.04,h*0.70,lean*1.4,c0,c1,sl,bl);
       blade(bx,by,bz, Math.cos(a+3.6),Math.sin(a+3.6), 0.18,0.035,h*0.55,-lean*1.2,c0,c1,sl,bl);
-      if(tf===0 && r1<cv.d*cv.fl){            // a flower on the tallest few
-        var pc=PETALS[(j3*PETALS.length)|0], st=h*0.92, pw=0.26;
-        blade(bx,by+st,bz, Math.cos(a+0.8),Math.sin(a+0.8), pw,pw*0.9,0.14,0,pc,pc,sl,bl);
-        blade(bx,by+st,bz, -Math.sin(a+0.8),Math.cos(a+0.8), pw,pw*0.9,0.14,0,pc,pc,sl,bl);
-        // a tiny bright centre
-        var yc=[1.0,0.92,0.5];
-        blade(bx,by+st,bz, 1.0,0.0, 0.08,0.07,0.05,0,yc,yc,sl,bl);
+      if(tf===0 && (r1<cv.d*cv.fl || j2<0.10)){   // fuller, more frequent blooms
+        var daisy=(j1<0.6);
+        var pc=daisy?[1.0,1.0,0.97]:PETALS[(j3*PETALS.length)|0];
+        var st=h*0.92, pw=0.22, np=daisy?6:5;
+        for(var pp=0;pp<np;pp++){
+          var pa=a+pp*(6.283/np);
+          blade(bx,by+st,bz, Math.cos(pa),Math.sin(pa), pw,pw*0.82,0.15,0.04,pc,pc,sl,bl);
+        }
+        // a warm yellow eye in the middle
+        var yc=daisy?[1.0,0.85,0.34]:[1.0,0.92,0.5];
+        blade(bx,by+st+0.015,bz, 1.0,0.0, 0.09,0.08,0.06,0,yc,yc,sl,bl);
+        blade(bx,by+st+0.015,bz, 0.0,1.0, 0.09,0.08,0.06,0,yc,yc,sl,bl);
       }
+    }
+    // occasional shrub or fern clump, to break the flat lawn into varied plants
+    var deco=hash3(wx,61,wz,WSEED);
+    if(deco<0.05){                       // a low bushy shrub
+      var bc0=[cv.c0[0]*0.70,cv.c0[1]*0.84,cv.c0[2]*0.66], bc1=[cv.c1[0]*0.92,cv.c1[1]*1.0,cv.c1[2]*0.84];
+      var bcx=lx+0.5, bcz=lz+0.5;
+      for(var bb=0;bb<8;bb++){ var ba2=(bb/8)*6.283+deco*6.283;
+        blade(bcx+Math.cos(ba2)*0.12, by, bcz+Math.sin(ba2)*0.12, Math.cos(ba2),Math.sin(ba2),
+          0.34,0.12, 0.34+hash3(wx,67+bb,wz,WSEED)*0.2, 0.5+hash3(wx,71+bb,wz,WSEED)*0.3, bc0,bc1,sl,bl); }
+    } else if(deco<0.082){               // a tall arching fern / tall-grass clump
+      var fc0=[cv.c0[0]*0.9,cv.c0[1]*1.02,cv.c0[2]*0.78], fc1=[Math.min(1,cv.c1[0]*1.05),Math.min(1,cv.c1[1]*1.1),cv.c1[2]*0.82];
+      var fcx=lx+0.5, fcz=lz+0.5;
+      for(var fn=0;fn<5;fn++){ var fa=(fn/5)*6.283+deco*3.0;
+        blade(fcx, by, fcz, Math.cos(fa),Math.sin(fa), 0.12,0.02, 0.95+hash3(wx,79+fn,wz,WSEED)*0.45, 0.7, fc0,fc1,sl,bl); }
     }
   }
   // ---- LEAF FRONDS: drooping cards on exposed leaf blocks, which is what
@@ -1323,7 +1354,7 @@ function emitCover(cx,cz){
                   (at(px2,y2,pz2+1)===0)||(at(px2,y2,pz2-1)===0);
       if(!upAir && !sideAir) continue;
       var wx2=lx2+cx*SX, wz2=lz2+cz*SZ;
-      if(hash3(wx2,51,wz2*7+y2,WSEED)>0.5) continue;      // thin it out
+      if(hash3(wx2,51,wz2*7+y2,WSEED)>0.72) continue;     // leafier canopy
       var li2=pidx(px2,Math.min(SY-1,y2+1),pz2);
       var sl2=sky[li2]/15, bl2=blk[li2]/15;
       var hx2=BLOCKS[lid].t;
@@ -1331,7 +1362,7 @@ function emitCover(cx,cz){
       var jf=hash3(wx2,53,wz2+y2,WSEED), jf2=hash3(wx2,59,wz2+y2,WSEED);
       var dark=[lr*0.62,lg2*0.62,lb2*0.62];
       var lite=[Math.min(1,lr*1.15),Math.min(1,lg2*1.12),Math.min(1,lb2*1.1)];
-      var cx2=lx2+0.5, cz2=lz2+0.5, nf=2+((jf2*2)|0);
+      var cx2=lx2+0.5, cz2=lz2+0.5, nf=3+((jf2*3)|0);
       for(var ff=0;ff<nf;ff++){
         var ang=(ff/nf)*6.283+jf*6.283, dcx=Math.cos(ang), dcz=Math.sin(ang);
         blade(cx2+dcx*0.3, y2+1, cz2+dcz*0.3, dcx,dcz, 0.52,0.18,
@@ -1340,6 +1371,9 @@ function emitCover(cx,cz){
       if(upAir){
         blade(cx2, y2+1.0, cz2, 1.0,0.0, 0.7,0.5,0.14,0.0, lite,lite, sl2,bl2);
         blade(cx2, y2+1.0, cz2, 0.0,1.0, 0.7,0.5,0.14,0.0, lite,lite, sl2,bl2);
+        // two more diagonal crown fronds, for a rounder, fuller canopy top
+        blade(cx2, y2+1.05, cz2, 0.7,0.7, 0.6,0.4,0.18,0.0, lite,lite, sl2,bl2);
+        blade(cx2, y2+1.05, cz2, 0.7,-0.7, 0.6,0.4,0.18,0.0, lite,lite, sl2,bl2);
       }
     }
   }
@@ -1405,7 +1439,10 @@ const GLOW_WHITE=glowTex('rgba(255,255,255,1)','rgba(192,216,255,0.45)');
 
 const canvas=$('#gl');
 const renderer=new T.WebGLRenderer({canvas:canvas,antialias:false});
-let pixelBudget=Math.min(window.devicePixelRatio||1,1.25);
+let pixelBudget=Math.min(window.devicePixelRatio||1,1.0);   // capped for smoothness; Quality setting adjusts
+// Which post-processing passes run, set by the Quality setting (Low/Med/High).
+// Low drops them for frames; High adds the wide soft-bloom + stronger AO/rays.
+let FX_RAYS=true, FX_WIDE=false, FX_SSAO=true;
 renderer.setPixelRatio(pixelBudget);
 renderer.outputColorSpace=T.SRGBColorSpace;
 renderer.toneMapping=T.NoToneMapping;      // graded in the composite instead
@@ -1473,7 +1510,7 @@ const matRays=new T.ShaderMaterial({
 
 const matComp=new T.ShaderMaterial({
   uniforms:{tDiffuse:{value:null},tBloom:{value:null},tWide:{value:null},
-    tRays:{value:null},uRays:{value:1.35},uAO:{value:0.80},
+    tRays:{value:null},uRays:{value:1.35},uAO:{value:0.80},uSharp:{value:0.30},
     tDepth:{value:null},uTexel:{value:new T.Vector2(1/800,1/600)},
     uNear:{value:0.1},uFar:{value:900},
     uOutline:{value:0.9},uOutW:{value:1.0},uSat:{value:1.16},
@@ -1486,7 +1523,7 @@ const matComp=new T.ShaderMaterial({
     'uniform vec2 uRes;uniform float uTime,uBloom,uExposure,uVig,uHalo,uNight;',
     'uniform float uUnder,uWet,uReal;',
     'uniform sampler2D tDepth,tRays; uniform vec2 uTexel;',
-    'uniform float uRays,uAO;',
+    'uniform float uRays,uAO,uSharp;',
     'uniform float uNear,uFar,uOutline,uOutW,uSat;',
     // view depth, so an edge threshold can scale with distance instead of
     // fattening up close and vanishing far away
@@ -1559,26 +1596,32 @@ const matComp=new T.ShaderMaterial({
     '   float mx=max(max(dot(nw,L),dot(ne,L)),max(dot(sw,L),dot(se,L)));',
     '   float w=smoothstep(0.02,0.14,max(mx-l0,l0-mn));',
     '   col=mix(c0,(nw+ne+sw+se+c0)*0.2,w*0.85);',
+    '   col+=(col-(nw+ne+sw+se)*0.25)*uSharp;',   // unsharp mask — recover clarity without more pixels
     ' }',
-    ' col*=ssao(uv,linz(uv));',
+    ' if(uAO>0.004) col*=ssao(uv,linz(uv));',   // SSAO skipped when Quality is Low
     ' col+=texture2D(tRays,uv).rgb*uRays;',
     ' vec3 bl=texture2D(tBloom,uv).rgb*0.60+texture2D(tWide,uv).rgb*1.00;',
     ' col+=bl*uBloom;',
     // film scatters the red layer furthest, which is most of why a lamp at
     // night feels warm rather than merely bright
-    ' col+=bl*vec3(0.42,0.17,0.06)*uHalo;',
+    ' col+=bl*vec3(0.46,0.20,0.07)*uHalo;',
+    ' float gl=smoothstep(0.55,1.1,dot(bl,vec3(0.33)));',
+    ' col+=vec3(0.26,0.19,0.09)*gl*uBloom*0.9;',
     ' col*=uExposure;',
     ' col=aces(col);',
     ' float l=dot(col,vec3(0.2126,0.7152,0.0722));',
     // shadows toward night-blue, highlights toward lamplight
-    ' col=mix(col*vec3(0.80,0.90,1.18),col*vec3(1.16,1.05,0.86),smoothstep(0.06,0.60,l));',
+    ' col=mix(col*vec3(0.80,0.91,1.17),col*vec3(1.20,1.07,0.80),smoothstep(0.06,0.60,l));',  // warmer golden-hour highlights
     // the reference look lives on saturated colour, so this pushes chroma
     // instead of only lifting contrast
     ' col=mix(vec3(l),col,mix(uSat,1.12,uReal));',
-    ' col=mix(col, col*col*(3.0-2.0*col), uReal*0.40);',   // filmic S-curve
+    ' col=mix(col, col*col*(3.0-2.0*col), uReal*0.28);',   // gentler, softer contrast
     ' col=pow(col,vec3(0.94));',    // lift the midtones, a softer, sunnier curve
     ' col=mix(col,vec3(l),smoothstep(0.74,1.0,l)*0.45);',
     ' col*=mix(vec3(0.95,0.93,1.05),vec3(1.04,1.00,0.94),smoothstep(0.12,0.78,l));',
+    ' float lb=dot(col,vec3(0.2126,0.7152,0.0722));',
+    ' col+=vec3(-0.015,0.004,0.020)*(1.0-smoothstep(0.0,0.5,lb))*uReal;',
+    ' col+=vec3(0.022,0.010,-0.016)*smoothstep(0.5,1.0,lb)*uReal;',
     // the eye loses colour before it loses light: night desaturates
     ' col=mix(col,vec3(l)*vec3(0.80,0.88,1.12),uNight*0.34);',
     ' col=pow(max(col*1.03-0.004,0.0),vec3(1.04));',
@@ -1609,8 +1652,10 @@ const matComp=new T.ShaderMaterial({
     ' float paper=pN(pp)*0.55+pN(pp*2.7)*0.30+pN(pp*7.3)*0.15;',
     ' col*=0.955+paper*0.085*(1.0-uReal*0.78);',
     ' col+=vec3(0.012,0.004,-0.010)*(pN(uv*uRes*0.035)-0.5)*0.9;',
-    ' float vig=smoothstep(1.16,0.28,length(d)*1.42);',
+    ' float vd2=length(d)*1.38;',
+    ' float vig=smoothstep(1.22,0.20,vd2);',
     ' col*=mix(uVig*mix(1.0,0.55,uUnder),1.0,vig);',
+    ' col*=1.0+0.05*(1.0-smoothstep(0.0,0.7,vd2));',
     ' float g=h21(floor(uv*uRes)+vec2(uTime*61.0,uTime*37.0));',
     ' col+=(g-0.5)*0.026*smoothstep(0.02,0.36,l);',
     ' col=clamp(col,0.0,1.0);',
@@ -1664,12 +1709,14 @@ function renderFrame(time){
   renderer.setRenderTarget(rtA); renderer.render(postScene,postCam);
   blurPass(rtA,rtB,1,0,1.0); blurPass(rtB,rtA,0,1,1.0);
   blurPass(rtA,rtC,1,0,1.0); blurPass(rtC,rtD,0,1,1.0);
-  blurPass(rtD,rtC,1,0,2.2); blurPass(rtC,rtD,0,1,2.2);
+  if(FX_WIDE){ blurPass(rtD,rtC,1,0,2.2); blurPass(rtC,rtD,0,1,2.2); }  // extra soft bloom (High only)
 
-  // light shafts, smeared out of the already-bright pixels
-  pquad.material=matRays;
-  matRays.uniforms.tDiffuse.value=rtA.texture;
-  renderer.setRenderTarget(rtB); renderer.render(postScene,postCam);
+  // light shafts, smeared out of the already-bright pixels (skipped on Low)
+  if(FX_RAYS){
+    pquad.material=matRays;
+    matRays.uniforms.tDiffuse.value=rtA.texture;
+    renderer.setRenderTarget(rtB); renderer.render(postScene,postCam);
+  }
 
   pquad.material=matComp;
   matComp.uniforms.tRays.value=rtB.texture;
@@ -1797,10 +1844,8 @@ function toonRamp(){
   TOON_RAMP.generateMipmaps=false; TOON_RAMP.colorSpace=T.SRGBColorSpace;
   return TOON_RAMP;
 }
-// A lifted ramp for the photographed (GLB) figures. The procedural residents
-// are painted flat, but a Tripo toy already carries colour and soft shading in
-// its texture, so the dark cel band only needs to shape it, not darken it —
-// the shadow side stays bright and barely cool instead of sinking to mud.
+// A lifted ramp for the photographed (GLB) figures: the shadow side stays
+// bright and barely cool so a textured toy never sinks to a dark blob.
 let GLB_RAMP=null;
 function glbRamp(){
   if(GLB_RAMP) return GLB_RAMP;
@@ -2903,10 +2948,7 @@ function parseGLB(buf){
     map.flipY=false;                 // glTF UVs already run top-down
     map.anisotropy=4;
   }
-  // cel shading, so a generated mesh sits in the same world as the rest — but
-  // on a lifted ramp, and with its own texture fed back as a gentle emissive so
-  // the toy keeps its painted colour even on the shadow side and at dusk, never
-  // reading as a dark blob. Lighter watercolour so the edge doesn't pool dark.
+  // cel shading, so a generated mesh sits in the same world as the rest
   if(map) map.anisotropy=8;
   const material=papery(new T.MeshToonMaterial({map:map,gradientMap:glbRamp(),
     emissive:0xffffff, emissiveMap:map, emissiveIntensity:0.34}),0.45);
@@ -3747,6 +3789,15 @@ const CHUNK_FS=[
   '    col*=0.90+gr*0.20;',
   '    col*=mix(0.70,1.0,seam);',                  // the groove between blocks
   '    col*=mix(1.06,1.0,bev);',                   // and the bevel inside it
+  // Round the hard cube edges in SHADING only (no extra geometry): near the
+  // in-plane edges, tilt the normal outward so a flat face catches the light
+  // like a softly rounded block. This is what takes the "all cubes" harshness
+  // off the silhouette without touching the mesh.
+  '    vec3 _et=vec3(0.0);',
+  '    if(abs(n.y)>0.5){ _et.x=0.5-fp.x; _et.z=0.5-fp.z; }',
+  '    else if(abs(n.x)>0.5){ _et.y=0.5-fp.y; _et.z=0.5-fp.z; }',
+  '    else { _et.x=0.5-fp.x; _et.y=0.5-fp.y; }',
+  '    n=normalize(n - _et*((1.0-bev)*0.75));',
   // --- the surface. Each family is drawn in the face's own 0..1 coords,
   // which is exactly where a texture would have sat, so every block type
   // reads as its own material without a single image being loaded.
@@ -4118,6 +4169,9 @@ function updateDay(dt){
    it does that a couple per frame so walking never stutters.
    ====================================================================== */
 let VIEW=7;                         // chunks of sight, trimmed if frames run long
+// --- game mode + player-adjustable settings (Minecraft-style) ---
+let creative=false, flying=false, VIEW_LOCK=false;
+let LOOK_SENS=0.0026, INVERT_Y=false, _lastSpace=0, QUALITY=2, LANG='zh';
 const CH=new Map();                 // live chunks
 const EDITS=new Map();              // every block the player ever changed, forever
 const UPLOAD_BUDGET=2;
@@ -4419,9 +4473,16 @@ function inWaterAt(x,y,z){
 function movePlayer(dt){
   const p=player.p, v=player.v;
   player.inWater=inWaterAt(p.x,p.y,p.z);
-  const g=player.inWater?-7.0:-26.0;
-  v.y+=g*dt;
-  if(player.inWater){ v.y=Math.max(v.y,-3.2); v.x*=0.86; v.z*=0.86; }
+  if(flying){
+    // creative flight: no gravity — Space rises, Shift descends
+    const up=(keys[' ']?1:0)-(sneak?1:0);
+    v.y += (up*22 - v.y)*Math.min(1,dt*10);
+    if(!up) v.y*=0.80;
+  } else {
+    const g=player.inWater?-7.0:-26.0;
+    v.y+=g*dt;
+    if(player.inWater){ v.y=Math.max(v.y,-3.2); v.x*=0.86; v.z*=0.86; }
+  }
   let ny;
   // sneaking refuses any step that would leave you standing on nothing,
   // which is the whole reason the key exists
@@ -4509,6 +4570,12 @@ addEventListener('keydown',function(e){
   }
   if(state!=='play') return;
   if(k===' '||k.indexOf('Arrow')===0||k==='Tab') e.preventDefault();
+  if(k===' ' && !e.repeat && creative){
+    const now=performance.now();
+    if(now-_lastSpace<300){ flying=!flying; player.v.y=0; }   // double-tap space to fly
+    _lastSpace=now;
+  }
+  if((k==='o'||k==='O') && !e.repeat){ toggleSettings(); return; }
   // E has to be reachable WITH the panel open, or it can open it and never
   // close it again — the bag key must work both ways
   if(k==='e'){ if(!e.repeat) toggleCraft(); return; }
@@ -4556,7 +4623,8 @@ document.addEventListener('visibilitychange',function(){ if(document.hidden) cle
 const DRAG_SLOP=6;                  // px before a press counts as a look
 function lookBy(dx,dy,k){
   player.yaw-=dx*k;
-  player.pitch=clamp(player.pitch-dy*k,-1.55,1.55);
+  const dp=(INVERT_Y?-dy:dy)*k;
+  player.pitch=clamp(player.pitch-dp,-1.55,1.55);
 }
 canvas.addEventListener('mousedown',function(e){
   if(state!=='play'||craftOpen) return;
@@ -4573,7 +4641,7 @@ canvas.addEventListener('mousedown',function(e){
 addEventListener('mousemove',function(e){
   if(state!=='play'||craftOpen) return;
   if(locked){
-    lookBy(e.movementX||0,e.movementY||0,0.0022);
+    lookBy(e.movementX||0,e.movementY||0,LOOK_SENS);
     return;
   }
   if(!mBtn) return;                  // unlocked: only a held button looks
@@ -4728,16 +4796,17 @@ function playerInput(dt){
   if(keys['a']) mx-=1;
   if(keys['d']) mx+=1;
   if(TOUCH){ mx+=tMove.x; mz+=tMove.z; }
-  if(keys['ArrowLeft'])  player.yaw+=dt*2.1;
-  if(keys['ArrowRight']) player.yaw-=dt*2.1;
+  if(keys['ArrowLeft'])  player.yaw+=dt*3.0;
+  if(keys['ArrowRight']) player.yaw-=dt*3.0;
   if(keys['ArrowUp'])    player.pitch=clamp(player.pitch+dt*1.7,-1.45,1.45);
   if(keys['ArrowDown'])  player.pitch=clamp(player.pitch-dt*1.7,-1.45,1.45);
   // sneak beats sprint, the way it does everywhere else
-  const gait=sneak?0.32:(sprint?1.42:1.0);
-  const sp=(player.inWater?3.4:(player.onGround?4.6:4.1))*gait;
+  // Minecraft-style gait ratios (sneak ~0.3×, sprint ~1.3×) on a brisk base.
+  const gait=sneak?0.30:(sprint?1.33:1.0);
+  const sp=(player.inWater?3.6:(player.onGround?6.0:5.4))*gait;   // brisker walk
   const len=Math.hypot(mx,mz)||1;
   const tx=(_fwd.x*mz+_rgt.x*mx)/len*sp, tz=(_fwd.z*mz+_rgt.z*mx)/len*sp;
-  const acc=player.onGround?14:5;
+  const acc=player.onGround?42:9;   // near-instant ground accel, Minecraft-snappy
   if(mx||mz){
     player.v.x+=(tx-player.v.x)*Math.min(1,acc*dt);
     player.v.z+=(tz-player.v.z)*Math.min(1,acc*dt);
@@ -4798,9 +4867,8 @@ function updateCamera(dt){
   if(avatar){
     avatar.position.set(player.p.x,player.p.y,player.p.z);
     // A generated figure turns to face the way it is actually walking, so
-    // strafing (A/D) and backing up (S) visibly rotate it instead of sliding
-    // sideways facing the camera. Walking straight forward still lines up with
-    // the view. Procedural residents keep facing the view as before.
+    // strafing (A/D) and backing up (S) visibly rotate it and the face points
+    // the way it moves. Procedural residents keep facing the view as before.
     if(avatarParts&&avatarParts.glb){
       const sp=Math.hypot(player.v.x,player.v.z);
       if(player._face===undefined) player._face=player.yaw;
@@ -4835,19 +4903,15 @@ function animateAvatar(dt,t){
     avatarParts.halo.material.opacity=0.30*nightness;
     const k=2.0+nightness*1.4; avatarParts.halo.scale.set(k,k,1);
   }
-  // A generated (GLB) figure has no separate limbs — the arm/leg holders above
-  // are empty — so give the whole body a lively procedural walk instead: a bob
-  // on every step, a side-to-side rock, a forward lean into the stride, a gentle
-  // squash-stretch, and a bank into turns so even a round body visibly steers.
+  // A generated (GLB) figure has no separate limbs — the arm/leg holders are
+  // empty — so drive the whole body: a springy hop, side rock, waddle, forward
+  // lean and squash-stretch while walking, and an always-on breathing bob +
+  // slow sway + look-around while idle, so it is never frozen in place.
   const body=avatar.children[0];
   if(avatarParts.glb){
     const tt=t||performance.now()*0.001;
     const moving=Math.min(1,sp*0.55), idle=1-moving;
-    const ph=player.bob;                       // stride phase
-    // WALK: a springy hop each step, a side rock, a cute waddle around the
-    // facing, a forward lean into the stride and a squash-stretch.
-    // IDLE: an always-on breathing bob, a slow sway and a gentle look-around,
-    // so the figure is clearly alive and never frozen in place.
+    const ph=player.bob;
     const hop    = Math.abs(Math.sin(ph))*0.22*moving;
     const breath = (Math.sin(tt*1.8)*0.5+0.5)*0.07*idle;
     body.position.y = hop + breath;
@@ -4859,7 +4923,7 @@ function animateAvatar(dt,t){
     let dyaw=f-(player._pface===undefined?f:player._pface);
     player._pface=f;
     while(dyaw>Math.PI)dyaw-=2*Math.PI; while(dyaw<-Math.PI)dyaw+=2*Math.PI;
-    body.rotation.z += clamp(-dyaw*1.7,-0.24,0.24);   // bank into turns
+    body.rotation.z += clamp(-dyaw*1.7,-0.24,0.24);
     const sq = Math.sin(ph*2)*0.08*moving + Math.sin(tt*1.8)*0.035*idle;
     const s0 = avatarParts.glb.userData.s0;
     avatarParts.glb.scale.set(s0*(1-sq*0.6),s0*(1+sq),s0*(1-sq*0.6));
@@ -4869,6 +4933,7 @@ function animateAvatar(dt,t){
   if(player.swing>0) player.swing=Math.max(0,player.swing-dt*3.4);
 }
 function hurt(n){
+  if(creative) return;                 // invincible in creative mode
   if(player.dead||player.hurtT>0) return;
   player.hp-=n; player.hurtT=0.85; player.calm=0;
   flash('#d04d4d',0.35); sfxHurt();
@@ -4880,6 +4945,161 @@ function respawn(){
   player.v.set(0,0,0); player.hp=player.maxHp; player.dead=false; player.air=10;
   hideDeath();
 }
+
+/* ======================================================================
+   Minecraft-style game mode + settings menu (press O or the ⚙ button)
+   ====================================================================== */
+function setMode(cr){
+  creative=!!cr;
+  if(!creative) flying=false;
+  if(creative){
+    // a creative palette: every placeable block, effectively unlimited
+    for(let i=0;i<INV_N;i++) inv[i]=null;
+    let slot=0;
+    for(let id=1; id<100 && slot<INV_N; id++){
+      if(BLOCKS[id] && isPlaceable(id)) inv[slot++]={id:id,n:99};
+    }
+    player.hp=player.maxHp; player.dead=false; player.air=10;
+    if(typeof hideDeath==='function') hideDeath();
+  }
+  if(typeof refreshHotbar==='function') refreshHotbar();
+  if(typeof refreshBag==='function') refreshBag();
+  document.body.classList.toggle('creative',creative);
+}
+function setQuality(q){
+  QUALITY=q;
+  const dpr=window.devicePixelRatio||1;
+  const cap = q<=1?0.7 : (q===2?1.0 : Math.min(dpr,1.5));
+  pixelBudget=cap; renderer.setPixelRatio(cap);
+  VIEW = q<=1?4 : (q===2?6 : 8);
+  FX_RAYS = q>=3; FX_SSAO = q>=2; FX_WIDE = q>=3;   // volumetric rays High-only → smoother Med
+  try{
+    matComp.uniforms.uRays.value = FX_RAYS ? (q>=3?1.5:1.0) : 0.0;
+    matComp.uniforms.uAO.value   = FX_SSAO ? (q>=3?0.92:0.80) : 0.0;
+  }catch(e){}
+  if(typeof resize==='function') resize();
+  if(typeof updateChunks==='function') updateChunks(player.p.x,player.p.z,true);
+}
+const I18N={
+  zh:{mode:'模式',sur:'生存',cre:'创造',render:'渲染距离',fov:'视野',sens:'灵敏度',inv:'反转视角',quality:'画质',lang:'语言',low:'低',med:'中',high:'高',resume:'继续',settings:'设置',start:'出 发',hint:'WASD 移动 · 空格 跳 · Shift 潜行 · Ctrl 或双击 W 疾跑<br>右键拖动 或 方向键 转视角 · 左键 挖/打 · 右键 放块 · 滚轮 换物品<br>1-9 快捷栏 · Q 丢弃 · E 背包 · F5 切换视角 · O 设置'},
+  en:{mode:'Mode',sur:'Survival',cre:'Creative',render:'Render Dist.',fov:'FOV',sens:'Sensitivity',inv:'Invert Y',quality:'Quality',lang:'Language',low:'Low',med:'Med',high:'High',resume:'Resume',settings:'Settings',start:'PLAY',hint:'WASD move · Space jump · Shift sneak · Ctrl / double-tap W sprint<br>Right-drag or arrows look · Left dig · Right place · Wheel select<br>1-9 hotbar · Q drop · E bag · F5 view · O settings'},
+  ja:{mode:'モード',sur:'サバイバル',cre:'クリエイティブ',render:'描画距離',fov:'視野',sens:'感度',inv:'Y反転',quality:'画質',lang:'言語',low:'低',med:'中',high:'高',resume:'続ける',settings:'設定',start:'スタート',hint:'WASD 移動 · スペース ジャンプ · Shift スニーク · Ctrl/W二回 ダッシュ<br>右ドラッグ/矢印 視点 · 左 採掘 · 右 設置 · ホイール 選択<br>1-9 ホットバー · Q 捨てる · E バッグ · F5 視点 · O 設定'},
+  es:{mode:'Modo',sur:'Supervivencia',cre:'Creativo',render:'Distancia',fov:'FOV',sens:'Sensibilidad',inv:'Invertir Y',quality:'Calidad',lang:'Idioma',low:'Baja',med:'Media',high:'Alta',resume:'Continuar',settings:'Ajustes',start:'JUGAR',hint:'WASD mover · Espacio saltar · Shift agacharse · Ctrl/doble W correr<br>Clic der./flechas mirar · Izq picar · Der poner · Rueda elegir<br>1-9 barra · Q soltar · E bolsa · F5 vista · O ajustes'},
+  fr:{mode:'Mode',sur:'Survie',cre:'Créatif',render:'Distance',fov:'FOV',sens:'Sensibilité',inv:'Inverser Y',quality:'Qualité',lang:'Langue',low:'Bas',med:'Moyen',high:'Haut',resume:'Continuer',settings:'Réglages',start:'JOUER',hint:'WASD déplacer · Espace sauter · Shift accroupir · Ctrl/double W courir<br>Clic droit/flèches regarder · Gauche miner · Droit poser · Molette choisir<br>1-9 barre · Q lâcher · E sac · F5 vue · O réglages'},
+  ko:{mode:'모드',sur:'생존',cre:'창작',render:'렌더 거리',fov:'시야',sens:'감도',inv:'Y 반전',quality:'화질',lang:'언어',low:'낮음',med:'중간',high:'높음',resume:'계속',settings:'설정',start:'시작',hint:'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl/W더블 달리기<br>우클릭/화살표 시점 · 좌클릭 캐기 · 우클릭 놓기 · 휠 선택<br>1-9 단축바 · Q 버리기 · E 가방 · F5 시점 · O 설정'}
+};
+function t(k){ return (I18N[LANG]||I18N.zh)[k]||I18N.zh[k]||k; }
+// Generic personality keywords per resident, for the non-Chinese UI.
+const TAG_EN={
+  lumi:'Curious · Afraid of the dark · Carries a lantern',
+  twinkle:'Cheerful · Brave · A little dreamy',
+  molly:'Pouty · Stubborn · Always with a brush',
+  labubu:'Mischievous · Kind-hearted',
+  dimoo:'Shy · Dreamer · Lives with a cloud',
+  skull:'Aloof · Curious · A traveler',
+  crybaby:'Tearful · Gentle · Honest'
+};
+function charInfo(id){
+  const c=CAST[id]; if(!c) return;
+  const zh=(LANG==='zh');
+  const sz=document.getElementById('selZh'), st=document.getElementById('selTag'), sl=document.getElementById('selLine');
+  if(sz) sz.textContent = zh ? c.zh : (c.en||c.zh);
+  if(st) st.textContent = zh ? c.tag : (TAG_EN[id]||c.tag);
+  if(sl) sl.textContent = zh ? c.line : '';   // detailed zh lore stays zh-only
+}
+function applyLang(lang){
+  LANG=lang;
+  const gb=document.getElementById('goBtn'); if(gb) gb.textContent=t('start');
+  const hn=document.getElementById('hint'); if(hn) hn.innerHTML=t('hint');
+  const row=document.getElementById('cards'); if(row && row.dataset.id) charInfo(row.dataset.id);
+  if(window.__relabelSettings) window.__relabelSettings();
+}
+let settingsOpen=false;
+function toggleSettings(){
+  if(state!=='play' && !settingsOpen) return;
+  settingsOpen=!settingsOpen;
+  const el=document.getElementById('settings');
+  if(el) el.style.display=settingsOpen?'flex':'none';
+  if(settingsOpen){
+    if(window.__syncSettings) window.__syncSettings();
+    if(document.exitPointerLock) document.exitPointerLock();
+    if(typeof clearInput==='function') clearInput();
+  }
+}
+(function buildSettingsUI(){
+  const css=document.createElement('style');
+  css.textContent=
+    "#setBtn{position:absolute;top:14px;right:16px;width:34px;height:34px;border-radius:9px;"+
+    "background:rgba(18,22,36,.72);border:1px solid rgba(255,255,255,.14);display:none;"+
+    "align-items:center;justify-content:center;font-size:18px;cursor:pointer;z-index:22;"+
+    "pointer-events:auto;color:#f4f1ea}"+
+    "#settings{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;"+
+    "justify-content:center;background:rgba(8,11,22,.74);z-index:41;color:#f4f1ea;font-size:14px}"+
+    "#settings .sc{min-width:342px;padding:24px 28px;border-radius:16px;"+
+    "background:rgba(22,27,43,.92);border:1px solid rgba(255,255,255,.1)}"+
+    "#settings h3{font-size:13px;letter-spacing:.3em;font-weight:600;opacity:.7;margin-bottom:16px;text-align:center}"+
+    "#settings .row{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:13px 0}"+
+    "#settings .row>span:first-child{opacity:.82}#settings .row b{min-width:44px;text-align:right}"+
+    "#settings input[type=range]{width:170px}"+
+    "#settings .mb{display:flex;gap:8px}"+
+    "#settings button{padding:8px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.18);"+
+    "background:rgba(255,255,255,.06);color:#f4f1ea;cursor:pointer;font:inherit}"+
+    "#settings button.on{border-color:#ffd48a;background:rgba(255,200,120,.2)}"+
+    "#settings .done{margin-top:18px;width:100%}"+
+    "body.creative #hearts,body.creative #air{display:none!important}";
+  document.head.appendChild(css);
+  const root=document.getElementById('app')||document.body;
+  const btn=document.createElement('div'); btn.id='setBtn'; btn.textContent='⚙'; root.appendChild(btn);
+  const el=document.createElement('div'); el.id='settings';
+  el.innerHTML=
+    "<div class='sc'><h3 id='lTitle'></h3>"+
+    "<div class='row'><span id='lMode'></span><span class='mb'>"+
+    "<button id='mSur'></button><button id='mCre'></button></span></div>"+
+    "<div class='row'><span id='lQual'></span><span class='mb'>"+
+    "<button id='qLow'></button><button id='qMed'></button><button id='qHigh'></button></span></div>"+
+    "<div class='row'><span id='lView'></span><input id='sView' type='range' min='3' max='12' step='1'><b id='vView'></b></div>"+
+    "<div class='row'><span id='lFov'></span><input id='sFov' type='range' min='50' max='110' step='1'><b id='vFov'></b></div>"+
+    "<div class='row'><span id='lSens'></span><input id='sSens' type='range' min='5' max='40' step='1'><b id='vSens'></b></div>"+
+    "<div class='row'><span id='lInv'></span><input id='sInv' type='checkbox'></div>"+
+    "<div class='row'><span id='lLang'></span><select id='sLang'>"+
+    "<option value='zh'>中文</option><option value='en'>English</option><option value='ja'>日本語</option>"+
+    "<option value='es'>Español</option><option value='fr'>Français</option><option value='ko'>한국어</option></select></div>"+
+    "<button class='done' id='sDone'></button></div>";
+  root.appendChild(el);
+  const G=id=>document.getElementById(id);
+  window.__relabelSettings=function(){
+    G('lTitle').textContent=t('settings'); G('lMode').textContent=t('mode');
+    G('mSur').textContent=t('sur'); G('mCre').textContent=t('cre');
+    G('lQual').textContent=t('quality');
+    G('qLow').textContent=t('low'); G('qMed').textContent=t('med'); G('qHigh').textContent=t('high');
+    G('lView').textContent=t('render'); G('lFov').textContent=t('fov');
+    G('lSens').textContent=t('sens'); G('lInv').textContent=t('inv');
+    G('lLang').textContent=t('lang'); G('sDone').textContent=t('resume');
+  };
+  window.__syncSettings=function(){
+    window.__relabelSettings();
+    G('mSur').classList.toggle('on',!creative); G('mCre').classList.toggle('on',creative);
+    G('qLow').classList.toggle('on',QUALITY===1); G('qMed').classList.toggle('on',QUALITY===2); G('qHigh').classList.toggle('on',QUALITY===3);
+    G('sView').value=VIEW; G('vView').textContent=VIEW;
+    const fv=Math.round(fovBase||70); G('sFov').value=fv; G('vFov').textContent=fv;
+    G('sSens').value=Math.round(LOOK_SENS*10000); G('vSens').textContent=Math.round(LOOK_SENS*10000);
+    G('sInv').checked=INVERT_Y; G('sLang').value=LANG;
+  };
+  G('mSur').onclick=function(){ setMode(false); window.__syncSettings(); };
+  G('mCre').onclick=function(){ setMode(true);  window.__syncSettings(); };
+  G('qLow').onclick=function(){ setQuality(1); window.__syncSettings(); };
+  G('qMed').onclick=function(){ setQuality(2); window.__syncSettings(); };
+  G('qHigh').onclick=function(){ setQuality(3); window.__syncSettings(); };
+  G('sLang').onchange=function(e){ applyLang(e.target.value); window.__syncSettings(); };
+  G('sView').oninput=function(e){ VIEW=+e.target.value; VIEW_LOCK=true; G('vView').textContent=VIEW; updateChunks(player.p.x,player.p.z,true); };
+  G('sFov').oninput=function(e){ fovBase=+e.target.value; camera.fov=fovBase; camera.updateProjectionMatrix(); G('vFov').textContent=fovBase; };
+  G('sSens').oninput=function(e){ LOOK_SENS=(+e.target.value)/10000; G('vSens').textContent=e.target.value; };
+  G('sInv').onchange=function(e){ INVERT_Y=e.target.checked; };
+  G('sDone').onclick=function(){ toggleSettings(); };
+  btn.onclick=function(){ toggleSettings(); };
+  window.__relabelSettings();
+  setInterval(function(){ btn.style.display=(state==='play')?'flex':'none'; },400);
+})();
 /* ======================================================================
    MAIN · 5 — mining, placing, carrying, crafting
    ====================================================================== */
@@ -5005,7 +5225,7 @@ function updateMining(dt){
   if(k!==mineKey){ mineKey=k; mineT=0;
     const B=BLOCKS[target.id];
     const sp=hardKind(target.id)?bestTool():1;
-    mineNeed=Math.max(0.12,B.hard/sp);
+    mineNeed=creative?0.001:Math.max(0.12,B.hard/sp);   // instant break in creative
   }
   mineT+=dt;
   player.swing=1;
@@ -5022,7 +5242,7 @@ function updateMining(dt){
     setBlock(target.x,target.y,target.z,0);
     blockBits(target.x+0.5,target.y+0.5,target.z+0.5,id,14);
     const dr=dropOf(id);
-    if(dr) spawnDrop(dr,1,target.x+0.5,target.y+0.5,target.z+0.5,
+    if(!creative && dr) spawnDrop(dr,1,target.x+0.5,target.y+0.5,target.z+0.5,
       (Math.random()-0.5)*1.2,2.0,(Math.random()-0.5)*1.2);
     sfxBreak(id);
     mineT=0; mineKey=''; crackBox.visible=false;
@@ -5038,7 +5258,7 @@ function tryPlace(){
   const px=player.p.x, py=player.p.y, pz=player.p.z;
   if(x+1>px-PW/2 && x<px+PW/2 && z+1>pz-PW/2 && z<pz+PW/2 && y+1>py && y<py+PH) return;
   if(setBlock(x,y,z,s.id)){
-    s.n--; if(s.n<=0) inv[hotbarSel]=null;
+    if(!creative){ s.n--; if(s.n<=0) inv[hotbarSel]=null; }   // infinite blocks in creative
     refreshHotbar(); refreshBag(); player.swing=1; sfxPlace();
   }
 }
@@ -5201,8 +5421,9 @@ const MOB_CAP=12;
 let spawnT=0;
 
 const MOBDEF={
-  shade: {hp:8,  speed:3.4, dmg:2, r:0.42, h:1.3, agro:28, atk:1.0, night:1, burn:1},
-  slime: {hp:12, speed:2.4, dmg:2, r:0.52, h:1.0, agro:22, atk:1.2, dark:1},
+  // Minecraft-like hostiles: ~20 HP, ~35-block follow range, brisk chase, real bite
+  shade: {hp:20, speed:4.0, dmg:3, r:0.42, h:1.3, agro:35, atk:1.0, night:1, burn:1},
+  slime: {hp:16, speed:3.0, dmg:2, r:0.52, h:1.0, agro:24, atk:1.2, dark:1},
   bunny: {hp:6,  speed:2.6, dmg:0, r:0.34, h:0.7, agro:0,  atk:0,   calm:1}
 };
 
@@ -5360,7 +5581,7 @@ function mobBlocked(m,x,y,z){
 const _md=new T.Vector3();
 function updateMobs(dt,t){
   spawnT-=dt;
-  if(spawnT<=0){ spawnT=2.4; trySpawn(); }
+  if(spawnT<=0){ spawnT=(daylight<0.26?1.1:3.2); trySpawn(); }   // night presses harder
   for(let i=mobs.length-1;i>=0;i--){
     const m=mobs[i], d=m.def;
     const dist=m.p.distanceTo(player.p);
@@ -5505,6 +5726,7 @@ function trySpawn(){
     else if(dark) kind='slime';
     else if(Math.random()<0.5) kind='bunny';
     if(!kind) continue;
+    if(creative && kind!=='bunny') continue;   // creative mode is peaceful
     if(kind==='bunny' && mobs.length>12) continue;
     spawnMob(kind,x,y,z);
     return;
@@ -5819,9 +6041,9 @@ function tick(){
   renderFrame(t);
   frameAvg+=(dt-frameAvg)*0.05;
   if(state==='play' && now-startedAt>7000){
-    if(frameAvg>0.034 && VIEW>4){
+    if(!VIEW_LOCK && frameAvg>0.034 && VIEW>4){
       VIEW--; updateChunks(player.p.x,player.p.z,true); startedAt=now;
-    } else if(frameAvg<0.019 && VIEW<8){
+    } else if(!VIEW_LOCK && frameAvg<0.019 && VIEW<8){
       VIEW++; updateChunks(player.p.x,player.p.z,true); startedAt=now;
     }
   }
@@ -5858,7 +6080,10 @@ function beginPlay(){
   player.yaw=bestYaw; player.pitch=-0.15;
   $('#loading').style.display='none';
   $('#hud').style.display='block';
-  invAdd(I_PICK_W,1); invAdd(PLANK,16); invAdd(LAMP,4);
+  // a Minecraft-style starter kit, with a block already in hand ready to build
+  invAdd(GRASS,64); invAdd(DIRT,64); invAdd(COBBLE,64); invAdd(PLANK,64); invAdd(LOG,16);
+  invAdd(I_PICK_W,1); invAdd(LAMP,8);
+  hotbarSel=0;                         // select the first block so right-click places at once
   refreshHotbar();
   toast('WASD 走 · 空格 跳 · Shift 潜行 · Ctrl/双击W 疾跑 · 左键挖 · 右键放 · Q 丢 · E 背包 · F5 视角');
   wantLock();
@@ -5895,16 +6120,13 @@ function buildTitle(){
     card.onclick=function(){
       [].forEach.call(row.children,function(n){ n.classList.remove('on'); });
       card.classList.add('on');
-      $('#selZh').textContent=c.zh; $('#selTag').textContent=c.tag;
-      $('#selLine').textContent=c.line;
-      row.dataset.id=id;
+      row.dataset.id=id; charInfo(id);
     };
     row.appendChild(card);
   });
   row.dataset.id=PLAYABLE[0];
   const c0=CAST[PLAYABLE[0]];
-  $('#selZh').textContent=c0.zh; $('#selTag').textContent=c0.tag;
-  $('#selLine').textContent=c0.line;
+  charInfo(PLAYABLE[0]);
   $('#goBtn').onclick=function(){ startGame(row.dataset.id); };
   $('#respawnBtn').onclick=function(){ respawn(); wantLock(); };
 }
@@ -5918,7 +6140,7 @@ if(TOUCH){
   VIEW=5;
   pixelBudget=Math.min(window.devicePixelRatio||1,1.1);
   renderer.setPixelRatio(pixelBudget);
-  camera.fov=76; camera.updateProjectionMatrix();
+  camera.fov=70; camera.updateProjectionMatrix();   // Minecraft default FOV
   sunLight.shadow.mapSize.set(1024,1024);
   CHUNK_U.uShadowTexel.value.set(1/1024,1/1024);
 }
@@ -5931,7 +6153,7 @@ bootWorkers(function(){
     $('#warn').textContent='后台线程不可用，世界会生成得慢一些。';
   }
   $('#goBtn').disabled=false;
-  $('#goBtn').textContent='出 发';
+  $('#goBtn').textContent=(typeof t==='function'?t('start'):'出 发');
   const s0=findSpawn();
   TITLE_AT[0]=s0[0]+0.5; TITLE_AT[1]=s0[2]+1; TITLE_AT[2]=s0[1]+0.5;
   VIEW=TOUCH?3:4; updateChunks(TITLE_AT[0],TITLE_AT[2],true);  // a world behind the menu
@@ -5940,4 +6162,5 @@ loadGLBs(function(){ if(avatar && GLB[charId]) spawnAvatar(charId); });
 tick();
 })();
 </script>
+<a href="./" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:99999;font:600 12px/1 system-ui,sans-serif;color:#cfe;background:rgba(10,14,22,.72);border:1px solid rgba(90,180,255,.4);padding:7px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">🌾 返回 星星人露谷 StarVale</a>
 </body></html>
