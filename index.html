@@ -182,7 +182,7 @@ import { N8AOPostPass } from 'n8ao';
 import {
   EffectComposer, RenderPass, EffectPass,
   BloomEffect, SMAAEffect, VignetteEffect, ToneMappingEffect, ToneMappingMode,
-  DepthOfFieldEffect, BrightnessContrastEffect, HueSaturationEffect, GodRaysEffect, KernelSize, BlendFunction, Effect
+  DepthOfFieldEffect, BrightnessContrastEffect, HueSaturationEffect, GodRaysEffect, KernelSize, BlendFunction, Effect, EffectAttribute
 } from 'postprocessing';
 
 /* ======================================================================
@@ -1198,10 +1198,26 @@ class WarmGrade extends Effect {
     '  col += vec3(0.07,0.04,-0.022)*(0.5+0.8*warm)*hm;\n'+           // warm highlights
     '  col=(col-0.5)*0.9+0.5; col=col*0.95+0.042;\n'+                 // soft contrast + lift (airy)
     '  col*=vec3(1.0+warm*0.07,1.0,1.0-warm*0.06);\n'+               // warm neutral wash
+    '  col=floor(col*18.0+0.5)/18.0;\n'+                             // posterize → flat painterly colour bands
     '  float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.2;\n'+          // cozy vignette
     '  o=vec4(clamp(col,0.0,1.6),c.a);\n'+
     '}',
     { uniforms:new Map([['warm',new THREE.Uniform(0.5)]]) }); }
+}
+// depth-edge outline → hand-drawn / toon silhouettes
+class ToonOutline extends Effect {
+  constructor(){ super('ToonOutline',
+    'uniform float thickness; uniform vec3 lineColor; uniform float strength;\n'+
+    'void mainImage(const in vec4 c, const in vec2 uv, const in float depth, out vec4 o){\n'+
+    '  vec2 tx=thickness/resolution; float z=getViewZ(depth); float e=0.0;\n'+
+    '  e+=abs(z-getViewZ(readDepth(uv+vec2(tx.x,0.0))));\n'+
+    '  e+=abs(z-getViewZ(readDepth(uv-vec2(tx.x,0.0))));\n'+
+    '  e+=abs(z-getViewZ(readDepth(uv+vec2(0.0,tx.y))));\n'+
+    '  e+=abs(z-getViewZ(readDepth(uv-vec2(0.0,tx.y))));\n'+
+    '  float line=smoothstep(0.35,0.9,e/max(1.0,-z));\n'+   // high threshold → only big silhouettes, not grass
+    '  o=vec4(mix(c.rgb, lineColor, line*strength), c.a);\n'+
+    '}',
+    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['thickness',new THREE.Uniform(1.2)],['lineColor',new THREE.Uniform(new THREE.Color(0x2b2d2a))],['strength',new THREE.Uniform(0.5)]]) }); }
 }
 let QUAL = localStorage.getItem('sv_qual')||'med';
 // low = fast path (no post, max fps). med = cinematic post (bloom+grade+vignette, no AO).
@@ -1229,7 +1245,7 @@ function setupPost(){
   if(q.ao){ aoPass=new N8AOPostPass(scene,camera,innerWidth,innerHeight);
     aoPass.configuration.aoRadius=1.3; aoPass.configuration.distanceFalloff=1.0; aoPass.configuration.intensity=2.4; aoPass.configuration.halfRes=true;
     try{ aoPass.setQualityMode('Medium'); }catch(e){} composer.addPass(aoPass); } else aoPass=null;
-  const fx=[ new BloomEffect({ intensity:0.62, luminanceThreshold:0.72, luminanceSmoothing:0.35, mipmapBlur:true, radius:0.72 }) ];
+  const fx=[ new ToonOutline(), new BloomEffect({ intensity:0.62, luminanceThreshold:0.72, luminanceSmoothing:0.35, mipmapBlur:true, radius:0.72 }) ];
   if(q.god && sunMesh){ try{ fx.push(new GodRaysEffect(camera, sunMesh, { density:0.92, decay:0.93, weight:0.5, exposure:0.5, samples:40, blur:true, kernelSize:KernelSize.SMALL })); }catch(e){} }
   fx.push(new ToneMappingEffect({ mode:ToneMappingMode.AGX }));
   warmGradeFx=new WarmGrade(); warmGradeFx.uniforms.get('warm').value=seasonWarm; fx.push(warmGradeFx);  // grade AFTER tonemap (display-referred)
