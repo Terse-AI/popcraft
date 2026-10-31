@@ -97,9 +97,19 @@
     #energy{width:136px;bottom:66px;padding:6px 8px}
     #help{display:none}
   }
+  #guide{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(20,14,8,.44);backdrop-filter:blur(6px)}
+  .gcard{width:min(460px,90vw);padding:30px 32px 24px;border-radius:20px;background:rgba(36,27,19,.94);color:#f3e7d2;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .gcard .gic{font-size:42px} .gcard h2{margin:10px 0 12px;font-size:23px} .gcard p{white-space:pre-line;line-height:1.75;font-size:15px;color:#dccfb8;margin:0 0 18px}
+  .gdots{display:flex;justify-content:center;gap:7px;margin-bottom:18px} .gdots i{width:6px;height:6px;border-radius:50%;background:rgba(243,231,210,.26)} .gdots i.on{background:#f0c674}
+  .grow{display:flex;justify-content:space-between;gap:12px} .grow button,#signprompt button{font:inherit;border:0;border-radius:10px;padding:10px 18px;cursor:pointer}
+  .gskip{background:none;color:#b6a88e} .gnext{background:#f0c674;color:#2a1e10;font-weight:700;flex:1}
+  #todo{position:absolute;left:12px;top:120px;max-width:260px;padding:11px 13px;font-size:13px;line-height:1.7;z-index:30} #todo b{display:block;margin-bottom:3px} #todo b span{opacity:.6;font-weight:400;margin-left:6px} #todo .done{opacity:.46;text-decoration:line-through} #todo .now{color:#f0c674;font-weight:600}
+  #bigmap{position:fixed;inset:0;z-index:85;display:flex;align-items:center;justify-content:center;background:rgba(20,14,8,.62);cursor:zoom-out} #bigmap canvas{border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+  #signprompt{position:fixed;right:20px;bottom:90px;z-index:88;width:300px;padding:16px 18px;color:#f3e7d2} #signprompt p{font-size:13px;line-height:1.6;margin:6px 0 12px;color:#dccfb8} #signprompt div{display:flex;gap:8px} #signprompt .go{background:#f0c674;color:#2a1e10;font-weight:700;flex:1} #signprompt .no{background:rgba(255,255,255,.08);color:#dccfb8}
 </style>
 </head>
 <body>
+<script>if(window.parent===window&&!/[?&]shot/.test(location.search)) location.replace('https://nova-games.up.railway.app/starvale');</script>
 <canvas id="c"></canvas>
 
 <div id="load">
@@ -113,9 +123,10 @@
     <span class="pill" id="qualbtn">⚙ 均衡</span>
     <span class="pill" id="sndbtn">🔊</span>
     <span class="pill" id="langbtn">🌐 中文</span>
-    <a class="pill" href="./mc.html">⛏ Minecraft 模式</a>
+    <span class="pill" id="savebtn" title="save">💾</span>
+    <span class="pill" id="helpbtn" title="help">❓</span>
+    <span class="pill" id="mapbtn" title="map">🗺</span>
     <span class="pill" id="journalbtn">📖</span>
-    <span class="pill" id="resetbtn" title="new game">🆕</span>
     <span class="pill" id="fps" style="pointer-events:none;opacity:.75">60 fps</span>
   </div>
 
@@ -195,6 +206,8 @@ import { setupFlora, updateFlora, refreshFlora } from './flora.js';
 import { buildLife, updateLife } from './life.js';
 import { cropMesh, soilGeometry } from './crops.js';
 import { debrisMesh, forageMesh, placedModel } from './props.js';
+import { nova, inNova, NOVA_URL } from './nova.js';
+import { showCards, startChecklist } from './guide.js';
 import { startAudio, updateAudio, play as snd, playAt as sndAt, setVolumes, volumes, duckMusic, auditSounds, audioLevel } from './audio.js';
 import { makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, makeSheep, makeGoat, makePig, makeWalkDuck, makeFish, poseQuadruped, poseBird, damp, angDamp, furLod } from './creatures.js';
 import { CROPS, CROP_FORM, FISH, RODS, ANIMALS } from './data.js';
@@ -502,6 +515,7 @@ addEventListener('keydown',e=>{
   else if(k==='e'){ interact(); }
   else if(k==='c'){ G.openCraft(); }
   else if(k==='j'){ G.openJournal(); }
+  else if(k==='m'){ openMap(); }
   else if(k==='f'){ if(G.fishing.state) G.fishPress(true); else G.tryFish(); }
   else if(k==='tab'){ e.preventDefault(); if($('#inv').classList.contains('hidden')) openInv(); else closeAll(); }
   else if(k==='escape'){ closeAll(); const m=$('#dynmodal'); if(m) m.classList.add('hidden'); G.cancelFish(); }
@@ -760,7 +774,9 @@ $('#sndbtn').onclick=()=>modal(L('🔊 声音','🔊 Sound'),b=>{ const v=volume
 for(const ev of ['pointerdown','keydown','touchstart']) addEventListener(ev,()=>startAudio(),{passive:true});
 addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.buy,.pill,button,.slot,.tab')) snd('click'); });
 $('#journalbtn').onclick=()=>G.openJournal();
-$('#resetbtn').onclick=()=>{ if(confirm(LANG==='zh'?'开始新游戏？当前存档会被清除。':'Start a new game? Your save will be erased.')) resetSave(); };
+$('#savebtn').onclick=()=>G.saveGame();
+$('#helpbtn').onclick=()=>showCards(L);
+$('#mapbtn').onclick=()=>openMap();
 
 /* ============================ MINIMAP ============================ */
 const mm=$('#mmc'), mx=mm.getContext('2d');
@@ -802,7 +818,7 @@ function drawMini(){
     mx.fillRect(p[0]-sc*0.4,p[1]-sc*0.4,sc*0.8,sc*0.8); }
   // landmarks
   const mark=(pp,col,lab)=>{ const p=toPx(pp.x,pp.z); mx.fillStyle=col; mx.beginPath(); mx.arc(p[0],p[1],3,0,7); mx.fill(); mx.fillStyle='#fff'; mx.font='7px sans-serif'; mx.fillText(lab,p[0]+4,p[1]+2); };
-  mark(CABIN,'#8a5a3a','🏠'); mark(BIN,'#a8743a','📦'); for(const b of TOWN) mark(b,'#6a4a2a',b.icon); mark(MINE_ENT,'#3a3a3a','⛏'); mark({x:-212,z:33},'#5a8aa8','💧'); mark({x:ISLANDS[4][0],z:ISLANDS[4][1]},'#b83a2a','🗼');
+  mx.font='600 9px -apple-system,"PingFang SC",sans-serif'; for(const q of places()){ const p=toPx(q.x,q.z); if(p[0]<-4||p[1]<-4||p[0]>W+4||p[1]>H+4) continue; mx.fillStyle='#3a2a1c'; mx.beginPath(); mx.arc(p[0],p[1],2.2,0,7); mx.fill(); const tx=L(q.zh,q.en), tw=mx.measureText(tx).width; mx.fillStyle='rgba(250,242,226,.86)'; mx.fillRect(p[0]+3,p[1]-6,tw+4,11); mx.fillStyle='#3a2a1c'; mx.fillText(tx,p[0]+5,p[1]+3); }
   // player arrow
   mx.save(); mx.translate(cx,cy); mx.rotate(-cam.yaw+Math.PI);
   mx.fillStyle='#b83a2a'; mx.beginPath(); mx.moveTo(0,-6); mx.lineTo(4,5); mx.lineTo(0,2); mx.lineTo(-4,5); mx.closePath(); mx.fill();
@@ -965,6 +981,16 @@ function soundTick(dt,t){
   Object.assign(sndS,{cam:camera.position,fwd:sndF,pos:p,t:S.time,season:S.season,weather:S.weather,inMine:!!S.inMine,inHouse:!!S.inHouse,under:!!cut.on,wind:paintU.uWindAmp.value,gust:.5+.5*Math.sin(t*.31)*Math.sin(t*.17+1),trees:sp[0],lake:clamp(1+f/.16,0,1),creek:rv?clamp(1-(rv.d-rv.w)/70,0,1):0,falls:clamp(1-Math.hypot(p.x+212,p.z-33)/150,0,1),deep:S.inMine?G.mine.theme:0});
   updateAudio(sndS); duckMusic(paused()?.55:1);
 }
+/* saving needs an account: say so once, kindly, and keep playing either way */
+let promptOpen=false;
+function savePrompt(){ if(promptOpen) return; promptOpen=true; const w=document.createElement('div'); w.id='signprompt'; w.className='card'; w.innerHTML='<b>'+L('登录后才能存档','Sign in to save')+'</b><p>'+L('今天的进度还在,登录 NOVA 账号就能保存,换设备也能继续。','Your progress is safe for now. Sign in to NOVA to keep it and carry on from any device.')+'</p><div><button class="go">'+L('登录并保存','Sign in and save')+'</button><button class="no">'+L('先玩着','Keep playing')+'</button></div>'; document.body.appendChild(w); const off=()=>{ promptOpen=false; w.remove(); };
+  w.querySelector('.no').onclick=off; w.querySelector('.go').onclick=async()=>{ w.querySelector('.go').disabled=true; const r=await nova('signin',null,300000); off(); if(r&&r.ok) G.saveGame(); }; }
+/* the valley map: every place, named */
+function places(){ const n=(x,z,ic,zh,en)=>({x,z,ic,zh,en}); return [n(CABIN.x,CABIN.z,'🏠','你的小屋','Your cabin'),n(0,4,'🌱','农田','Farm plot'),n(BIN.x,BIN.z,'📦','出货箱','Shipping bin'),n(COOP.x,COOP.z,'🐔','鸡舍','Coop'),n(BARN.x,BARN.z,'🐄','畜棚','Barn'),n(GREENHOUSE.x,GREENHOUSE.z,'🌿','温室','Greenhouse'),n(MINE_ENT.x,MINE_ENT.z,'⛏','矿洞','The mine'),n(PLAZA.x,PLAZA.z,'⛲','小镇广场','Town square'),n(DOCK.x,DOCK.z1,'🛶','码头','Dock'),n(0,128,'🌊','星星湖','Star Lake'),n(-212,33,'💧','瀑布','The falls'),n(-170,54,'〰','山溪','Mist Creek'),n(ISLANDS[4][0],ISLANDS[4][1],'🗼','灯塔','Lighthouse'),...TOWN.map(b=>n(b.x,b.z,b.icon,b.zh,b.en))]; }
+function openMap(){ if(document.getElementById('bigmap')){ document.getElementById('bigmap').remove(); return; } const w=document.createElement('div'); w.id='bigmap'; const S2=Math.min(innerWidth,innerHeight)*.86, c=document.createElement('canvas'), dpr=Math.min(devicePixelRatio,2); c.width=c.height=S2*dpr; c.style.cssText='width:'+S2+'px;height:'+S2+'px'; w.appendChild(c); const g=c.getContext('2d'), sc=c.width/(MAP_R*2), P=(x,z)=>[(x+MAP_R)*sc,(z+MAP_R)*sc]; g.drawImage(mapBase,0,0,c.width,c.height); g.font=(13*dpr)+'px -apple-system,"PingFang SC",sans-serif'; g.textBaseline='middle';
+  const used=[]; for(const p of places()){ const [x,y]=P(p.x,p.z), txt=p.ic+' '+L(p.zh,p.en), tw=g.measureText(txt).width+10*dpr; let ty=y, tx=x+6*dpr; for(let k=0;k<12&&used.some(u=>Math.abs(u[1]-ty)<18*dpr&&tx<u[0]+u[2]&&tx+tw>u[0]);k++) ty+=18*dpr; if(tx+tw>c.width) tx=x-tw-6*dpr; used.push([tx,ty,tw]); g.fillStyle='rgba(44,32,22,.82)'; g.beginPath(); g.arc(x,y,3.4*dpr,0,7); g.fill(); g.fillStyle='rgba(250,242,226,.92)'; g.beginPath(); g.roundRect(tx,ty-10*dpr,tw,20*dpr,6*dpr); g.fill(); g.fillStyle='#3a2a1c'; g.fillText(txt,tx+5*dpr,ty); }
+  const [px,py]=P(player.pos.x,player.pos.z); g.fillStyle='#e8503a'; g.strokeStyle='#fff'; g.lineWidth=2*dpr; g.beginPath(); g.arc(px,py,6*dpr,0,7); g.fill(); g.stroke();
+  w.onclick=()=>w.remove(); document.body.appendChild(w); snd('panelOpen'); }
 function animateWalk(dt){
   if(!avatar) return;
   const v=player.speed, g=Math.min(1,v/4.2), run=Math.max(0,(v-4.4)/2.8), P=player.walkT;
@@ -1102,7 +1128,6 @@ function rebuildDigs(){ digG.clear(); for(const d of S.digs){ const g=new THREE.
 let jellyOn=false, jellies=null;
 function updateJellies(t){ const p=jellies.geometry.attributes.position; for(let i=0;i<p.count;i++){ p.setX(i,(jellyBase[i*2]+t*1.2)%160-80+15); p.setZ(i,jellyBase[i*2+1]+Math.sin(t*.4+i)*2); } p.needsUpdate=true; if(S.time<1300||S.time>1450||S.day!==28) { jellies.visible=false; jellyOn=false; } }
 const jellyBase=[]; G.jellies=()=>{ if(!jellies){ const n=240, g=new THREE.BufferGeometry(), a=new Float32Array(n*3); for(let i=0;i<n;i++){ jellyBase.push(Math.random()*160,50+Math.random()*90); a[i*3+1]=WATER_Y+.05; } g.setAttribute('position',new THREE.BufferAttribute(a,3)); jellies=new THREE.Points(g,new THREE.PointsMaterial({color:0x8ae8ff,size:1.1,map:dotTex(),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false})); jellies.frustumCulled=false; world.add(jellies); } jellies.visible=true; jellyOn=true; };
-function resetSave(){ try{ localStorage.removeItem('sv_save'); }catch(e){} location.reload(); }
 function setupValley(){
   Object.assign(G,{snd,sndAt,L,$,toast,modal,camera,scene,renderer,world,player,itemIcon,renderHotbar,renderStatus,renderEnergy,getTile,tkey,refreshTileMesh,rebuildCrop,aoe,spawnPlacement,spawnAnimal,rebuildDebris,rebuildForage,rebuildDigs,onMine,fadeMsg,floatText,
     spend:spendEnergy, target:()=>targetCell, toolNames:()=>t('tools'), toolEm:()=>[0,1,2,3,4,5].map(i=>toolIcon(i,34)), seasonName:i=>t('season')[i], MINE_ENT, ANIMALS:null,
@@ -1124,15 +1149,17 @@ async function boot(){
   setProgress(90);
 
   // a new farmer: fifteen parsnip seeds, and a yard gone to weeds
-  const fresh=!(!DBG||DBG.load)||!G.loadGame();
+  // saves belong to your NOVA account: the launcher says whether to continue, and signing in is what makes progress stick
+  const bootQ=new URLSearchParams(location.search), wantLoad=bootQ.get('mode')==='continue'&&!DBG; let cloud=null; if(wantLoad){ const r=await nova('load'); cloud=r&&r.data; }
+  G.storeSave=async d=>{ if(!inNova){ return null; } const meta={day:S.day,season:S.season,year:S.year||1,gold:S.gold,time:Math.round(S.time)}, r=await nova('save',{data:d,meta},30000); if(r&&r.ok){ toast('💾 '+L('已保存到你的账号','Saved to your account')); return true; } if(r&&r.needAuth) savePrompt(); else toast('⚠️ '+L('这次没有存上,稍后再试','Could not save just now')); return false; };
+  const fresh=!(!DBG||DBG.load)||!G.loadGame(cloud);
   if(fresh){ G.invAdd('seed','parsnip',15); G.seedDebris(60); G.spawnForage(); G.spawnDigs(); G.rollTomorrow(); G.festivalsToday(); S.mail.push({zh:'亲爱的,这座小农场和湖畔小屋从今天起是你的了。去犁地、去钓鱼、去认识镇上的人吧。——爷爷','en':'My dear, this little farm and lakeside cabin are yours now. Till the soil, fish the lake, and meet the town. — Grandpa'}); }
   else toast(L('存档已读取','Save loaded'));
-  if(!DBG) addEventListener('beforeunload', G.saveGame);
   if(DBG) applyDebugShot();
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn(); buildTouch();
   setProgress(100);
-  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); },250); // ensure render targets match the (now-visible) viewport
+  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ window.focus(); startAudio(); if(fresh){ showCards(L,()=>startChecklist(S,L,player,snd)); } } },250); // ensure render targets match the (now-visible) viewport
   requestAnimationFrame(frame);
 }
 /* touch: on-screen actions, the stick is the left half of the screen */
@@ -1144,7 +1171,7 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
 boot().catch(e=>{ console.error(e); const m=$('#loadsub'); if(m){ m.textContent='加载失败,点这里重试 · Could not load, tap to retry'; m.style.cursor='pointer'; m.onclick=()=>location.reload(); } });

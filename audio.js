@@ -151,7 +151,7 @@ export function play(name,...a){ if(!ctx||hidden||!SND[name]) return; try{ if(na
 export const playAt=(name,x,y,z)=>{ if(!ctx||hidden||!SND[name]) return; try{ SND[name]({},x,y,z); }catch(e){ console.warn('sound',name,e); } };
 
 /* ---------- the valley's voices, placed in the trees ---------- */
-let nextBird=0, nextEvent=0, nextDrip=0, nextCrack=0, nextOwl=0, nextLoon=0, nextPeck=0, lastWeather='', thunderT=0;
+let gustStart=-1, gustLen=6, gustPeak=1, nextGust=14, nextBird=0, nextEvent=0, nextDrip=0, nextCrack=0, nextOwl=0, nextLoon=0, nextPeck=0, lastWeather='', thunderT=0;
 function birdSong(dest,t,kind){ const w=dest;
   if(kind==='robin'){ let q=t; const n=Math.floor(rand(4,9)); for(let i=0;i<n;i++){ const f=rand(2200,3800), d=rand(.09,.2); osc(w,q,d,'sine',f,f*rand(.8,1.3),rand(.06,.11),.012); q+=d+rand(.02,.09); } return q-t; }
   if(kind==='warbler'){ let q=t, f=rand(4200,5200); for(let i=0;i<14;i++){ osc(w,q,.05,'sine',f,f*.86,.05,.004); q+=.06; f*=.985; } osc(w,q,.22,'sine',f*1.3,f*.8,.07,.01); return 1.2; }
@@ -177,8 +177,11 @@ export function updateAudio(st){ if(!ctx||hidden) return; const now=ctx.currentT
   const T=now, rv=B.rev; rv.valley.g.gain.setTargetAtTime(out_?(snow?.3:.55):0,T,.4); rv.cave.g.gain.setTargetAtTime(st.inMine?1:0,T,.4); rv.room.g.gain.setTargetAtTime(st.inHouse?.65:0,T,.2);
   B.muf.frequency.setTargetAtTime(st.inHouse?620:st.under?520:st.inMine?1400:20000,T,.2);
   // air
-  const gust=st.gust; set(beds.wind,(out_?1:st.inHouse?.5:.05)*(.05+.13*wind+.14*gust)*(snow?1.25:1)); beds.wind.chain[0].frequency.setTargetAtTime(280+gust*340+wind*120,T,.6);
-  set(beds.gust,(out_?.1+.2*gust:0)*wind); set(beds.rustle,out_?(st.trees*.8+.2)*(.012+.034*wind+.05*gust)*(snow?.2:1):0,.4);
+  // wind comes and goes: long quiet, then a single gust that swells through the trees and dies away
+  if(now>nextGust){ gustStart=now; gustLen=rand(5,10); gustPeak=rand(.55,1); nextGust=now+gustLen+rand(storm?10:28,storm?26:75); }
+  const gq=gustStart<0?1:(now-gustStart)/gustLen, gust=gq<1?gustPeak*Math.pow(Math.sin(gq*Math.PI),2):0, still=rain?.012:.004;
+  set(beds.wind,(out_?1:st.inHouse?.35:.05)*(still+.2*gust*(.6+wind*.5))*(snow?1.2:1),.35); beds.wind.chain[0].frequency.setTargetAtTime(240+gust*420,T,.5);
+  set(beds.gust,out_?.2*gust*wind:0,.4); set(beds.rustle,out_?(st.trees*.8+.2)*(.004+.11*gust)*(snow?.2:1):0,.3);
   // water
   set(beds.rain,rain?(out_?.17:st.inHouse?.07:0):0,1.5); set(beds.rainLow,rain?(out_?.1:st.inHouse?.1:0):0,1.5); const lapM=.5+.5*Math.sin(now*.7)*Math.sin(now*.31+1); set(beds.lap,st.lake*(.14+.14*lapM)*(st.inHouse?.3:1),.7); set(beds.creek,st.creek*.26); set(beds.falls,st.falls*.44);
   // life
