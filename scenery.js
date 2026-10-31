@@ -226,8 +226,8 @@ function buildSky(root){
         float sd=acos(clamp(dot(d,uSunD),-1.,1.)); float above=1.-uNight;                                      // sun: hard concentric rings
         c=mix(c,mix(c,uSunC,.1),step(sd,.26)*above); c=mix(c,mix(c,uSunC,.18),step(sd,.17)*above); c=mix(c,uSunC,step(sd,.075)*above);
         c+=uSunC*.12*above*exp(-sd*sd*3.);
-        vec2 uv=vec2(az/6.28318*3.+uTime*.00028,clamp(asin(h)/1.5708/.42,0.,1.)); vec3 t=texture2D(uClouds,uv).rgb;
-        float e=mix(.8,.44,uCover), m=smoothstep(e,e+.01,t.g), sm=smoothstep(e-.02,e+.16,t.b)*.72;
+        float cv=asin(h)/1.5708/.42; vec2 uv=vec2(az/6.28318*3.+uTime*.00028,clamp(cv,0.,1.)); vec3 t=texture2D(uClouds,uv).rgb;
+        float cTop=1.-smoothstep(.8,.98,cv), e=mix(.8,.44,uCover), m=smoothstep(e,e+.01,t.g)*cTop, sm=smoothstep(e-.02,e+.16,t.b)*.72*cTop;   // the painted clouds end before the zenith, or their top row smears into streaks
         vec3 cc=mix(uCS,uCL,t.r); c=mix(c,mix(uCS,uCL,.56),sm*(1.-m)); c=mix(c,cc,m);
         c=mix(c,uLow,smoothstep(.05,.0,h)*.7);
         gl_FragColor=vec4(c,1.); }` });
