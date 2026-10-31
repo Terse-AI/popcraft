@@ -38,7 +38,7 @@
   #ebar>i{display:block;height:100%;width:100%;border-radius:99px;background:linear-gradient(90deg,#b9c46a,#8ea04a);transition:width .25s}
 
   /* minimap */
-  #mini{position:absolute;top:12px;right:12px;width:168px;height:168px;padding:7px}
+  #mini{position:absolute;top:12px;right:12px;width:168px;height:168px;padding:7px;pointer-events:auto;cursor:zoom-in;transition:transform .15s}#mini:hover{transform:scale(1.03)}
   #mini .t{font-size:10px;color:#e6d6b4;letter-spacing:1px;text-transform:uppercase;margin:0 0 5px 3px}
   #mmc{width:154px;height:132px;border-radius:7px;display:block;background:#d6c59c;border:1px solid #5c4028}
 
@@ -75,6 +75,7 @@
 
   /* top controls */
   #top{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;pointer-events:auto}
+  @media(max-width:1180px){#top{top:66px;left:12px;transform:none;flex-wrap:wrap;max-width:calc(100% - 200px)}#todo{top:112px!important}}
   .pill{font:600 12px/1 system-ui;color:#f1e4c8;background:var(--panel);border:1px solid #7a5a3c;padding:8px 13px;border-radius:999px;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
   .pill:hover{border-color:var(--neon)}
 
@@ -125,7 +126,7 @@
     <span class="pill" id="langbtn">🌐 中文</span>
     <span class="pill" id="savebtn" title="save">💾</span>
     <span class="pill" id="helpbtn" title="help">❓</span>
-    <span class="pill" id="mapbtn" title="map">🗺</span>
+    <span class="pill" id="mapbtn" title="map">🗺 地图</span>
     <span class="pill" id="journalbtn">📖</span>
     <span class="pill" id="fps" style="pointer-events:none;opacity:.75">60 fps</span>
   </div>
@@ -158,7 +159,7 @@
     <span id="h3">鼠标</span> <span id="h4">视角</span> · <kbd>1-6</kbd> <span id="h5">工具</span><br>
     <kbd>←click</kbd> <span id="h6">使用工具</span> · <kbd>E</kbd> <span id="h7">交互/睡觉</span><br>
     <kbd>Tab</kbd> <span id="h9">背包</span> · <kbd>C</kbd> <span id="h10">制作</span><br>
-    <kbd>F</kbd> <span id="h11">钓鱼</span> · <kbd>J</kbd> <span id="h12">日志</span>
+    <kbd>F</kbd> <span id="h11">钓鱼</span> · <kbd>J</kbd> <span id="h12">日志</span> · <kbd>M</kbd> <span id="h13">地图</span>
   </div>
 </div>
 
@@ -200,7 +201,7 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, splatAt, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
+  collide, addObstacle, addBoxObstacle, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
 import { setupFlora, updateFlora, refreshFlora } from './flora.js';
 import { buildLife, updateLife } from './life.js';
@@ -485,7 +486,7 @@ async function loadTwinkle(){
     const c=box.getCenter(new THREE.Vector3());
     m.position.set(-c.x*s, -box.min.y*s, -c.z*s);
     m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false;        // same stepped light as the painted world
-      const src=o.material, mat=toonOf({ map:src.map||null, color:src.color||0xffffff, transparent:src.transparent, opacity:src.opacity, side:src.side });
+      const src=o.material, mat=toonOf({ gradientMap:softGrad, map:src.map||null, color:src.color||0xffffff, transparent:src.transparent, opacity:src.opacity, side:src.side });
       o.geometry.computeBoundingBox(); const bb=o.geometry.boundingBox; walkU.uBox.value.set(bb.min.y,bb.max.y,Math.max(-bb.min.x,bb.max.x));
       // the model is one solid mesh, so legs and arms swing in the vertex shader around hip and shoulder heights
       mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,walkU);
@@ -760,7 +761,7 @@ const signs=[];
 function applyLang(){
   $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
   document.documentElement.lang = LANG==='zh'?'zh':'en'; document.title=L('StarVale · 星星人露谷','StarVale');
-  $('#langbtn').textContent=t('lang'); $('#minit').textContent=t('map');
+  $('#langbtn').textContent=t('lang'); $('#minit').textContent=L('地图 · 点击放大','Map · click to open'); $('#mapbtn').textContent='🗺 '+L('地图','Map'); $('#h13').textContent=L('地图','map');
   $('#enlab').textContent=t('energy');
   $('#h0').textContent=t('ops'); $('#h1').textContent=t('move'); $('#h2').textContent=t('run');
   $('#h3').textContent=t('mouse'); $('#h4').textContent=t('view'); $('#h5').textContent=t('tool');
@@ -779,7 +780,7 @@ addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.buy,.pill,
 $('#journalbtn').onclick=()=>G.openJournal();
 $('#savebtn').onclick=()=>G.saveGame();
 $('#helpbtn').onclick=()=>showCards(L);
-$('#mapbtn').onclick=()=>openMap();
+$('#mapbtn').onclick=()=>openMap(); $('#mini').onclick=()=>openMap();
 
 /* ============================ MINIMAP ============================ */
 const mm=$('#mmc'), mx=mm.getContext('2d');
@@ -833,10 +834,15 @@ let composer=null, gradeFx=null, lastRig=null;
 // the hour's three-colour key: every value in the frame is pulled toward it, so the picture stays in one harmony
 class HourGrade extends Effect {
   constructor(){ super('HourGrade',
-    `uniform vec3 gS,gM,gH,uTint,uSunC; uniform float amt,flash,uLine,uT,uShaft,uAsp; uniform vec2 uSunP; uniform sampler2D tUnder;
+    `uniform vec3 gS,gM,gH,uTint,uSunC; uniform float amt,flash,uLine,uT,uShaft,uAsp,uAO,uSharp; uniform vec2 uSunP; uniform sampler2D tUnder;
      float ign(vec2 p){ return fract(52.9829189*fract(dot(p,vec2(.06711056,.00583715)))); }
+     float zlin(float d){ return cameraNear*cameraFar/(cameraFar-d*(cameraFar-cameraNear)); }
+     // contact shade: a few depth taps around each pixel, so things sit on the ground and boughs hold shadow between them
+     float contact(vec2 uv,float d){ if(d>=.99999) return 0.; float z=zlin(d); if(z>64.) return 0.; float j=ign(gl_FragCoord.xy)*6.2832, rad=clamp(1.5/z,.003,.024), o=0.; for(int i=0;i<6;i++){ float a=j+float(i)*1.0472, r=rad*(.4+float(i)*.14); float dz=z-zlin(readDepth(uv+vec2(cos(a)/uAsp,sin(a))*r)); o+=smoothstep(.03,.12,dz)*(1.-smoothstep(.7,1.8,dz)); } return o/6.*(1.-smoothstep(38.,64.,z)); }
      void mainImage(const in vec4 c, const in vec2 uv, const in float depth, out vec4 o){
-       vec3 src=c.rgb; float wob=sin(uv.x*30.+uT*2.)*.0016+sin(uv.x*11.-uT*1.3)*.0022, ln=uLine+wob*step(.001,uLine);
+       vec3 src=c.rgb; if(uSharp>.001){ vec3 nb=(texture2D(inputBuffer,uv+vec2(texelSize.x,0.)).rgb+texture2D(inputBuffer,uv-vec2(texelSize.x,0.)).rgb+texture2D(inputBuffer,uv+vec2(0.,texelSize.y)).rgb+texture2D(inputBuffer,uv-vec2(0.,texelSize.y)).rgb)*.25; src=max(src+(src-nb)*uSharp,vec3(0.)); }
+       if(uAO>.001) src*=1.-contact(uv,depth)*uAO;
+       float wob=sin(uv.x*30.+uT*2.)*.0016+sin(uv.x*11.-uT*1.3)*.0022, ln=uLine+wob*step(.001,uLine);
        if(uv.y<ln){ float dp=1.-uv.y/ln; vec2 q=vec2(uv.x+sin(uv.y*40.+uT*1.6)*.0015,(uv.y/ln)); vec3 u=texture2D(tUnder,q).rgb; u=mix(u*1.25,uTint*.3+vec3(.0,.012,.02),.2+dp*.28); u*=.96-dp*.5; float ray=smoothstep(.55,1.,sin(uv.x*22.+uT*.3+uv.y*6.)*.5+.5)*(1.-dp)*.1; src=u+uTint*ray; }
        vec3 col=pow(max(src,0.0),vec3(1.0/2.2));
        vec3 s=pow(gS,vec3(1.0/2.2)), m=pow(gM,vec3(1.0/2.2)), h=pow(gH,vec3(1.0/2.2));
@@ -852,12 +858,12 @@ class HourGrade extends Effect {
        col+=flash*.42;
        o=vec4(pow(col,vec3(2.2)),c.a);
      }`,
-    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)]]) }); }
+    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)]]) }); }
 }
 let QUAL = localStorage.getItem('sv_qual')||'med';
-const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false},
-            med:{dpr:1.25,shadow:1536,bloom:true,msaa:0,smaa:true},
-            high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false} };
+const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false,ao:0,sharp:.3},
+            med:{dpr:1.4,shadow:1536,bloom:true,msaa:0,smaa:true,ao:.46,sharp:.42},
+            high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false,ao:.52,sharp:.34} };
 function setupPost(){
   const q=QSET[QUAL]||QSET.med;
   renderer.setPixelRatio(Math.min(devicePixelRatio,q.dpr));
@@ -869,7 +875,7 @@ function setupPost(){
   composer.addPass(new RenderPass(scene,camera));
   const fx=[];
   if(q.bloom) fx.push(new BloomEffect({ intensity:0.32, luminanceThreshold:0.86, luminanceSmoothing:0.2, mipmapBlur:true, radius:0.5 }));
-  gradeFx=new HourGrade(); fx.push(gradeFx);
+  gradeFx=new HourGrade(); gradeFx.uniforms.get('uAO').value=q.ao||0; gradeFx.uniforms.get('uSharp').value=q.sharp||0; gradeFx.uniforms.get('uAsp').value=innerWidth/innerHeight; fx.push(gradeFx);
   if(q.smaa) fx.push(new SMAAEffect());
   composer.addPass(new EffectPass(camera, ...fx));
   composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(2);
@@ -990,7 +996,7 @@ function savePrompt(){ if(promptOpen) return; promptOpen=true; const w=document.
   w.querySelector('.no').onclick=off; w.querySelector('.go').onclick=async()=>{ w.querySelector('.go').disabled=true; const r=await nova('signin',null,300000); off(); if(r&&r.ok) G.saveGame(); }; }
 /* the valley map: every place, named */
 function places(){ const n=(x,z,ic,zh,en)=>({x,z,ic,zh,en}); return [n(CABIN.x,CABIN.z,'🏠','你的小屋','Your cabin'),n(0,4,'🌱','农田','Farm plot'),n(BIN.x,BIN.z,'📦','出货箱','Shipping bin'),n(COOP.x,COOP.z,'🐔','鸡舍','Coop'),n(BARN.x,BARN.z,'🐄','畜棚','Barn'),n(GREENHOUSE.x,GREENHOUSE.z,'🌿','温室','Greenhouse'),n(MINE_ENT.x,MINE_ENT.z,'⛏','矿洞','The mine'),n(PLAZA.x,PLAZA.z,'⛲','小镇广场','Town square'),n(DOCK.x,DOCK.z1,'🛶','码头','Dock'),n(0,128,'🌊','星星湖','Star Lake'),n(-212,33,'💧','瀑布','The falls'),n(-170,54,'〰','山溪','Mist Creek'),n(ISLANDS[4][0],ISLANDS[4][1],'🗼','灯塔','Lighthouse'),...TOWN.map(b=>n(b.x,b.z,b.icon,b.zh,b.en))]; }
-function openMap(){ if(document.getElementById('bigmap')){ document.getElementById('bigmap').remove(); return; } const w=document.createElement('div'); w.id='bigmap'; const V={x0:-238,z0:-72,x1:166,z1:232}, asp=(V.x1-V.x0)/(V.z1-V.z0), CW=Math.min(innerWidth*.94,innerHeight*.9*asp), CH=CW/asp, c=document.createElement('canvas'), dpr=Math.min(devicePixelRatio,2); c.width=CW*dpr; c.height=CH*dpr; c.style.cssText='width:'+CW+'px;height:'+CH+'px'; w.appendChild(c); const g=c.getContext('2d'), sc=c.width/(V.x1-V.x0), P=(x,z)=>[(x-V.x0)*sc,(z-V.z0)*sc], full=(c.width/(V.x1-V.x0))*MAP_R*2;
+function openMap(){ if(document.getElementById('bigmap')){ document.getElementById('bigmap').remove(); return; } if(document.pointerLockElement) document.exitPointerLock(); const w=document.createElement('div'); w.id='bigmap'; const V={x0:-238,z0:-72,x1:166,z1:232}, asp=(V.x1-V.x0)/(V.z1-V.z0), CW=Math.min(innerWidth*.94,innerHeight*.9*asp), CH=CW/asp, c=document.createElement('canvas'), dpr=Math.min(devicePixelRatio,2); c.width=CW*dpr; c.height=CH*dpr; c.style.cssText='width:'+CW+'px;height:'+CH+'px'; w.appendChild(c); const g=c.getContext('2d'), sc=c.width/(V.x1-V.x0), P=(x,z)=>[(x-V.x0)*sc,(z-V.z0)*sc], full=(c.width/(V.x1-V.x0))*MAP_R*2;
   g.drawImage(mapBase,(-MAP_R-V.x0)*sc,(-MAP_R-V.z0)*sc,full,full); const fs=Math.round(12.5*dpr); g.font='600 '+fs+'px -apple-system,"PingFang SC",sans-serif'; g.textBaseline='middle';
   const H=20*dpr, used=[], dots=places().map(p=>({p,xy:P(p.x,p.z)})), hit=(x,y,tw)=>x<3||y<3||x+tw>c.width-3||y+H>c.height-3||used.some(u=>x<u[0]+u[2]+4&&x+tw+4>u[0]&&y<u[1]+H+3&&y+H+3>u[1])||dots.some(d=>{ const [a,b]=d.xy; return a>x-5*dpr&&a<x+tw+5*dpr&&b>y-5*dpr&&b<y+H+5*dpr; });
   dots.sort((a,b)=>a.xy[1]-b.xy[1]); const placed=[];

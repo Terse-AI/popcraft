@@ -305,8 +305,8 @@ function ringTrees(root,qual,heightAt){
   const P=new Float32Array(cap*3), S=new Float32Array(cap*2), Q=new Float32Array(cap*4), Mi=new Float32Array(cap*3); let n=0;
   for(let i=0;i<cap*40&&n<cap;i++){ const u=r(), v=Math.pow(r(),1.5)*.9+.025; if(forestAt(u,v)<.5||r()>1-v*.6) continue;
     const p=ringPos(heightAt(u,v),u,v), rad=Math.hypot(p[0]-RING.CX,p[2]-RING.CZ); if(p[1]<6) continue;
-    const grove=vnoise(p[0]*.006+3,p[2]*.006)>.5, nm=grove?names[4+Math.floor(r()*4)]:names[Math.floor(r()*4)], a=ATLAS[nm], h=(15+r()*13)*(1+smooth(600,1100,rad)*.9);
-    P.set(p,n*3); S.set([h*a.w/a.h,h],n*2); Q.set([a.u0,a.v0,a.u1,a.v1],n*4); Mi.set([(r()-.5)*.26,grove?1:0,r()<.5?-1:1],n*3); n++; }
+    const grove=vnoise(p[0]*.006+3,p[2]*.006)>.5, nm=grove?names[4+Math.floor(r()*4)]:names[Math.floor(r()*4)], a=ATLAS[nm], h=(13+r()*9)*(1+smooth(600,1100,rad)*.7);
+    P.set(p,n*3); S.set([h*a.w/a.h*1.5,h],n*2); Q.set([a.u0,a.v0,a.u1,a.v1],n*4); Mi.set([(r()-.5)*.26,grove?1:0,r()<.5?-1:1],n*3); n++; }
   const g=new THREE.InstancedBufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-.5,0,0, .5,0,0, .5,1,0, -.5,1,0]),3)); g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array([0,0,1,0,1,1,0,1]),2)); g.setIndex([0,1,2,0,2,3]);
   g.setAttribute('iPos',new THREE.InstancedBufferAttribute(P,3)); g.setAttribute('iSize',new THREE.InstancedBufferAttribute(S,2)); g.setAttribute('iRect',new THREE.InstancedBufferAttribute(Q,4)); g.setAttribute('iMisc',new THREE.InstancedBufferAttribute(Mi,3)); g.instanceCount=n;
   ringTreeMat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, uniforms:{ ...U, ...mtU, uMap:{value:TEX.sheet_trees}, uDecAmt:{value:0} },
@@ -314,7 +314,7 @@ function ringTrees(root,qual,heightAt){
       void main(){ vec3 tc=cameraPosition-iPos; tc.y=0.; float d=max(length(tc),.001); tc/=d; vec3 right=vec3(tc.z,0.,-tc.x); vec3 wp=iPos+right*position.x*iSize.x+vec3(0.,position.y*iSize.y-1.5,0.);
         float u=iMisc.z<0.?1.-uv.x:uv.x; vUv=vec2(mix(iRect.x,iRect.z,u),mix(iRect.y,iRect.w,uv.y)); vTone=iMisc.x; vGrove=iMisc.y; vL=dot(right,uSide)*(uv.x-.5); vD=d; vP=iPos; gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
     fragmentShader:`precision highp float; uniform sampler2D uMap; uniform vec3 uFS,uFL,uDS,uDL,uHz,uSS,uSL,uFogSun,uSunDirW; uniform float uDecAmt,uSnow; varying vec2 vUv; varying float vTone,vGrove,vL,vD; varying vec3 vP; ${CLOUD_GLSL}
-      void main(){ vec4 t=texture2D(uMap,vUv); if(t.a<.42) discard; float v=t.r+(t.g-.5)*.2+vTone+vL*.5, w=clamp(v*1.5,0.,1.); vec3 c=mix(uFS,uFL,w); c=mix(c,mix(uDS,uDL,w),vGrove*uDecAmt);
+      void main(){ vec4 t=texture2D(uMap,vUv,.7); if(t.a<.5) discard; float v=min(t.r,.58)+(t.g-.5)*.12+vTone+vL*.22, w=clamp(v*1.5,0.,1.); vec3 c=mix(uFS,uFL,w); c=mix(c,mix(uDS,uDL,w),vGrove*uDecAmt);
         if(uSnow>.5) c=mix(c,mix(uSS,uSL,w),.42*smoothstep(.1,.6,t.b)+.1);
         c*=cloudShade(vP.xz); float hz=smoothstep(380.,1400.,vD)*.36, low=1.-smoothstep(10.,120.,vP.y); c=mix(c,uHz+uFogSun*pow(max(dot(normalize(vP-cameraPosition),uSunDirW),0.),6.),clamp(hz+low*low*.3,0.,1.));
         gl_FragColor=vec4(c,1.); }` });
@@ -340,7 +340,7 @@ export function makeSprites(root,sheet,items,opts={}){
   geo.instanceCount=n;
   const mat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, alphaToCoverage:true,
     defines:opts.colored?{COLORED:1}:{},
-    uniforms:{ ...U, uMap:{value:TEX[sheet]}, uSnowRow:{value:rowV('ice')} },
+    uniforms:{ ...U, uMap:{value:TEX[sheet]}, uMott:{value:TEX.mt_detail}, uSnowRow:{value:rowV('ice')} },
     vertexShader:`attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iRect,iMisc;
       uniform float uTime,uFogD,uLodT,uLodP,uWindAmp; uniform vec3 uSide,uSunDirW;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF,vInsc; varying vec2 vP;
@@ -355,14 +355,14 @@ export function makeSprites(root,sheet,items,opts={}){
         vRow=iMisc.x; vTone=iMisc.y; vX=uv.x-.5; vSideL=dot(right,uSide); vFogF=1.-exp(-d*d*uFogD*uFogD); vNear=d; vP=iPos.xz; vInsc=pow(max(dot(normalize(wp-cameraPosition),uSunDirW),0.),5.);
         gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
     fragmentShader:`precision highp float;
-      uniform sampler2D uMap,uRamps; uniform vec3 uShade,uLit,uFog,uFogSun; uniform float uSnow,uSnowRow,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
+      uniform sampler2D uMap,uRamps,uMott; uniform vec3 uShade,uLit,uFog,uFogSun; uniform float uSnow,uSnowRow,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF,vInsc; varying vec2 vP; ${ramp} ${CLOUD_GLSL}
       float dith(vec2 p){ return fract(52.9829189*fract(dot(floor(p)+.5,vec2(.06711056,.00583715)))); }
       void main(){ if(vLodF<=dith(gl_FragCoord.xy)) discard; vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
         #ifdef COLORED
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
         #else
-        float v=t.r+(t.g-.5)*.16+vTone+vSideL*vX*.42;
+        float v=t.r+(t.g-.5)*.16+vTone+vSideL*vX*.42; v=min(v,mix(1.,.66,smoothstep(40.,170.,vNear))); float mot=texture2D(uMott,vUv*53.).b-.5, mot2=texture2D(uMott,vUv*151.).b-.5; v+=(mot*.34+mot2*.2)*(1.-smoothstep(120.,420.,vNear));
         vec3 c=ramp(v,vRow);
         if(uSnow>.01){ float s=uSnow*smoothstep(.1,.6,t.b)*smoothstep(.2,.42,t.r); c=mix(c,ramp(.45+v*.6,uSnowRow),s); }
         #endif
@@ -427,7 +427,7 @@ function groundMaterial(){
           c=mix(c,ramp(.3+lf*.6,uLeafRow),step(.1,lf)*lz*bk*.85); }
         c*=mix(1.,.55,wet);
         c*=cloudShade(vWP.xz);
-        if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.3)); }
+        if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.06)); }
         diffuseColor.rgb*=c;`);
   };
   return m;
@@ -479,7 +479,7 @@ function buildLake(root,res){
         float g=0.;
         float dn=.92-road*.5, cl=cloudShade(p).g;
         g+=f1*dash(vec2(p.x*1.9+t*.1,p.y*11.),dn)*.6;
-        g+=f2*dash(vec2(p.x*.42-t*.06,p.y*2.6),dn-.01);
+        g+=f2*dash(vec2(p.x*.74-t*.06,p.y*3.8),dn-.01);
         g+=f2*dash(vec2(p.x*.97+t*.09+7.,p.y*5.3),dn+.02)*.7;
         g+=f3*dash(vec2(p.x*.13+t*.025,p.y*.9),dn);
         g+=f3*dash(vec2(p.x*.31-t*.04+3.,p.y*2.1),dn+.02)*.8;
@@ -564,6 +564,7 @@ function rockGeo(seed,flat,detail=2){
   g.computeVertexNormals(); return g;
 }
 const toonGrad=(()=>{ const d=new Uint8Array([70,130,195,255]); const t=new THREE.DataTexture(d,4,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.NearestFilter; t.needsUpdate=true; return t; })();
+export const softGrad=(()=>{ const d=new Uint8Array([86,112,140,170,198,222,240,255]); const t=new THREE.DataTexture(d,8,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.LinearFilter; t.needsUpdate=true; return t; })();    // a soft ramp for the hero, so a face never breaks into hard bands
 export function toonOf(params){ return new THREE.MeshToonMaterial({gradientMap:toonGrad,...params}); }
 function buildRocks(root,obst){
   const r=rng(77), geos=[rockGeo(1,.72,5),rockGeo(2,.6,5),rockGeo(3,.84,5),rockGeo(4,.5,5),rockGeo(5,.7,2),rockGeo(6,.56,2),rockGeo(7,.8,2),rockGeo(8,.5,2)];
@@ -733,7 +734,7 @@ export function nearestOf(kind,x,z,reach){ let best=null, bd=reach; const cx=Mat
 export function addBoxObstacle(x,z,hx,hz){ const o={x,z,hx,hz,box:true}; obstacles.push(o); if(blockT) stampBlock(x,z,hx,hz); const k=gkey(x,z); [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]].forEach(([a,b])=>{ const kk=gkey(x+a*hx,z+b*hz); if(!grid.has(kk)) grid.set(kk,[]); if(!grid.get(kk).includes(o)) grid.get(kk).push(o); }); return o; }
 
 let mistRings=[], birds=null, birdT=0, root=null;
-export const QUAL_RES={low:[512,320],med:[900,560],high:[1280,800]};
+export const QUAL_RES={low:[512,320],med:[1080,680],high:[1400,880]};
 export function buildScenery(parent,qual){
   root=new THREE.Group(); parent.add(root);
   bakeFields(); const before=root.children.length; buildSky(root); buildMountains(root,qual); aboveWater=root.children.slice(before); buildGround(root);

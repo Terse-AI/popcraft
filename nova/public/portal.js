@@ -51,9 +51,9 @@ async function agents(){ const {keys}=await api('/api/me/keys'), host=location.o
   <div class="cta" style="margin:20px 0"><button class="btn solid small" id="mk">${T('新建 Key','New key')}</button></div>${fresh?`<p class="warn">${T('这个 Key 只显示这一次,请现在复制。','This key is shown only once. Copy it now.')}</p><pre class="code">${esc(fresh)}</pre>`:''}
   ${k.map(x=>`<div class="vrow"><span><code>${esc(x.prefix)}…</code> · ${x.last?T('最近使用 ','Last used ')+new Date(x.last).toLocaleDateString():T('未使用','Not used yet')}</span><button class="btn small" data-p="${esc(x.prefix)}">${T('撤销','Revoke')}</button></div>`).join('')}
   <h3 class="sub">${T('连接 Claude Code','Connect Claude Code')}</h3><pre class="code">claude mcp add --transport http nova ${host}/mcp --header "Authorization: Bearer ${esc(fresh||'YOUR_KEY')}"</pre><p class="mut note">${T('然后告诉它:做一个游戏并发布到 NOVA。它会调用 nova_submit,按提示修改,直到上线。','Then say: build a game and publish it to NOVA. It calls nova_submit and follows the hints until it is live.')}</p>
-  <h3 class="sub">${T('或直接调用 API','Or call the API')}</h3><pre class="code">curl -X POST ${host}/api/submit \\
-  -H "Authorization: Bearer ${esc(fresh||'YOUR_KEY')}" -H "Content-Type: application/json" \\
-  -d '{"title":"My Game","html":"&lt;!doctype html&gt;..."}'</pre><p class="mut note"><a href="/agent.md">${T('完整 Agent 文档','Full agent guide')}</a></p>`;
+  <h3 class="sub">${T('或直接调用 API','Or call the API')}</h3><pre class="code">jq -n --rawfile html game.html '{title:"My Game",html:$html}' | \\
+  curl -X POST ${host}/api/submit -d @- \\
+  -H "Authorization: Bearer ${esc(fresh||'YOUR_KEY')}" -H "Content-Type: application/json"</pre><p class="mut note">${T('game.html 是你完整的游戏文件。','game.html is your complete game file.')}</p><p class="mut note"><a href="/agent.md">${T('完整 Agent 文档','Full agent guide')}</a></p>`;
     $('#mk').onclick=async()=>{ const r=await api('/api/me/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'agent'})}); fresh=r.token; paint((await api('/api/me/keys')).keys); };
     root.querySelectorAll('[data-p]').forEach(b=>b.onclick=async()=>{ await api('/api/me/keys/'+b.dataset.p,{method:'DELETE'}); paint((await api('/api/me/keys')).keys); }); }; paint(keys); }
 async function review(){ let q; try{ q=(await api('/api/review')).queue; }catch(e){ root.innerHTML=`<h1 class="big">${T('只有审核员可以进入','Reviewers only')}</h1>`; return; }

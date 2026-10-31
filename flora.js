@@ -46,7 +46,7 @@ function clumps(m,r,pts,sizeFn,center){ const rects=CLUMPS.map(n=>ATLAS[n]);
     [[-1,-1,a.u0,a.v0],[1,-1,a.u1,a.v0],[1,1,a.u1,a.v1],[-1,1,a.u0,a.v1]].forEach(([x,y,u,v])=>m.v(c[0],c[1],c[2],u,v,n.x,n.y,n.z,0,ph,c[3],sh,x*co-y*si,x*si+y*co,s));
     m.q(base,base+1,base+2,base+3); } }
 function blob(m,r,c,rx,ry,rz){ const LAT=5, LON=8, b=m.p.length/3;       // dark mass inside a billow of leaves, so the light has something to fall into
-  for(let j=0;j<=LAT;j++) for(let i=0;i<LON;i++){ const t=j/LAT*Math.PI, a=i/LON*tau+j, q=.86+r()*.24, x=Math.sin(t)*Math.cos(a), y=Math.cos(t), z=Math.sin(t)*Math.sin(a); m.v(c[0]+x*rx*q,c[1]+y*ry*q,c[2]+z*rz*q,0,0,x,y,z,2,0,0,.1); }
+  for(let j=0;j<=LAT;j++) for(let i=0;i<LON;i++){ const t=j/LAT*Math.PI, a=i/LON*tau+j, q=.86+r()*.24, x=Math.sin(t)*Math.cos(a), y=Math.cos(t), z=Math.sin(t)*Math.sin(a); m.v(c[0]+x*rx*q,c[1]+y*ry*q,c[2]+z*rz*q,0,0,x,y,z,2,0,0,.55); }
   for(let j=0;j<LAT;j++) for(let i=0;i<LON;i++){ const i2=(i+1)%LON; m.q(b+j*LON+i,b+(j+1)*LON+i,b+(j+1)*LON+i2,b+j*LON+i2); } }
 function broadleaf(seed,n=520){
   const r=rng(seed), m=new Mesh3(), C=[0,.6,0], RX=.36, RY=.33, lobes=[];
@@ -59,7 +59,7 @@ function broadleaf(seed,n=520){
   const prim=[0,1,2,3].map(i=>{ const a=i/4*tau+seed+r()*.5, p=[Math.cos(a)*.13,.45+r()*.08,Math.sin(a)*.13]; bent(top,p,.018,.011,6,.05); return p; });
   lobes.forEach(l=>{ let best=prim[0], bd=9; for(const p of prim){ const d=Math.hypot(p[0]-l[0],p[1]-l[1],p[2]-l[2]); if(d<bd){ bd=d; best=p; } } bent(best,[l[0],l[1],l[2]],.0085,.0028,4,.06); blob(m,r,l,l[3]*.46,l[3]*.4,l[3]*.46); });
   const pts=[];
-  lobes.forEach(l=>{ for(let i=0;i<9;i++){ const a=r()*tau, u=r()*1.6-.8, q=Math.sqrt(Math.max(0,1-u*u)), R=l[3]*.55; pts.push([l[0]+Math.cos(a)*q*R,l[1]+u*R,l[2]+Math.sin(a)*q*R,.3,Math.cos(a)*q,u,Math.sin(a)*q,.15]); } });   // deep leaves, in shade, so gaps show foliage and not sky
+  lobes.forEach(l=>{ for(let i=0;i<15;i++){ const a=r()*tau, u=r()*1.6-.8, q=Math.sqrt(Math.max(0,1-u*u)), R=l[3]*.55; pts.push([l[0]+Math.cos(a)*q*R,l[1]+u*R,l[2]+Math.sin(a)*q*R,.3,Math.cos(a)*q,u,Math.sin(a)*q,.15]); } });   // deep leaves, in shade, so gaps show foliage and not sky
   for(let i=0;i<n;i++){ const l=lobes[i%lobes.length], u=r()*2-1, a=r()*tau, q=Math.sqrt(1-u*u), rad=l[3]*(.74+.34*Math.cbrt(r())), nx=Math.cos(a)*q, ny=u, nz=Math.sin(a)*q; if(ny<-.7&&r()<.7) continue;
     const gn=new THREE.Vector3(l[0],(l[1]-C[1])*1.2,l[2]).normalize(), N=new THREE.Vector3(nx*.7+gn.x*.3,ny*.7+gn.y*.3,nz*.7+gn.z*.3).normalize();
     pts.push([l[0]+nx*rad,l[1]+ny*rad*.86,l[2]+nz*rad,.4+.6*(ny*.5+.5),N.x,N.y,N.z,.72+.28*(ny*.5+.5)]); }
@@ -124,7 +124,7 @@ function floraMaterial(depth,plantsR,leafy){
       void main(){ float fade=smoothstep(uLodT-5.,uLodT-1.,vD); if(fade>dith(gl_FragCoord.xy)+.001) discard; if(vF<3.4&&(vF-1.2)/2.2<dith(gl_FragCoord.xy)) discard;
         if(vD<uReveal.z){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.26){ if(dith(gl_FragCoord.xy*.5)>rr/.26*1.1-.08) discard; } }
         vec3 c; float a=1.; float lam=dot(normalize(vN),uSunDirW);
-        if(vTrunk>1.5){ c=ramp(.22+vTone,vRow)*mix(uShade,uLit,.36); }
+        if(vTrunk>1.5){ float bn=vShade>.3?texture2D(uBark,vN.xz*1.6+vP*.07).b-.5:0.; c=ramp((vShade>.3?.36:.22)+vTone+bn*.3,vRow)*mix(uShade,uLit,vShade>.3?.5:.36); }
         else if(vTrunk>.5){ vec2 bq=vUv*vec2(.62,.3); vec3 b=texture2D(uBark,bq).rgb, b2=texture2D(uBark,bq*3.3).rgb; vec3 nb=normalize(vN+vec3(b.r-.5,0.,b.g-.5)*1.6+vec3(b2.r-.5,0.,b2.g-.5)*.9); float l2=dot(nb,uSunDirW); float v=.4+.36*(l2*.5+.5)+(b.b-.5)*.95+(b2.b-.5)*.6; c=ramp(v,uWoodRow)*mix(uShade,uLit,.5+.45*max(l2,0.)); }
         else { vec4 t=texture2D(uMap,vUv,uMipBias); if(t.a<.32) discard; a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
           float v=mix(.42,t.r,uDetail)+(t.g-.5)*.2+vTone+lam*.3*(.6+.4*vShade)+(vShade-.5)*.34;
