@@ -271,7 +271,7 @@ function variant(root,name,geo,cap,mat,dep){
   const a=new THREE.InstancedBufferAttribute(new Float32Array(cap*3),3), b=new THREE.InstancedBufferAttribute(new Float32Array(cap*4),4); a.setUsage(THREE.DynamicDrawUsage); b.setUsage(THREE.DynamicDrawUsage);
   g.setAttribute('iPos',a); g.setAttribute('iMisc',b); g.instanceCount=0;
   const o=new THREE.Mesh(g,mat); o.frustumCulled=false; o.layers.set(1); if(dep){ o.customDepthMaterial=dep; o.castShadow=true; } root.add(o);
-  VAR[name]={g,a,b,cap,n:0,o,kind:'flora'};
+  VAR[name]={g,a,b,cap,n:0,o,kind:'flora',base:geo};
 }
 function bladeVariant(root,name,geo,cap,mat){
   const g=new THREE.InstancedBufferGeometry(); g.index=geo.index; for(const k in geo.attributes) g.setAttribute(k,geo.attributes[k]);
@@ -301,6 +301,20 @@ export function setupFlora(root,trees,plants,qual){
   for(const list of [trees,plants]) for(const it of list){ it.v=pickVar(it); if(!it.v) continue; if(it.trueH===undefined) it.trueH=it.h; const k=key(it.x,it.z); if(!cells.has(k)) cells.set(k,[]); cells.get(k).push(it); }
 }
 export const refreshFlora=()=>{ lastX=1e9; };
+/* Far trees are pictures of the near ones. Each model is photographed once into an atlas: its light value, snow mask and trunk flag, not its colour,
+   so season and hour colour it with the same ramps. Drawing a far tree stays one quad, and what you see far off is the tree you walk up to. */
+export function bakeFar(renderer){ const CW=512, CH=1024, names=['con0','con1','con2','lar0','lar1','bro0','bro1','shr'], rt=new THREE.WebGLRenderTarget(CW*4,CH*2,{ samples:4, generateMipmaps:true, minFilter:THREE.LinearMipmapLinearFilter, magFilter:THREE.LinearFilter, type:THREE.UnsignedByteType }); rt.texture.anisotropy=8; rt.texture.colorSpace=THREE.NoColorSpace;
+  const mat=d=>new THREE.ShaderMaterial({ side:THREE.DoubleSide, uniforms:{ uMap:{value:TEX.sheet_near}, uBark:{value:TEX.mt_detail}, uDetail:{value:d} },
+    vertexShader:`attribute vec3 aNorm; attribute vec4 aWind; attribute vec3 aOff; varying vec2 vUv; varying vec3 vN; varying float vShade,vTrunk; void main(){ vec4 mv=viewMatrix*vec4(position,1.); if(aOff.z>0.) mv.xy+=aOff.xy*aOff.z; gl_Position=projectionMatrix*mv; vUv=uv; vN=aNorm; vShade=aWind.w; vTrunk=aWind.x; }`,
+    fragmentShader:`precision highp float; uniform sampler2D uMap,uBark; uniform float uDetail; varying vec2 vUv; varying vec3 vN; varying float vShade,vTrunk; const vec3 L=normalize(vec3(.34,.72,.6));
+      void main(){ float v, wood=0., snow=0., a=1.; float lam=dot(normalize(vN),L);
+        if(vTrunk>1.5){ wood=0.; v=vShade>.3?.42:.34; }
+        else if(vTrunk>.5){ vec2 bq=vUv*vec2(.62,.3); vec3 b=texture2D(uBark,bq).rgb, b2=texture2D(uBark,bq*3.3).rgb; vec3 nb=normalize(vN+vec3(b.r-.5,0.,b.g-.5)*1.6); v=.4+.36*(dot(nb,L)*.5+.5)+(b.b-.5)*.95+(b2.b-.5)*.6; wood=1.; }
+        else { vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard; a=t.a; v=mix(.42,t.r,uDetail)+(t.g-.5)*.2+lam*.3*(.6+.4*vShade)+(vShade-.5)*.34; snow=smoothstep(.1,.6,t.b)*smoothstep(-.3,.35,normalize(vN).y); }
+        gl_FragColor=vec4((v+.2)/1.4,wood,snow,a); }` });
+  const scene=new THREE.Scene(), cam=new THREE.OrthographicCamera(-1,1,1,0,-4,4), mesh=new THREE.Mesh(new THREE.BufferGeometry(),mat(.9)), leafy=mat(.78); mesh.frustumCulled=false; scene.add(mesh); const info={}, was={ rt:renderer.getRenderTarget(), auto:renderer.autoClear }, col=new THREE.Color(); renderer.getClearColor(col); const wasA=renderer.getClearAlpha(); renderer.autoClear=false; renderer.setClearColor(new THREE.Color(.46,0,0),0); renderer.setRenderTarget(rt); renderer.clear();
+  names.forEach((nm,i)=>{ const V=VAR[nm]; if(!V) return; const g=V.base, P=g.attributes.position, O=g.attributes.aOff; let rx=0,ry=0; for(let k=0;k<P.count;k++){ const e=O?O.getZ(k)*Math.hypot(O.getX(k),O.getY(k)):0; rx=Math.max(rx,Math.hypot(P.getX(k),P.getZ(k))+e); ry=Math.max(ry,P.getY(k)+e); } rx*=1.04; ry*=1.03; const x=(i%4)*CW, y=Math.floor(i/4)*CH; mesh.geometry=g; mesh.material=/^(bro|shr)/.test(nm)?leafy:mat(.9); cam.left=-rx; cam.right=rx; cam.top=ry; cam.bottom=0; cam.updateProjectionMatrix(); rt.viewport.set(x,y,CW,CH); rt.scissor.set(x,y,CW,CH); rt.scissorTest=true; renderer.setRenderTarget(rt); renderer.render(scene,cam); info[nm]={ w:rx*2, h:ry, k:nm==='shr'?1.1:1, u0:x/(CW*4), v0:y/(CH*2), u1:(x+CW)/(CW*4), v1:(y+CH)/(CH*2) }; });
+  renderer.setRenderTarget(was.rt); renderer.autoClear=was.auto; renderer.setClearColor(col,wasA); rt.scissorTest=false; return {tex:rt.texture,info}; }
 export function updateFlora(cam,fwd){
   if(chunkFrame++%6===0||dirty.size) updateChunks(cam,chunkFrame<3?999:2);
   const cx=cam.x, cz=cam.z, yaw=Math.atan2(fwd.x,fwd.z), dy=Math.abs(((yaw-lastYaw+Math.PI)%tau+tau)%tau-Math.PI); if(Math.hypot(cx-lastX,cz-lastZ)<2.6&&dy<.3) return; lastX=cx; lastZ=cz; lastYaw=yaw;

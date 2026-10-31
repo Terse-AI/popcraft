@@ -171,7 +171,7 @@
     <kbd>←click</kbd> <span id="h6">使用工具</span> · <kbd>E</kbd> <span id="h7">交互/睡觉</span><br>
     <kbd>Tab</kbd> <span id="h9">背包</span> · <kbd>C</kbd> <span id="h10">制作</span><br>
     <kbd>F</kbd> <span id="h11">钓鱼</span> · <kbd>J</kbd> <span id="h12">日志</span> · <kbd>M</kbd> <span id="h13">地图</span><br>
-    <kbd>H</kbd> <span id="h14">隐藏面板</span>
+    <kbd>Space</kbd> <span id="h15">跳跃</span> · <kbd>H</kbd> <span id="h14">隐藏面板</span>
   </div>
   <div id="buffs" class="card hidden"></div>
   <span class="pill" id="eyeback" title="show panels">👁</span>
@@ -215,9 +215,9 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, obstacles, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
+  collide, addObstacle, addBoxObstacle, obstacles, reskinTrees, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
-import { setupFlora, updateFlora, refreshFlora } from './flora.js';
+import { setupFlora, updateFlora, refreshFlora, bakeFar } from './flora.js';
 import { buildDesert, DESERT } from './desert.js';
 import { buildIsland, ISLAND } from './island.js';
 import { buildLife, updateLife } from './life.js';
@@ -534,6 +534,7 @@ addEventListener('keydown',e=>{
   else if(k==='j'){ G.openJournal(); }
   else if(k==='m'){ openMap(); }
   else if(k==='h'){ hudOff.all=!hudOff.all; paintHud(); }
+  else if(e.code==='Space'){ e.preventDefault(); jump(); }
   else if(k==='f'){ if(G.fishing.state) G.fishPress(true); else G.tryFish(); }
   else if(k==='tab'){ e.preventDefault(); if($('#inv').classList.contains('hidden')) openInv(); else closeAll(); }
   else if(k==='escape'){ closeAll(); const m=$('#dynmodal'); if(m) m.classList.add('hidden'); G.cancelFish(); }
@@ -782,7 +783,7 @@ const signs=[];
 function applyLang(){
   $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
   document.documentElement.lang = LANG==='zh'?'zh':'en'; document.title=L('StarVale · 星星人露谷','StarVale');
-  $('#langbtn').textContent=t('lang'); $('#minit').textContent=L('地图 · 点击放大','Map · click to open'); $('#mapbtn').textContent='🗺 '+L('地图','Map'); $('#h13').textContent=L('地图','map'); $('#h14').textContent=L('隐藏面板','Hide panels');
+  $('#langbtn').textContent=t('lang'); $('#minit').textContent=L('地图 · 点击放大','Map · click to open'); $('#mapbtn').textContent='🗺 '+L('地图','Map'); $('#h13').textContent=L('地图','map'); $('#h14').textContent=L('隐藏面板','Hide panels'); $('#h15').textContent=L('跳跃','Jump');
   $('#enlab').textContent=t('energy');
   $('#h0').textContent=t('ops'); $('#h1').textContent=t('move'); $('#h2').textContent=t('run');
   $('#h3').textContent=t('mouse'); $('#h4').textContent=t('view'); $('#h5').textContent=t('tool');
@@ -968,11 +969,12 @@ function frame(now){
   updateBoat(dt,now); updateBeasts(dt,now);
   if(S.inMine){ const mo=G.mine.mode, area=mo==='desert'?DESERT:mo==='island'?ISLAND:null, lim=area?area.R:17, r=Math.hypot(player.pos.x,player.pos.z); if(r>lim){ player.pos.x*=lim/r; player.pos.z*=lim/r; } if(area) for(const o of area.solid){ const dx=player.pos.x-o.x, dz=player.pos.z-o.z, d=Math.hypot(dx,dz), q=o.r+.4; if(d<q&&d>.01){ player.pos.x=o.x+dx/d*q; player.pos.z=o.z+dz/d*q; } } player.pos.y=0; }
   if(S.inHouse){ player.pos.x=clamp(player.pos.x,-5.6,5.6); player.pos.z=clamp(player.pos.z,-4,4); player.pos.y=0; }
+  stepJump(dt);
   if(G.film) G.film.pose(dt);
-  if(G.film) player.pos.y=(S.inMine||S.inHouse)?0:walkH(player.pos.x,player.pos.z);
-  avatar.position.copy(player.pos);
+  if(G.film) player.pos.y=(S.inMine||S.inHouse)?0:S.boating?WATER_Y+.08:walkH(player.pos.x,player.pos.z);
+  avatar.position.copy(player.pos); avatar.position.y+=hop.y;
   avatar.rotation.y=angDamp(avatar.rotation.y,player.yaw,S.boating?4:13,dt);
-  animateWalk(dt);
+  animateWalk(dt); hopPose();
 
   // third-person camera
   const cs=Math.cos(cam.pitch);
@@ -1044,6 +1046,11 @@ function openMap(){ if(document.getElementById('bigmap')){ document.getElementBy
   for(const q of placed){ g.fillStyle='rgba(44,32,22,.9)'; g.beginPath(); g.arc(q.x,q.y,3.2*dpr,0,7); g.fill(); g.fillStyle='rgba(250,242,226,.94)'; g.beginPath(); g.roundRect(q.tx,q.ty,q.tw,H,6*dpr); g.fill(); g.fillStyle='#3a2a1c'; g.fillText(q.txt,q.tx+6*dpr,q.ty+H/2+dpr*.5); }
   const [px,py]=P(player.pos.x,player.pos.z); g.fillStyle='#e8503a'; g.strokeStyle='#fff'; g.lineWidth=2*dpr; g.beginPath(); g.arc(px,py,6*dpr,0,7); g.fill(); g.stroke();
   w.onclick=()=>w.remove(); document.body.appendChild(w); snd('panelOpen'); }
+/* a hop: the arc is real, the camera stays level so the view doesn't bounce, and the landing has weight */
+const hop={y:0,v:0,land:0};
+function jump(){ if(hop.y>0||S.sleeping||S.boating||paused()||G.fishing.state) return; hop.v=6.4; snd('step',{run:true},'grass'); }
+function stepJump(dt){ if(hop.y>0||hop.v>0){ hop.v-=19*dt; hop.y+=hop.v*dt; if(hop.y<=0){ hop.y=0; hop.v=0; hop.land=1; snd('step',{run:true},footSurface()); if(!S.inHouse&&!S.inMine) G.dust&&G.dust(player.pos.x,player.pos.z); } } hop.land=Math.max(0,hop.land-dt*6); }
+function hopPose(){ if(charHolder&&(hop.y>0||hop.land>0)){ const air=Math.min(1,hop.y*1.2), sq=hop.land*.16-air*.06; charHolder.scale.y*=1-sq; charHolder.scale.x*=1+sq*.6; charHolder.scale.z*=1+sq*.6; } }
 function animateWalk(dt){
   if(!avatar) return;
   const v=player.speed, g=Math.min(1,v/4.2), run=Math.max(0,(v-4.4)/2.8), P=player.walkT;
@@ -1212,7 +1219,7 @@ let swingT=0, shakeT=0;
 function updateFx(dt){ cut.k=damp(cut.k,cut.on?1:0,cut.on?3.2:5,dt); if(gradeFx) gradeFx.uniforms.get('uLine').value=(S.inMine||S.inHouse)?0:cut.k*.46; if(cut.k<.01){ cut.k=cut.on?cut.k:0; if(!cut.on){ cut.fish.forEach(F=>F.root.visible=false); kelp.forEach(k=>k.visible=false); } } const p=fxGeo.attributes.position, c=fxGeo.attributes.color; let n=0; for(let i=fxPts.length-1;i>=0;i--){ const f=fxPts[i]; f.t-=dt; if(f.t<=0){ fxPts.splice(i,1); continue; } f.vy-=9*dt; f.x+=f.vx*dt; f.y+=f.vy*dt; f.z+=f.vz*dt; } for(const f of fxPts){ p.setXYZ(n,f.x,f.y,f.z); c.setXYZ(n,f.c.r,f.c.g,f.c.b); n++; } fxGeo.setDrawRange(0,n); p.needsUpdate=true; c.needsUpdate=true;
   if(swingT>0){ swingT=Math.max(0,swingT-dt*3.4); const q=Math.sin((1-swingT)*Math.PI); toolMesh.visible=true; toolMesh.rotation.x=-1.9+q*2.6; walkU.uSwing.value=q; } else { toolMesh.visible=false; walkU.uSwing.value=0; } }
 const toolMesh=new THREE.Group(); toolMesh.visible=false; { const h=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.9,6),toonOf({color:0x7a5a3a})); h.position.y=.45; const b=new THREE.Mesh(new THREE.BoxGeometry(.26,.12,.12),toonOf({color:0x9aa0a8})); b.position.y=.88; toolMesh.add(h,b); toolMesh.position.set(.36,.8,.14); }
-G.swing=()=>{ swingT=1; };
+G.swing=()=>{ swingT=1; const id=S.tool; if(toolMesh.userData.id!==id){ toolMesh.clear(); const m=toolModel(id); m.scale.setScalar(.8); m.position.y=.5; toolMesh.add(m); toolMesh.userData.id=id; } };
 function floatText(x,y,z,txt,col){ const e=document.createElement('div'); e.textContent=txt; const v=new THREE.Vector3(x,y,z).project(camera); e.style.cssText='position:fixed;z-index:60;pointer-events:none;font-weight:800;font-size:16px;color:'+(col||'#fff')+';text-shadow:0 1px 3px #000;left:'+((v.x*.5+.5)*innerWidth)+'px;top:'+((-v.y*.5+.5)*innerHeight)+'px;transition:all .7s;opacity:1'; document.body.appendChild(e); requestAnimationFrame(()=>{ e.style.transform='translateY(-34px)'; e.style.opacity=0; }); setTimeout(()=>e.remove(),750); }
 /* debris, forage and dig spots on the ground */
 const debrisG=new THREE.Group(), forageG=new THREE.Group(), digG=new THREE.Group(); world.add(debrisG,forageG,digG);
@@ -1236,7 +1243,7 @@ async function boot(){
   $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
   await loadScenery(p=>setProgress(5+p*35)); setProgress(42); new Image().src='assets/paint/portraits.webp';
   setupValley();
-  buildScenery(world,QUAL); setupFlora(world,plantedTrees,plantedPlants,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
+  buildScenery(world,QUAL); setupFlora(world,plantedTrees,plantedPlants,QUAL); reskinTrees(bakeFar(renderer)); setSeason(S.season); bakeMap(); setProgress(58);
   buildRain(); buildCritters(); buildFireflies(); buildPetals();
   buildFarmstead(); buildTown(); outerPlaces(); dressValley(world,TOWN); buildLife(world); mineMouth(world,MINE_ENT.x,MINE_ENT.z); G.mine.build(); G.buildPeople(); boat=buildDock(world); buildLighthouse(world,ISLANDS[4][0],ISLANDS[4][1]); buildSmoke(world); setupBeasts(); house=cabinRoom(scene); setProgress(70);
   buildAvatar(); await loadTwinkle(); avatar.add(toolMesh); setupPost(); setProgress(84);
@@ -1259,14 +1266,14 @@ async function boot(){
 }
 /* touch: on-screen actions, the stick is the left half of the screen */
 function buildTouch(){ if(!('ontouchstart' in window)&&!(DBG&&DBG.touch)) return; const w=document.createElement('div'); w.id='touchpad'; w.style.cssText='position:absolute;right:12px;bottom:88px;display:grid;grid-template-columns:repeat(2,64px);gap:10px;pointer-events:auto;z-index:56';
-  [['🛠',()=>G.useTool()],['E',()=>interact()],['🎣',()=>{ if(G.fishing.state) G.fishPress(true); else G.tryFish(); }],['🎒',()=>openInv()]].forEach(([l,f])=>{ const b=document.createElement('div'); b.className='pill'; b.style.cssText='width:64px;height:64px;justify-content:center;font-size:24px;border-radius:50%'; b.textContent=l; b.addEventListener('touchstart',e=>{ e.preventDefault(); e.stopPropagation(); f(); },{passive:false}); b.addEventListener('touchend',e=>{ e.stopPropagation(); G.fishPress(false); },{passive:false}); b.onclick=f; w.appendChild(b); }); $('#hud').appendChild(w); $('#help').style.display='none'; }
+  [['🛠',()=>G.useTool()],['E',()=>interact()],['⤴',()=>jump()],['🎣',()=>{ if(G.fishing.state) G.fishPress(true); else G.tryFish(); }],['🎒',()=>openInv()]].forEach(([l,f])=>{ const b=document.createElement('div'); b.className='pill'; b.style.cssText='width:64px;height:64px;justify-content:center;font-size:24px;border-radius:50%'; b.textContent=l; b.addEventListener('touchstart',e=>{ e.preventDefault(); e.stopPropagation(); f(); },{passive:false}); b.addEventListener('touchend',e=>{ e.stopPropagation(); G.fishPress(false); },{passive:false}); b.onclick=f; w.appendChild(b); }); $('#hud').appendChild(w); $('#help').style.display='none'; }
 // ?shot&t=1130&season=2&x=0&z=20&yaw=0&pitch=.1 freezes the clock on one composed view, for comparing frames
 function applyDebugShot(){ const q=DBG;
   if(q.t) S.time=q.t; if(q.season!==undefined) S.season=q.season; if(q.w) S.weather=q.w;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={SITES,OUTER,terrainH,lakeField,inWater,obstacles,composer,syncRes,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={hop,SITES,OUTER,terrainH,lakeField,inWater,obstacles,composer,syncRes,cut,house,DOCK,DESERT,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
   if(DBG&&DBG.film) import('./film.js').then(m=>{ m.setup(window.__sv); window.__filmReady=true; });
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });

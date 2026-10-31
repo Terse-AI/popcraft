@@ -340,7 +340,7 @@ export function makeSprites(root,sheet,items,opts={}){
   geo.instanceCount=n;
   const mat=new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, alphaToCoverage:true,
     defines:opts.colored?{COLORED:1}:{},
-    uniforms:{ ...U, uMap:{value:TEX[sheet]}, uMott:{value:TEX.mt_detail}, uSnowRow:{value:rowV('ice')} },
+    uniforms:{ ...U, uMap:{value:TEX[sheet]}, uMott:{value:TEX.mt_detail}, uSnowRow:{value:rowV('ice')}, uWoodRow:{value:rowV('wood')} },
     vertexShader:`attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iRect,iMisc;
       uniform float uTime,uFogD,uLodT,uLodP,uWindAmp; uniform vec3 uSide,uSunDirW;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF,vInsc; varying vec2 vP;
@@ -355,11 +355,19 @@ export function makeSprites(root,sheet,items,opts={}){
         vRow=iMisc.x; vTone=iMisc.y; vX=uv.x-.5; vSideL=dot(right,uSide); vFogF=1.-exp(-d*d*uFogD*uFogD); vNear=d; vP=iPos.xz; vInsc=pow(max(dot(normalize(wp-cameraPosition),uSunDirW),0.),5.);
         gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.); }`,
     fragmentShader:`precision highp float;
-      uniform sampler2D uMap,uRamps,uMott; uniform vec3 uShade,uLit,uFog,uFogSun; uniform float uSnow,uSnowRow,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
+      uniform sampler2D uMap,uRamps,uMott; uniform vec3 uShade,uLit,uFog,uFogSun; uniform float uSnow,uSnowRow,uWoodRow,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv; varying float vRow,vTone,vFogF,vSideL,vX,vNear,vLodF,vInsc; varying vec2 vP; ${ramp} ${CLOUD_GLSL}
       float dith(vec2 p){ return fract(52.9829189*fract(dot(floor(p)+.5,vec2(.06711056,.00583715)))); }
-      void main(){ if(vLodF<=dith(gl_FragCoord.xy)) discard; vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
-        #ifdef COLORED
+      void main(){ if(vLodF<=dith(gl_FragCoord.xy)) discard;
+        #ifdef BAKED
+        vec4 t=texture2D(uMap,vUv,-.8); if(t.a<.3) discard;
+        #else
+        vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
+        #endif
+        #ifdef BAKED
+        float v=t.r*1.4-.2+vSideL*vX*.2+(t.g>.5?0.:vTone); vec3 c=ramp(v,t.g>.5?uWoodRow:vRow);
+        if(uSnow>.01&&t.g<.5) c=mix(c,ramp(.45+v*.6,uSnowRow),uSnow*t.b);
+        #elif defined(COLORED)
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
         #else
         float v=t.r+(t.g-.5)*.16+vTone+vSideL*vX*.42; v=min(v,mix(1.,.66,smoothstep(40.,170.,vNear))); float mot=texture2D(uMott,vUv*53.).b-.5, mot2=texture2D(uMott,vUv*151.).b-.5; v+=(mot*.34+mot2*.2)*(1.-smoothstep(120.,420.,vNear));
@@ -673,10 +681,10 @@ function plant(root,obst,qual){
   for(let i=0;i<7000;i++){ const x=(r()-.5)*520, z=24+r()*300, f=lakeField(x,z); if(f<-.012||f>.012) continue; if(vnoise(x*.09,z*.09)<.5) continue; if(Math.hypot(x-14,z-34)<9) continue;
     plants.push({name:'reed_a',x,y:terrainH(x,z)-.1,z,h:1+r()*.8,row:'tuft',tone:r()*.1,flip:r()<.5,wind:1}); }
   // big framing pines
-  [[-36,31],[42,33],[-72,44],[70,40]].forEach(([x,z])=>{ if(lakeField(x,z)<0) trees.push({name:'pine_big',x,y:terrainH(x,z)-.3,z,h:24,row:'spruce',tone:-.02,flip:x>0,wind:.25,sheet:1}); obst.push({x,z,r:1.2}); });
+  [[-36,31],[42,33],[-72,44],[70,40]].forEach(([x,z])=>{ if(lakeField(x,z)<0) trees.push({name:'spruce_a',x,y:terrainH(x,z)-.3,z,h:24,row:'spruce',tone:-.02,flip:x>0,wind:.25}); obst.push({x,z,r:1.2}); });
 
   plantedTrees=trees; plantedPlants=plants;
-  const onTrees=[...trees.filter(t=>!t.sheet),...plants.filter(p=>p.trees)], onPlants=[...trees.filter(t=>t.sheet),...plants.filter(p=>!p.trees)];
+  const onTrees=[...trees.filter(t=>!t.sheet),...plants.filter(p=>p.trees)], onPlants=[...trees.filter(t=>t.sheet),...plants.filter(p=>!p.trees)]; spriteList=onTrees;
   spriteTrees=makeSprites(root,'sheet_trees',onTrees);
   onTrees.forEach((t,i)=>{ const a=ATLAS[t.name]; t.bi=i; t.h0=t.h; t.w0=t.h*a.w/a.h*(t.sx||1); });
   makeSprites(root,'sheet_plants',onPlants,{mainOnly:true});
@@ -693,7 +701,9 @@ function plant(root,obst,qual){
 }
 
 /* felling and breaking change the world, and regrow on schedule */
-let spriteTrees=null, rockInst=[];
+let spriteTrees=null, spriteList=[], rockInst=[];
+/* far trees take the pictures flora.js made of the real models */
+export function reskinTrees({tex,info}){ const m=spriteTrees, g=m.geometry, Z=g.attributes.iSize, R=g.attributes.iRect; spriteList.forEach((it,i)=>{ const q=info[it.v]; if(!q) return; const w=it.trueH*q.k*q.w, h=it.trueH*q.k*q.h; Z.setXY(i,it.gone?0:w,it.gone?0:h); R.setXYZW(i,q.u0,q.v0,q.u1,q.v1); it.w0=w; it.h0=h; }); Z.needsUpdate=true; R.needsUpdate=true; m.material.uniforms.uMap.value=tex; m.material.defines.BAKED=1; m.material.needsUpdate=true; }
 function setSpriteH(it,on){ if(it.bi===undefined||!spriteTrees) return; const a=spriteTrees.geometry.attributes.iSize, m=it; a.setXY(it.bi,on?m.w0:0,on?m.h0:0); a.needsUpdate=true; }
 export function removeTree(o,i){ const t=o?o.tree:plantedTrees[i]; if(!t) return; t.gone=true; setSpriteH(t,false); if(!o) o=t.ob; if(o){ o.r=0; o.kind='felled'; } }
 export function breakRock(o,i){ const k=o?o.ri:i, R=rockInst[k]; if(!R) return; const m=new THREE.Matrix4().makeScale(0,0,0); R.im.setMatrixAt(R.k,m); R.im.instanceMatrix.needsUpdate=true; if(!o) o=R.ob; if(o){ o.saved=o.r; o.r=0; o.kind='gone'; } }

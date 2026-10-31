@@ -226,6 +226,7 @@ function countSaves(slug){ let n = 0; try { for (const d of fs.readdirSync(SAVES
 function archive(g,note){ const v = g.version||1, to = path.join(VERSIONS,g.id,String(v)); fs.mkdirSync(to,{recursive:true}); const site = path.join(SITES,g.id); let size = 0; if (fs.existsSync(site)) { fs.cpSync(site,to,{recursive:true}); } else if (fs.existsSync(htmlPath(g.id))) { fs.copyFileSync(htmlPath(g.id),path.join(to,'single.html')); size = fs.statSync(htmlPath(g.id)).size; } g.versions = [{ v, at:Date.now(), note, size },...(g.versions||[])].slice(0,5); for (const d of fs.readdirSync(path.join(VERSIONS,g.id))) if (!g.versions.some(x=>String(x.v)===d)) fs.rmSync(path.join(VERSIONS,g.id,d),{recursive:true,force:true}); }
 
 // ---------------------------------------------------------------- routing
+let filmOpen = 0;
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname; let m;
   try {
@@ -234,6 +235,9 @@ http.createServer(async (req, res) => {
     if (req.method==='GET' && p==='/upload') return html(res,uploadPage());
     if (req.method==='GET' && (p==='/portal'||p==='/portal/agents'||p==='/portal/review'||/^\/portal\/[a-f0-9]{10}$/.test(p))) return html(res,portalPage());
     if ((req.method==='GET'||req.method==='HEAD') && p.startsWith(STARVALE_URL+'/')) { const f = path.normalize(path.join(GAME, decodeURIComponent(p.slice(STARVALE_URL.length))==='/'?'index.html':decodeURIComponent(p.slice(STARVALE_URL.length)))); if (f.startsWith(GAME+path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) return sendFile(req,res,f,'no-cache'); return send(res,404,'text/plain','not found'); }
+    /* a short window for bringing rendered film shots home: opened and read with the token from a shell, written by the render page without one */
+    if (p==='/film-open' && process.env.FILM_TOKEN && u.searchParams.get('t')===process.env.FILM_TOKEN) { filmOpen = Date.now()+(+u.searchParams.get('min')||0)*60e3; return json(res,200,{open:filmOpen>Date.now()}); }
+    if ((m=p.match(/^\/film\/([A-Z0-9]+\.mp4)$/))) { const dir = path.join(DATA,'film'), f = path.join(dir,m[1]); fs.mkdirSync(dir,{recursive:true}); if (req.method==='PUT' && Date.now()<filmOpen) { const w = fs.createWriteStream(f); let n = 0; req.on('data',c=>{ n += c.length; if (n>6e8) req.destroy(); }); req.pipe(w); return w.on('finish',()=>json(res,200,{ok:true,bytes:n})); } if (req.method==='GET' && process.env.FILM_TOKEN && u.searchParams.get('t')===process.env.FILM_TOKEN && fs.existsSync(f)) return sendFile(req,res,f,'no-store'); return send(res,404,'text/plain','not found'); }
     if (req.method==='GET' && p==='/sdk.js') return send(res,200,TYPES['.js'],fs.readFileSync(path.join(PUBLIC,'sdk.js')),{'Access-Control-Allow-Origin':'*','Cache-Control':'public, max-age=300'});
     if (req.method==='GET' && (m=p.match(/^\/covers\/([a-f0-9]{10})\.jpg$/))) { const f = path.join(COVERS,m[1]+'.jpg'); if (!fs.existsSync(f)) return send(res,404,'text/plain','Not found'); return send(res,200,'image/jpeg',fs.readFileSync(f),{'Cache-Control':'public, max-age=86400'}); }
     if (req.method==='GET' && p==='/popcraft') { res.writeHead(301,{Location:'/starvale'}); return res.end(); }
