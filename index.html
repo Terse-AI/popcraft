@@ -891,7 +891,7 @@ function governor(raw){ if(DBG&&!DBG.gov) return;
 function syncRes(){ renderer.getDrawingBufferSize(paintU.uRes.value); }
 const paused=()=>!!document.querySelector('.panel:not(.hidden)');
 function frame(now){
-  requestAnimationFrame(frame);
+  if(!(DBG&&DBG.manual)) requestAnimationFrame(frame);
   const raw=(now-last)/1000, dt=Math.min(0.05,raw); last=now;
   updateRain(dt); updateCritters(now*0.001); if(lastRig) updateLife(now*0.001,dt,camera.position,S.season,lastRig,S.inMine||S.inHouse); G.updatePeople(dt); updateAnimals(dt); G.updateFishing(dt); updateFireflies(now*0.001); updatePetals(dt); G.mine.update(dt); if(G.festTick) G.festTick(dt); updateFx(dt);
   fCnt++; fAcc+=raw; if(fAcc>=0.5){ const fe=$('#fps'), v=Math.round(fCnt/fAcc); if(fe) fe.textContent=v+' fps'; window.__fps=v; fCnt=0; fAcc=0; }
@@ -990,8 +990,13 @@ function savePrompt(){ if(promptOpen) return; promptOpen=true; const w=document.
   w.querySelector('.no').onclick=off; w.querySelector('.go').onclick=async()=>{ w.querySelector('.go').disabled=true; const r=await nova('signin',null,300000); off(); if(r&&r.ok) G.saveGame(); }; }
 /* the valley map: every place, named */
 function places(){ const n=(x,z,ic,zh,en)=>({x,z,ic,zh,en}); return [n(CABIN.x,CABIN.z,'🏠','你的小屋','Your cabin'),n(0,4,'🌱','农田','Farm plot'),n(BIN.x,BIN.z,'📦','出货箱','Shipping bin'),n(COOP.x,COOP.z,'🐔','鸡舍','Coop'),n(BARN.x,BARN.z,'🐄','畜棚','Barn'),n(GREENHOUSE.x,GREENHOUSE.z,'🌿','温室','Greenhouse'),n(MINE_ENT.x,MINE_ENT.z,'⛏','矿洞','The mine'),n(PLAZA.x,PLAZA.z,'⛲','小镇广场','Town square'),n(DOCK.x,DOCK.z1,'🛶','码头','Dock'),n(0,128,'🌊','星星湖','Star Lake'),n(-212,33,'💧','瀑布','The falls'),n(-170,54,'〰','山溪','Mist Creek'),n(ISLANDS[4][0],ISLANDS[4][1],'🗼','灯塔','Lighthouse'),...TOWN.map(b=>n(b.x,b.z,b.icon,b.zh,b.en))]; }
-function openMap(){ if(document.getElementById('bigmap')){ document.getElementById('bigmap').remove(); return; } const w=document.createElement('div'); w.id='bigmap'; const S2=Math.min(innerWidth,innerHeight)*.86, c=document.createElement('canvas'), dpr=Math.min(devicePixelRatio,2); c.width=c.height=S2*dpr; c.style.cssText='width:'+S2+'px;height:'+S2+'px'; w.appendChild(c); const g=c.getContext('2d'), sc=c.width/(MAP_R*2), P=(x,z)=>[(x+MAP_R)*sc,(z+MAP_R)*sc]; g.drawImage(mapBase,0,0,c.width,c.height); g.font=(13*dpr)+'px -apple-system,"PingFang SC",sans-serif'; g.textBaseline='middle';
-  const used=[]; for(const p of places()){ const [x,y]=P(p.x,p.z), txt=p.ic+' '+L(p.zh,p.en), tw=g.measureText(txt).width+10*dpr; let ty=y, tx=x+6*dpr; for(let k=0;k<12&&used.some(u=>Math.abs(u[1]-ty)<18*dpr&&tx<u[0]+u[2]&&tx+tw>u[0]);k++) ty+=18*dpr; if(tx+tw>c.width) tx=x-tw-6*dpr; used.push([tx,ty,tw]); g.fillStyle='rgba(44,32,22,.82)'; g.beginPath(); g.arc(x,y,3.4*dpr,0,7); g.fill(); g.fillStyle='rgba(250,242,226,.92)'; g.beginPath(); g.roundRect(tx,ty-10*dpr,tw,20*dpr,6*dpr); g.fill(); g.fillStyle='#3a2a1c'; g.fillText(txt,tx+5*dpr,ty); }
+function openMap(){ if(document.getElementById('bigmap')){ document.getElementById('bigmap').remove(); return; } const w=document.createElement('div'); w.id='bigmap'; const V={x0:-238,z0:-72,x1:166,z1:232}, asp=(V.x1-V.x0)/(V.z1-V.z0), CW=Math.min(innerWidth*.94,innerHeight*.9*asp), CH=CW/asp, c=document.createElement('canvas'), dpr=Math.min(devicePixelRatio,2); c.width=CW*dpr; c.height=CH*dpr; c.style.cssText='width:'+CW+'px;height:'+CH+'px'; w.appendChild(c); const g=c.getContext('2d'), sc=c.width/(V.x1-V.x0), P=(x,z)=>[(x-V.x0)*sc,(z-V.z0)*sc], full=(c.width/(V.x1-V.x0))*MAP_R*2;
+  g.drawImage(mapBase,(-MAP_R-V.x0)*sc,(-MAP_R-V.z0)*sc,full,full); const fs=Math.round(12.5*dpr); g.font='600 '+fs+'px -apple-system,"PingFang SC",sans-serif'; g.textBaseline='middle';
+  const H=20*dpr, used=[], dots=places().map(p=>({p,xy:P(p.x,p.z)})), hit=(x,y,tw)=>x<3||y<3||x+tw>c.width-3||y+H>c.height-3||used.some(u=>x<u[0]+u[2]+4&&x+tw+4>u[0]&&y<u[1]+H+3&&y+H+3>u[1])||dots.some(d=>{ const [a,b]=d.xy; return a>x-5*dpr&&a<x+tw+5*dpr&&b>y-5*dpr&&b<y+H+5*dpr; });
+  dots.sort((a,b)=>a.xy[1]-b.xy[1]); const placed=[];
+  for(const d of dots){ const [x,y]=d.xy, txt=d.p.ic+' '+L(d.p.zh,d.p.en), tw=g.measureText(txt).width+12*dpr; let best=null; for(let r=0;r<16&&!best;r++){ const R=(8+r*13)*dpr; for(const [ox,oy] of [[1,0],[-1,0],[0,-1],[0,1],[1,-1],[-1,-1],[1,1],[-1,1],[.5,-1],[-.5,-1],[.5,1],[-.5,1]]){ const tx=ox>0?x+R*ox:ox<0?x+R*ox-tw:x-tw/2, ty=y+oy*R-H/2; if(!hit(tx,ty,tw)){ best=[tx,ty]; break; } } } if(!best) best=[x+8*dpr,y-H/2]; used.push([best[0],best[1],tw]); placed.push({x,y,tx:best[0],ty:best[1],tw,txt}); }
+  g.strokeStyle='rgba(44,32,22,.55)'; g.lineWidth=dpr; for(const q of placed){ const ax=Math.max(q.tx,Math.min(q.x,q.tx+q.tw)), ay=q.ty+H/2; g.beginPath(); g.moveTo(q.x,q.y); g.lineTo(ax,ay); g.stroke(); }
+  for(const q of placed){ g.fillStyle='rgba(44,32,22,.9)'; g.beginPath(); g.arc(q.x,q.y,3.2*dpr,0,7); g.fill(); g.fillStyle='rgba(250,242,226,.94)'; g.beginPath(); g.roundRect(q.tx,q.ty,q.tw,H,6*dpr); g.fill(); g.fillStyle='#3a2a1c'; g.fillText(q.txt,q.tx+6*dpr,q.ty+H/2+dpr*.5); }
   const [px,py]=P(player.pos.x,player.pos.z); g.fillStyle='#e8503a'; g.strokeStyle='#fff'; g.lineWidth=2*dpr; g.beginPath(); g.arc(px,py,6*dpr,0,7); g.fill(); g.stroke();
   w.onclick=()=>w.remove(); document.body.appendChild(w); snd('panelOpen'); }
 function animateWalk(dt){
@@ -1162,7 +1167,7 @@ async function boot(){
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn(); buildTouch();
   setProgress(100);
-  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ window.focus(); startAudio(); if(fresh){ showCards(L,()=>startChecklist(S,L,player,snd)); } } },250); // ensure render targets match the (now-visible) viewport
+  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ showCards(L,()=>startChecklist(S,L,player,snd)); } } },250); // ensure render targets match the (now-visible) viewport
   requestAnimationFrame(frame);
 }
 /* touch: on-screen actions, the stick is the left half of the screen */
@@ -1174,7 +1179,7 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
 boot().catch(e=>{ console.error(e); const m=$('#loadsub'); if(m){ m.textContent='加载失败,点这里重试 · Could not load, tap to retry'; m.style.cursor='pointer'; m.onclick=()=>location.reload(); } });
