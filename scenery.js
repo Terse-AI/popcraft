@@ -182,10 +182,11 @@ function tileNoise(S,seed){            // tiling fractal noise, for the cloud sh
 }
 
 /* ---------- loading ---------- */
-const load=(url,fn)=>new Promise((res,rej)=>new THREE.TextureLoader().load(url,t=>{ fn&&fn(t); res(t); },undefined,rej));
+const retry=async(fn,n=4)=>{ for(let i=0;;i++){ try{ return await fn(); }catch(e){ if(i>=n) throw e; await new Promise(r=>setTimeout(r,500*(i+1))); } } };   // a dropped connection should not end the game at the loading screen
+const load=(url,fn)=>retry(()=>new Promise((res,rej)=>new THREE.TextureLoader().load(url,t=>{ fn&&fn(t); res(t); },undefined,rej)));
 export const ATLAS={}; export const TEX={};
 export async function loadScenery(onProgress){
-  const atlas=await (await fetch('assets/paint/atlas.json')).json(); Object.assign(ATLAS,atlas);
+  const atlas=await retry(async()=>{ const r=await fetch('assets/paint/atlas.json'); if(!r.ok) throw new Error('atlas '+r.status); return r.json(); }); Object.assign(ATLAS,atlas);
   const sheet=t=>{ t.anisotropy=8; t.generateMipmaps=true; t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; };
   const pano=t=>{ t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };
   const wrap=t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; t.minFilter=THREE.LinearMipmapLinearFilter; };

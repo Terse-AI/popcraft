@@ -28,14 +28,14 @@ function stoneMat(opts={}){
      .replace('#include <map_fragment>',`
       vec3 wn0=normalize(vWN); float ang=atan(vWP.z,vWP.x), wall=smoothstep(.45,.75,1.-abs(wn0.y)); vec2 duv=abs(wn0.y)>.62?vWP.xz:vec2(ang*17.,vWP.y);
       vec3 cd1=texture2D(uDetail,duv*.085).rgb, cd2=texture2D(uDetail,duv*.27+.3).rgb, cd3=texture2D(uDetail,duv*.93+.11).rgb;
-      float crack=(cd1.b-.5)*.9+(cd2.b-.5)*.7+(cd3.b-.5)*.4;
+      float crack=((cd1.b-.5)*.9+(cd2.b-.5)*.7+(cd3.b-.5)*.4)*mix(.34,.82,wall);
       float strata=sin(vWP.y*2.6+sin(ang*5.)*1.6+cd1.b*5.)*.5+.5;
-      float v=.44+crack*.8+(smoothstep(.55,.95,strata)-.3)*.2*wall;
+      float v=.44+crack*.8+(smoothstep(.55,.95,strata)-.3)*.2*wall+(texture2D(uBits,vWP.xz*.013).g-.2)*.05;
       vec3 c=v<.5?mix(uCS,uCM,clamp(v*2.,0.,1.)):mix(uCM,uCH,clamp(v*2.-1.,0.,1.));
       float flr=1.-wall; vec3 bt=texture2D(uBits,vWP.xz/4.1).rgb; float pb=bt.g*flr*smoothstep(.42,.6,cd1.b); c=mix(c,mix(uCM,uCH,bt.r*1.1),pb*.8);
       float wet=smoothstep(.5,.66,cd1.g*.7+cd2.r*.34)*flr; c*=1.-wet*.42;
       diffuseColor.rgb*=c;`)
-     .replace('#include <normal_fragment_maps>',`{ vec2 q=(cd1.rg-.5)*1.5+(cd2.rg-.5)*.95+(cd3.rg-.5)*.45; normal=normalize(mat3(viewMatrix)*normalize(wn0+vec3(q.x,q.y*.4,q.y))); }`)
+     .replace('#include <normal_fragment_maps>',`{ vec2 q=((cd1.rg-.5)*1.5+(cd2.rg-.5)*.95+(cd3.rg-.5)*.45)*mix(.3,.85,wall); normal=normalize(mat3(viewMatrix)*normalize(wn0+vec3(q.x,q.y*.4,q.y))); }`)
      .replace('#include <opaque_fragment>',`
       outgoingLight+=diffuseColor.rgb*uGlowC*vGlow*1.9;
       if(uLava>.5){ float cr=smoothstep(.1,.02,abs(cd1.b-.46)+abs(cd2.b-.5)*.32)*flr; float p=.72+.28*sin(uTimeC*1.7+vWP.x*.7+vWP.z*.5); outgoingLight+=vec3(1.,.36,.08)*cr*p*1.5; }
@@ -54,7 +54,7 @@ function shell(){
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('aGlow',new THREE.Float32BufferAttribute(G,1)); g.setIndex(I); g.computeVertexNormals(); return g;
 }
 function spike(seed,sides=9,rows=8){ const P=[], I=[]; for(let j=0;j<=rows;j++){ const t=j/rows, r=Math.pow(1-t,1.5)*.5+.012; for(let i=0;i<sides;i++){ const a=i/sides*tau, k=1+(n3(Math.cos(a)*1.5+seed,t*4,Math.sin(a)*1.5)-.5)*.8; P.push(Math.cos(a)*r*k+Math.sin(t*5+seed)*.04,t,Math.sin(a)*r*k); } } for(let j=0;j<rows;j++) for(let i=0;i<sides;i++){ const a=j*sides+i, b=j*sides+(i+1)%sides, c=a+sides, d=b+sides; I.push(a,c,b,b,c,d); }
-  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('aGlow',new THREE.Float32BufferAttribute(new Float32Array(P.length/3),1)); g.setIndex(I); g.computeVertexNormals(); return g; }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('aGlow',new THREE.Float32BufferAttribute(new Float32Array(P.length/3).fill(.34),1)); g.setIndex(I); g.computeVertexNormals(); return g; }
 function crystalGeo(){ const P=[], I=[], s=6, h=[[0,.17],[.72,.22],[1,0]]; h.forEach(([y,r])=>{ for(let i=0;i<s;i++){ const a=i/s*tau; P.push(Math.cos(a)*r,y,Math.sin(a)*r); } }); for(let j=0;j<2;j++) for(let i=0;i<s;i++){ const a=j*s+i, b=j*s+(i+1)%s, c=a+s, d=b+s; I.push(a,c,b,b,c,d); } const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); const q=g.toNonIndexed(); q.computeVertexNormals(); return q; }
 const CRY=crystalGeo();
 function crystalMat(col,emi=.55){ return toonOf({color:col,emissive:col,emissiveIntensity:emi}); }
@@ -69,7 +69,7 @@ export function buildCave(group){
       if(down){ o.position.set(Math.cos(a)*r,Math.min(11.4,9.8+r*.06),Math.sin(a)*r); o.rotation.set(Math.PI,seeded(q+4)*6,0); } else { o.position.set(Math.cos(a)*r,-.1,Math.sin(a)*r); o.rotation.set(0,seeded(q+4)*6,0); } o.scale.set(s,L,s); o.updateMatrix(); im.setMatrixAt(i,o.matrix); } im.frustumCulled=false; im.receiveShadow=true; im.castShadow=!down; group.add(im); }
   // veins of crystal in the walls
   const cm=crystalMat(0xffffff), cm2=crystalMat(0xffffff,.4); crystal=cm; crystal2=cm2; const gl=[];
-  for(const [mat,count,sh] of [[cm,64,0],[cm2,64,9]]){ const im=new THREE.InstancedMesh(CRY,mat,count); for(let i=0;i<count;i++){ const q=i*3.7+sh, cl=Math.floor(i/5), a=(seeded(cl+sh)*tau)+seeded(q)*.16, h=.1+seeded(cl+7+sh)*5.4, r=17.2-h*.02+seeded(q+1)*.4, s=.5+seeded(q+2)*1.1; o.position.set(Math.cos(a)*r,h+seeded(q+3)*.6,Math.sin(a)*r); o.rotation.set((seeded(q+4)-.5)*1.5,seeded(q+5)*6,(seeded(q+6)-.5)*1.5+(.5)); o.scale.set(s*.7,s*1.25,s*.7); o.updateMatrix(); im.setMatrixAt(i,o.matrix); if(i%5===0) gl.push([o.position.x*.97,o.position.y+.4,o.position.z*.97,5]); } im.frustumCulled=false; group.add(im); }
+  for(const [mat,count,sh] of [[cm,64,0],[cm2,64,9]]){ const im=new THREE.InstancedMesh(CRY,mat,count); for(let i=0;i<count;i++){ const q=i*3.7+sh, cl=Math.floor(i/5); let vx=0, vy=0, vz=0; for(let k=0;k<40;k++){ const pa=cave.geometry.attributes.position, vi=Math.floor(seeded(cl+sh+k*1.7)*pa.count); vx=pa.getX(vi); vy=pa.getY(vi); vz=pa.getZ(vi); if(vy>.2&&vy<6&&Math.hypot(vx,vz)>15) break; } const s=.5+seeded(q+2)*1.1, jx=(seeded(q+3)-.5)*.9, jz=(seeded(q+4)-.5)*.9, l=Math.hypot(vx,vz)||1; o.position.set(vx+jx,vy+(seeded(q+5)-.5)*.5,vz+jz); o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(-vx/l+(seeded(q+6)-.5)*1.1,.55+seeded(q+7)*.5,-vz/l+(seeded(q+8)-.5)*1.1).normalize()); o.scale.set(s*.7,s*1.25,s*.7); o.updateMatrix(); im.setMatrixAt(i,o.matrix); if(i%5===0) gl.push([o.position.x*.96,o.position.y+.4,o.position.z*.96,5]); } im.frustumCulled=false; group.add(im); }
   // timber sets, a lantern at each, and the old cart road round the gallery
   const K=new Kit(); for(let i=0;i<6;i++){ const a=i/6*tau+.3, c=Math.cos(a), s=Math.sin(a), R=15.5, tx=-s, tz=c, P=(d,rr=R)=>[c*rr+tx*d,s*rr+tz*d], ry=-a+Math.PI/2;
     for(const d of [-1.15,1.15]){ const [x,z]=P(d); K.post('log',.15,4.3,x,0,z); K.box('trim',.46,.16,.46,x,.08,z); }

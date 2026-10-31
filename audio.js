@@ -38,7 +38,7 @@ function build(){
   noise.white=noiseBuf('white'); noise.pink=noiseBuf('pink',8); noise.brown=noiseBuf('brown',8);
   const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=3.5; comp.attack.value=.006; comp.release.value=.22; comp.knee.value=14;
   const limit=ctx.createDynamicsCompressor(); limit.threshold.value=-2.5; limit.ratio.value=20; limit.attack.value=.001; limit.release.value=.08; limit.knee.value=0;
-  B.master=ctx.createGain(); B.master.connect(comp); comp.connect(limit); limit.connect(ctx.destination);
+  B.master=ctx.createGain(); B.master.connect(comp); comp.connect(limit); limit.connect(ctx.destination); B.meter=ctx.createAnalyser(); B.meter.fftSize=8192; limit.connect(B.meter);
   B.muf=biq('lowpass',20000,.3); B.muf.connect(B.master);                 // walls and water close over the world
   B.world=ctx.createGain(); B.world.connect(B.muf);
   B.amb=ctx.createGain(); B.amb.connect(B.world);
@@ -69,6 +69,8 @@ function build(){
 function applyVol(){ if(!B.master) return; const t=ctx.currentTime, m=V.mute?0:V.master; B.master.gain.setTargetAtTime(m,t,.05); B.mus.gain.setTargetAtTime(V.music*.62*duck,t,.12); B.amb.gain.setTargetAtTime(V.amb,t,.1); B.fx.gain.setTargetAtTime(V.sfx,t,.03); }
 export function setVolumes(o){ Object.assign(V,o); try{ localStorage.setItem(VKEY,JSON.stringify(V)); }catch(e){} applyVol(); }
 export const volumes=()=>V;
+/* a level meter on the final mix, in decibels, for checking the balance without ears */
+export function audioLevel(){ if(!B.meter) return {state:ctx?ctx.state:'none'}; const d=new Float32Array(B.meter.fftSize); B.meter.getFloatTimeDomainData(d); let s=0, p=0; for(const v of d){ s+=v*v; p=Math.max(p,Math.abs(v)); } return {state:ctx.state,rmsDb:+(10*Math.log10(s/d.length+1e-9)).toFixed(1),peak:+p.toFixed(3),mood:musicMood,beds:Object.fromEntries(Object.entries(beds).map(([k,b])=>[k,+b.g.gain.value.toFixed(3)]))}; }
 let duck=1; export function duckMusic(k){ duck=k; applyVol(); }
 export function startAudio(){ if(started){ if(ctx.state==='suspended') ctx.resume(); return; } const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; ctx=new AC({latencyHint:'interactive'}); started=true; build(); ctx.resume(); nextBird=ctx.currentTime+2; musicClock=setInterval(scheduleMusic,320); }
 document.addEventListener('visibilitychange',()=>{ if(!ctx) return; hidden=document.hidden; hidden?ctx.suspend():ctx.resume(); });
@@ -85,9 +87,9 @@ function modes(dest,t,fs,vol,dec=.2,jit=.03){ fs.forEach(([f,g,d],i)=>osc(dest,t
 let stepSide=1;
 const SND={
  step(o,s){ const t=ctx.currentTime, k=clamp(o.run?1.2:.9,.5,1.3), g=out(undefined,undefined,undefined,s==='stone'?.8:s==='wood'?.3:.14); stepSide=-stepSide; const sp=ctx.createStereoPanner(); sp.pan.value=stepSide*.09; sp.connect(g);
-   if(s==='grass'){ hit(sp,t,.09,'white','bandpass',rand(2600,4200),.7,.085*k,.006); hit(sp,t+.05,.08,'pink','bandpass',rand(1300,2200),.8,.06*k,.012); osc(sp,t,.06,'sine',95,60,.09*k); }
+   if(s==='grass'){ hit(sp,t,.09,'white','bandpass',rand(2600,4200),.7,.14*k,.006); hit(sp,t+.05,.08,'pink','bandpass',rand(1300,2200),.8,.16*k,.012); osc(sp,t,.06,'sine',95,60,.09*k); }
    else if(s==='dirt'){ osc(sp,t,.07,'sine',rand(82,104),58,.2*k); hit(sp,t,.05,'pink','bandpass',rand(900,1400),.8,.11*k); hit(sp,t+.02,.09,'white','highpass',3200,.5,.03*k,.01); }
-   else if(s==='pebble'){ for(let i=0;i<5;i++) hit(sp,t+i*.018+rand(0,.01),.03,'white','bandpass',rand(1800,4400),2.2,.08*k); osc(sp,t,.05,'sine',120,70,.08*k); }
+   else if(s==='pebble'){ for(let i=0;i<5;i++) hit(sp,t+i*.018+rand(0,.01),.03,'white','bandpass',rand(1800,4400),2.2,.17*k); osc(sp,t,.05,'sine',120,70,.08*k); }
    else if(s==='wood'){ osc(sp,t,.09,'sine',rand(118,142),80,.26*k); modes(sp,t,[[212,.5],[346,.34,.8],[612,.16,.5]],.09*k,.13,.05); hit(sp,t,.025,'white','bandpass',2100,1,.05*k); if(Math.random()<.07) osc(sp,t+.08,.2,'sawtooth',rand(180,260),rand(300,420),.012); }
    else if(s==='stone'){ hit(sp,t,.022,'white','bandpass',rand(2400,3800),1.4,.14*k); osc(sp,t,.05,'sine',150,90,.13*k); hit(sp,t+.012,.05,'pink','highpass',1600,.6,.04*k); }
    else if(s==='snow'){ for(let i=0;i<9;i++) hit(sp,t+i*.013+rand(0,.008),.02,'white','bandpass',rand(1500,3600),1.6,.055*k); osc(sp,t,.07,'sine',80,52,.08*k); }
@@ -95,30 +97,30 @@ const SND={
    if(o.wet){ hit(sp,t+.012,.1,'white','bandpass',rand(2800,4600),1.1,.05); osc(sp,t+.02,.05,'sine',rand(500,800),rand(900,1300),.022); }
    free(g,.5); },
  hoe(){ const t=ctx.currentTime, g=out(undefined,0,0,.2); osc(g,t,.1,'sine',112,52,.5); hit(g,t,.1,'pink','bandpass',760,.9,.36); hit(g,t+.03,.16,'white','bandpass',2400,.8,.1,.01); for(let i=0;i<6;i++) hit(g,t+.08+i*.022,.03,'pink','bandpass',rand(1100,2600),1.6,.05); free(g,.6); },
- water(){ const t=ctx.currentTime, g=out(undefined,0,0,.2); const dur=.9; hit(g,t,dur,'white','bandpass',3200,.6,.12,.08,1800); hit(g,t+.1,dur*.8,'pink','bandpass',900,.8,.1,.1); for(let i=0;i<22;i++){ const q=t+i*.04+rand(0,.03); osc(g,q,.05,'sine',rand(600,1500),rand(1500,2800),rand(.012,.03)); } free(g,1.3); },
- refill(){ const t=ctx.currentTime, g=out(undefined,0,0,.25); for(let i=0;i<14;i++){ const q=t+i*.055; osc(g,q,.09,'sine',260+i*38,520+i*62,.05); } hit(g,t,.9,'pink','bandpass',700,.8,.14,.05,1600); free(g,1.2); },
+ water(){ const t=ctx.currentTime, g=out(undefined,0,0,.2); const dur=.9; hit(g,t,dur,'white','bandpass',3200,.6,.24,.08,1800); hit(g,t+.1,dur*.8,'pink','bandpass',900,.8,.3,.1); for(let i=0;i<22;i++){ const q=t+i*.04+rand(0,.03); osc(g,q,.05,'sine',rand(600,1500),rand(1500,2800),rand(.012,.03)); } free(g,1.3); },
+ refill(){ const t=ctx.currentTime, g=out(undefined,0,0,.25); for(let i=0;i<14;i++){ const q=t+i*.055; osc(g,q,.09,'sine',260+i*38,520+i*62,.05); } hit(g,t,.9,'pink','bandpass',700,.8,.36,.05,1600); free(g,1.2); },
  axe(){ const t=ctx.currentTime, g=out(undefined,0,0,.5); hit(g,t,.012,'white','highpass',3000,.7,.5); osc(g,t,.08,'sine',170,84,.6); modes(g,t,[[290,.7],[470,.5,.8],[760,.32,.6],[1230,.16,.4]],.3,.17,.06); hit(g,t+.01,.1,'pink','bandpass',1700,1,.16); for(let i=0;i<4;i++) hit(g,t+.04+i*.03,.03,'white','bandpass',rand(2000,5000),2,.05); free(g,.9); },
  pick(){ const t=ctx.currentTime, g=out(undefined,0,0,.62); hit(g,t,.008,'white','highpass',4200,.7,.5); modes(g,t,[[2640,.5,1],[3910,.32,.8],[5270,.22,.55],[6820,.1,.4]],.19,.3,.03); osc(g,t,.06,'sine',210,98,.36); for(let i=0;i<7;i++) hit(g,t+.03+i*.028,.035,'white','bandpass',rand(900,3400),1.5,.08); free(g,1); },
- scythe(){ const t=ctx.currentTime, g=out(undefined,0,0,.15); hit(g,t,.19,'white','bandpass',1400,1.4,.14,.05,5200); hit(g,t+.08,.12,'white','highpass',4800,.7,.07,.01); free(g,.5); },
- swing(){ const t=ctx.currentTime, g=out(undefined,0,0,.1); hit(g,t,.17,'pink','bandpass',520,1.8,.12,.05,1900); free(g,.4); },
- sword(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); hit(g,t,.16,'white','bandpass',1300,3,.15,.04,5400); modes(g,t+.03,[[4200,.2,1],[6100,.1,.7]],.03,.22); free(g,.5); },
+ scythe(){ const t=ctx.currentTime, g=out(undefined,0,0,.15); hit(g,t,.19,'white','bandpass',1400,1.4,.36,.05,5200); hit(g,t+.08,.12,'white','highpass',4800,.7,.14,.01); free(g,.5); },
+ swing(){ const t=ctx.currentTime, g=out(undefined,0,0,.1); hit(g,t,.17,'pink','bandpass',520,1.8,.5,.05,1900); free(g,.4); },
+ sword(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); hit(g,t,.16,'white','bandpass',1300,3,.6,.04,5400); modes(g,t+.03,[[4200,.2,1],[6100,.1,.7]],.03,.22); free(g,.5); },
  thud(){ const t=ctx.currentTime, g=out(undefined,0,0,.4); osc(g,t,.13,'sine',130,50,.6); hit(g,t,.06,'pink','lowpass',900,.7,.3); free(g,.5); },
  treefall(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.8), cr=biq('bandpass',360,6); cr.frequency.exponentialRampToValueAtTime(1400,t+1.3); cr.connect(g); for(let i=0;i<30;i++){ const q=t+i*i*.0016+rand(0,.015); osc(cr,q,.03,'sawtooth',rand(60,130),0,.2); }
    hit(g,t+1.1,1.1,'white','highpass',2400,.5,.11,.5); hit(g,t+1.9,.8,'brown','lowpass',220,.7,1.1,.01); osc(g,t+1.9,.7,'sine',74,30,.85,.004); hit(g,t+1.92,.5,'pink','bandpass',600,.6,.34); for(let i=0;i<12;i++) hit(g,t+1.95+rand(0,.7),.05,'white','bandpass',rand(1000,3400),1.5,.1); free(g,3.4); },
  rockbreak(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.65); hit(g,t,.014,'white','highpass',3000,.7,.6); osc(g,t,.22,'sine',118,44,.8); hit(g,t,.36,'brown','lowpass',620,.7,.8); for(let i=0;i<16;i++) hit(g,t+.03+rand(0,.42),.05,'white','bandpass',rand(700,3600),1.3,rand(.05,.16)); free(g,1); },
  harvest(){ const t=ctx.currentTime, g=out(undefined,0,0,.15); hit(g,t,.14,'white','bandpass',2600,.8,.11,.02); osc(g,t+.05,.08,'sine',240,520,.2); osc(g,t+.1,.06,'sine',800,420,.1); free(g,.5); },
  plant(){ const t=ctx.currentTime, g=out(undefined,0,0,.1); osc(g,t,.07,'sine',120,70,.2); hit(g,t+.03,.08,'pink','bandpass',1100,1,.09); free(g,.4); },
- cast(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); hit(g,t,.32,'white','bandpass',900,4,.14,.1,4000); for(let i=0;i<18;i++) hit(g,t+.1+i*.016,.012,'white','bandpass',4200,6,.05); free(g,.8); },
+ cast(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); hit(g,t,.32,'white','bandpass',900,4,.62,.1,4000); for(let i=0;i<18;i++) hit(g,t+.1+i*.016,.012,'white','bandpass',4200,6,.2); free(g,.8); },
  plop(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.7); osc(g,t,.12,'sine',360,860,.3,.002); hit(g,t,.13,'white','bandpass',1500,.8,.16); osc(g,t+.1,.06,'sine',620,1250,.1); free(g,.7); },
  splash(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.7); hit(g,t,.55,'white','bandpass',1800,.5,.32,.012,700); hit(g,t,.3,'brown','lowpass',380,.7,.5); for(let i=0;i<10;i++) osc(g,t+rand(.03,.45),.05,'sine',rand(420,1100),rand(1100,2400),.05); free(g,1.2); },
  bite(){ const t=ctx.currentTime, g=out(undefined,0,0,.5); osc(g,t,.09,'triangle',1320,1320,.32); osc(g,t+.09,.26,'triangle',1760,1760,.3); hit(g,t,.12,'white','bandpass',2800,1.2,.14); free(g,.8); },
- reelTick(){ const t=ctx.currentTime, g=out(undefined,0,0,.05); hit(g,t,.009,'white','bandpass',3400,4,.12); osc(g,t,.012,'square',1500,900,.02); free(g,.2); },
+ reelTick(){ const t=ctx.currentTime, g=out(undefined,0,0,.05); hit(g,t,.009,'white','bandpass',3400,4,.4); osc(g,t,.012,'square',1500,900,.05); free(g,.2); },
  catch(){ const t=ctx.currentTime; SND.splash({}); const g=out(undefined,0,0,.6); [76,79,83,88,91].forEach((m,i)=>harp(g,t+.14+i*.075,m,.17)); free(g,3); },
  lost(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); osc(g,t,.24,'triangle',440,330,.1); osc(g,t+.2,.38,'triangle',330,247,.09); free(g,.9); },
  coin(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); modes(g,t,[[2093,.5],[3136,.3,.8],[5274,.14,.5]],.12,.35,.004); modes(g,t+.07,[[2637,.5],[3951,.3,.8],[6644,.12,.5]],.12,.5,.004); free(g,1); },
  ship(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); osc(g,t,.1,'sine',120,70,.4); modes(g,t,[[230,.6],[380,.4,.7]],.16,.16); setTimeout(()=>SND.coin(),160); free(g,.6); },
  pickup(){ const t=ctx.currentTime, g=out(undefined,0,0,.2); osc(g,t,.09,'sine',520,1040,.15,.003); osc(g,t+.05,.13,'sine',780,1560,.1,.003); free(g,.5); },
- eat(){ const t=ctx.currentTime, g=out(undefined,0,0,.1); for(let i=0;i<4;i++){ hit(g,t+i*.13,.07,'pink','bandpass',rand(700,1400),1,.14,.01); } free(g,.8); },
+ eat(){ const t=ctx.currentTime, g=out(undefined,0,0,.1); for(let i=0;i<4;i++){ hit(g,t+i*.13,.07,'pink','bandpass',rand(700,1400),1,.6,.01); } free(g,.8); },
  door(){ const t=ctx.currentTime, g=out(undefined,0,0,.3), cr=biq('bandpass',620,9); cr.frequency.exponentialRampToValueAtTime(980,t+.5); cr.connect(g); for(let i=0;i<20;i++) osc(cr,t+i*.022,.02,'sawtooth',rand(70,120),0,.09); osc(g,t+.56,.12,'sine',104,60,.4); modes(g,t+.56,[[190,.5],[310,.3]],.14,.15); free(g,1.1); },
  ladder(){ const t=ctx.currentTime, g=out(undefined,0,0,.7); [0,.22,.44].forEach(q=>{ osc(g,t+q,.07,'sine',160,90,.26); modes(g,t+q,[[320,.4],[540,.2]],.09,.1); }); free(g,1); },
  hurt(){ const t=ctx.currentTime, g=out(undefined,0,0,.3); osc(g,t,.16,'sawtooth',230,110,.15); hit(g,t,.11,'pink','lowpass',800,.7,.32); osc(g,t,.13,'sine',120,60,.44); free(g,.5); },
@@ -133,7 +135,7 @@ const SND={
  oink(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.3), f=biq('bandpass',640,3); f.connect(g); osc(f,t,.16,'square',150,230,.2); osc(f,t+.2,.13,'square',170,110,.15); free(g,.6); },
  quack(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.45), f=biq('bandpass',1250,5); f.connect(g); for(let i=0;i<3;i++) osc(f,t+i*.17,.11,'sawtooth',rand(230,280),190,.34,.01); free(g,.8); },
  rooster(o,x,y,z){ const t=ctx.currentTime, g=out(x,y,z,.7), f=biq('bandpass',1500,2.4); f.connect(g); [[0,.12,520,720],[.15,.14,720,900],[.32,.5,940,1050],[.84,.32,1050,620]].forEach(([q,d,a,b])=>osc(f,t+q,d,'sawtooth',a,b,.2,.02)); free(g,1.6); },
- talk(o,pitch=1){ const t=ctx.currentTime, g=out(undefined,0,0,.1); for(let i=0;i<4;i++){ const f=biq('bandpass',rand(620,1250),3); f.connect(g); osc(f,t+i*.062,.05,'triangle',rand(170,250)*pitch,0,.2,.004); setTimeout(()=>{ try{ f.disconnect(); }catch(e){} },900); } free(g,.7); },
+ talk(o,pitch=1){ const t=ctx.currentTime, g=out(undefined,0,0,.1); for(let i=0;i<4;i++){ const f=biq('bandpass',rand(620,1250),3); f.connect(g); osc(f,t+i*.062,.05,'sawtooth',rand(170,250)*pitch,0,.42,.004); setTimeout(()=>{ try{ f.disconnect(); }catch(e){} },900); } free(g,.7); },
  click(){ const t=ctx.currentTime, g=out(undefined,0,0,.05,B.fx); hit(g,t,.008,'white','bandpass',4200,1,.1); osc(g,t,.018,'sine',1500,1000,.05); free(g,.2); },
  tick(){ const t=ctx.currentTime, g=out(undefined,0,0,.03); osc(g,t,.016,'triangle',1100,800,.05); free(g,.2); },
  panelOpen(){ const t=ctx.currentTime, g=out(undefined,0,0,.2); hit(g,t,.08,'pink','bandpass',1600,.8,.07,.012,3200); osc(g,t+.01,.09,'sine',640,960,.05); free(g,.4); },
@@ -142,7 +144,7 @@ const SND={
  quest(){ const t=ctx.currentTime, g=out(undefined,0,0,.7); [79,84,88].forEach((m,i)=>harp(g,t+i*.11,m,.17)); free(g,2.6); },
  sleep(){ const t=ctx.currentTime, g=out(undefined,0,0,.9); [60,67,72,76,79].forEach((m,i)=>pianoNote(g,t+i*.34,m,.12,3)); free(g,5); },
  thunder(o,dist=1){ const t=ctx.currentTime+dist*.9, g=out(undefined,0,0,.9,B.world), v=lerp(1.2,.45,dist); hit(g,t,.14,'white','bandpass',1900,.5,.3*v,.005); for(let i=0;i<7;i++) hit(g,t+.05+i*rand(.1,.26),rand(.5,1.1),'brown','lowpass',rand(110,260),.7,rand(.6,1.2)*v,.05); osc(g,t,1.8,'sine',46,28,.5*v,.08); free(g,5); },
- boatRow(){ const t=ctx.currentTime, g=out(undefined,0,0,.5); hit(g,t,.32,'white','bandpass',900,.8,.1,.05,2200); osc(g,t+.12,.09,'sine',300,640,.05); modes(g,t,[[180,.3],[280,.2]],.05,.1); free(g,.7); }
+ boatRow(){ const t=ctx.currentTime, g=out(undefined,0,0,.5); hit(g,t,.32,'white','bandpass',900,.8,.28,.05,2200); osc(g,t+.12,.09,'sine',300,640,.12); modes(g,t,[[180,.3],[280,.2]],.14,.1); free(g,.7); }
 };
 function harp(dest,t,m,v){ const f=440*Math.pow(2,(m-69)/12); for(const [k,g,d] of [[1,1,1.4],[2,.34,.9],[3,.12,.5],[4,.05,.3]]) osc(dest,t,d,'sine',f*k,0,v*g,.003); }
 export function play(name,...a){ if(!ctx||hidden||!SND[name]) return; try{ if(name==='step') SND.step(a[0],a[1]); else SND[name](...a); }catch(e){ console.warn('sound',name,e); } }
@@ -182,7 +184,7 @@ export function updateAudio(st){ if(!ctx||hidden) return; const now=ctx.currentT
   // life
   const warm=!snow&&!rain; if(beds.cricket) set(beds.cricket,out_&&warm&&st.season!==3?night*(.34+.1*Math.sin(now*.2))*(1-st.lake*.3):0,2); if(beds.frog) set(beds.frog,out_&&warm&&st.season<2?night*st.lake*.5:0,2);
   // rooms
-  set(beds.fire,st.inHouse?.09:0,.3); set(beds.cave,st.inMine?.5:0,1); set(beds.lava,st.inMine&&st.deep===2?.3:0,1);
+  set(beds.fire,st.inHouse?.17:0,.3); set(beds.cave,st.inMine?.5:0,1); set(beds.lava,st.inMine&&st.deep===2?.3:0,1);
   if(st.inHouse&&now>nextCrack){ nextCrack=now+rand(.05,.55); crackle(0,Math.random()<.12); }
   if(st.inMine&&now>nextDrip){ nextDrip=now+rand(.6,3.4); const a=rand(0,6.28), r=rand(4,16); drip(Math.cos(a)*r,rand(2,8),Math.sin(a)*r); }
   if(out_&&now>nextBird){ const pool=(h<540?DAWN:h>1020?DUSK:DAY), chance=rain?.15:snow?.2:h<540?1:.8, gate=day>.4; const gap=h<540?rand(.8,2.6):rand(2.5,8); nextBird=now+gap; if(gate&&Math.random()<chance){ const a=rand(0,6.28), r=rand(14,70), x=st.pos.x+Math.cos(a)*r, z=st.pos.z+Math.sin(a)*r, g=out(x,rand(4,16),z,.75,B.amb), d=birdSong(g,now+.02,pick(pool)); free(g,d+1); } }

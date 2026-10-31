@@ -194,7 +194,8 @@ import {
 import { setupFlora, updateFlora, refreshFlora } from './flora.js';
 import { buildLife, updateLife } from './life.js';
 import { cropMesh, soilGeometry } from './crops.js';
-import { startAudio, updateAudio, play as snd, playAt as sndAt, setVolumes, volumes, duckMusic, auditSounds } from './audio.js';
+import { debrisMesh, forageMesh, placedModel } from './props.js';
+import { startAudio, updateAudio, play as snd, playAt as sndAt, setVolumes, volumes, duckMusic, auditSounds, audioLevel } from './audio.js';
 import { makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, makeSheep, makeGoat, makePig, makeWalkDuck, makeFish, poseQuadruped, poseBird, damp, angDamp, furLod } from './creatures.js';
 import { CROPS, CROP_FORM, FISH, RODS, ANIMALS } from './data.js';
 import { makeValley, defaultState, DB } from './valley.js';
@@ -1027,20 +1028,7 @@ const placedGroup=new THREE.Group(); world.add(placedGroup);
 const pm=(hex,rough)=>toonOf({color:hex});
 function box(g,w,h,d,c,x=0,y=0,z=0){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),pm(c)); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; }
 function cyl(g,r0,r1,h,c,x=0,y=0,z=0,seg=10){ const m=new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,h,seg),pm(c)); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; }
-function placedMesh(id){ const g=new THREE.Group();
-  if(/sprinkler/.test(id)){ const c=id==='sprinkler'?0x8a8f96:id==='quality_sprinkler'?0xd0b060:0xa070d0; cyl(g,.14,.18,.18,c,0,.1); cyl(g,.05,.05,.22,c,0,.3); cyl(g,.12,.09,.08,c,0,.44); }
-  else if(id==='scarecrow'){ cyl(g,.05,.05,1.8,0x7a5230,0,.9); box(g,1.4,.08,.08,0x7a5230,0,1.3); const h=new THREE.Mesh(new THREE.SphereGeometry(.22,10,8),pm(0xcf9a53)); h.position.y=1.72; g.add(h); const c=new THREE.Mesh(new THREE.ConeGeometry(.34,.32,10),pm(0x6b4a2e)); c.position.y=1.96; g.add(c); box(g,.6,.7,.14,0xa85a3a,0,1.1); }
-  else if(id==='fence'){ [-.45,.45].forEach(x=>cyl(g,.06,.07,.9,0x8a6a44,x,.45)); box(g,1,.08,.05,0x8a6a44,0,.62); box(g,1,.08,.05,0x8a6a44,0,.32); }
-  else if(id==='torch'){ cyl(g,.04,.05,.9,0x6b4a2e,0,.45); const f=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshBasicMaterial({color:0xffb040,toneMapped:false})); f.position.y=.96; g.add(f); }
-  else if(id==='chest'){ box(g,.9,.56,.6,0x8a5a2c,0,.28); box(g,.92,.2,.62,0x6e4620,0,.62); box(g,.14,.18,.06,0xd0b060,0,.5,.31); }
-  else if(id==='furnace'){ box(g,.9,1,.8,0x7a7470,0,.5); box(g,.5,.4,.08,0x201814,0,.42,.41); box(g,.4,.28,.1,0xe86a2a,0,.36,.4); cyl(g,.2,.26,.5,0x6a6460,0,1.2); }
-  else if(id==='keg'){ cyl(g,.36,.36,.9,0x8a5a30,0,.45,0,12); [.15,.75].forEach(y=>cyl(g,.38,.38,.06,0x3a3a3e,0,y,0,12)); }
-  else if(id==='preserves_jar'){ cyl(g,.3,.3,.6,0xc8d8c8,0,.42); cyl(g,.34,.34,.1,0xb88a4a,0,.76); cyl(g,.36,.36,.12,0x8a6a44,0,.06); }
-  else if(id==='bee_house'){ box(g,.7,.7,.6,0xd8b868,0,.65); box(g,.82,.1,.72,0x7a5a3a,0,1.04); [-.25,.25].forEach(x=>cyl(g,.05,.05,.3,0x7a5a3a,x,.15)); }
-  else if(id==='crab_pot'){ box(g,.7,.4,.7,0x8a6a44,0,.2); }
-  else if(/^sapling/.test(id)){ cyl(g,.06,.1,1.5,0x6a4a30,0,.75); const c=new THREE.Mesh(new THREE.IcosahedronGeometry(.62,1),pm(0x5a8a3a)); c.position.y=1.7; c.castShadow=true; g.add(c); }
-  else { box(g,.9,.8,.7,0x8a7458,0,.4); box(g,.6,.3,.5,0x5a4a3a,0,.95); }
-  return g; }
+function placedMesh(id){ return placedModel(id); }
 function spawnPlacement(id,x,z,ry){ const m=placedMesh(id); m.position.set(x,walkH(x,z),z); m.rotation.y=ry||0; placedGroup.add(m); if(id!=='torch'&&!/sprinkler/.test(id)) addObstacle(x,z,.55); if(id==='torch'){ const l=new THREE.PointLight(0xffa040,0,8); l.position.set(x,walkH(x,z)+1,z); placedGroup.add(l); torches.push(l); } }
 const torches=[];
 /* farm animals: the 3D bodies live here, their records in S.animals */
@@ -1067,7 +1055,7 @@ function buildTown(){
 }
 const onBuilt=G.onBuilt=(id,silent)=>{ if(id==='coop'&&!built.coop){ built.coop=1; logHouse({world,x:COOP.x,z:COOP.z,w:5,d:3.6,h:2,rh:1.5,porch:false,chimney:false,wins:1}); const a=COOP.x-6,b=COOP.x+6,c=COOP.z+2.4,d=COOP.z+10; fenceRun(world,[[a,c],[a,d],[b,d],[b,c]]); addSpot(COOP.x,COOP.z+3.2,3,()=>G.openCoopMenu(),()=>L('鸡舍','coop')); }
   if(id==='barn'&&!built.barn){ built.barn=1; logHouse({world,x:BARN.x,z:BARN.z,w:7,d:5,h:2.6,rh:2,porch:false,chimney:false,wins:1}); fenceRun(world,[[BARN.x-6,BARN.z+3],[BARN.x-6,BARN.z+11],[BARN.x+6,BARN.z+11],[BARN.x+6,BARN.z+3]]); addSpot(BARN.x,BARN.z+3.6,3,()=>G.openCoopMenu(),()=>L('畜棚','barn')); }
-  if(id==='silo'&&!built.silo){ built.silo=1; const g=new THREE.Group(); cyl(g,1.4,1.4,5,0xc8b898,0,2.5,0,14); const c=new THREE.Mesh(new THREE.ConeGeometry(1.6,1.2,14),pm(0x8a4a3a)); c.position.y=5.6; c.castShadow=true; g.add(c); g.position.set(32,walkH(32,-1),-1); world.add(g); addObstacle(32,-1,1.6); }
+  if(id==='silo'&&!built.silo){ built.silo=1; const g=placedModel('silo'); g.position.set(32,walkH(32,-1),-1); world.add(g); addObstacle(32,-1,1.6); }
   if(id==='greenhouse'&&!built.greenhouse){ built.greenhouse=1; greenhouse(world,GREENHOUSE.x,GREENHOUSE.z); } };
 const built={};
 G.buildGreenhouse=()=>onBuilt('greenhouse');
@@ -1107,9 +1095,8 @@ G.swing=()=>{ swingT=1; };
 function floatText(x,y,z,txt,col){ const e=document.createElement('div'); e.textContent=txt; const v=new THREE.Vector3(x,y,z).project(camera); e.style.cssText='position:fixed;z-index:60;pointer-events:none;font-weight:800;font-size:16px;color:'+(col||'#fff')+';text-shadow:0 1px 3px #000;left:'+((v.x*.5+.5)*innerWidth)+'px;top:'+((-v.y*.5+.5)*innerHeight)+'px;transition:all .7s;opacity:1'; document.body.appendChild(e); requestAnimationFrame(()=>{ e.style.transform='translateY(-34px)'; e.style.opacity=0; }); setTimeout(()=>e.remove(),750); }
 /* debris, forage and dig spots on the ground */
 const debrisG=new THREE.Group(), forageG=new THREE.Group(), digG=new THREE.Group(); world.add(debrisG,forageG,digG);
-const debrisMat={stone:pm(0x8a8078),twig:pm(0x6a4a30),stump:pm(0x5a4028),weed:pm(0x6a8a3a)};
-function rebuildDebris(){ debrisG.clear(); for(const d of S.debris.values()){ const g=new THREE.Group(); if(d.t==='stone'){ const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.3,0),debrisMat.stone); m.scale.y=.7; m.position.y=.14; m.castShadow=true; g.add(m); } else if(d.t==='twig'){ for(let i=0;i<3;i++){ const m=new THREE.Mesh(new THREE.CylinderGeometry(.03,.04,.8,5),debrisMat.twig); m.rotation.z=1.5; m.rotation.y=i*1.1; m.position.y=.06+i*.04; g.add(m); } } else if(d.t==='stump'){ const m=new THREE.Mesh(new THREE.CylinderGeometry(.34,.42,.5,8),debrisMat.stump); m.position.y=.25; m.castShadow=true; g.add(m); } else { for(let i=0;i<5;i++){ const m=new THREE.Mesh(new THREE.ConeGeometry(.07,.5,4),debrisMat.weed); m.position.set((i-2)*.1,.25,(i%2)*.12-.06); m.rotation.z=(i-2)*.2; g.add(m); } } g.position.set(d.x,terrainH(d.x,d.z),d.z); debrisG.add(g); } }
-function rebuildForage(){ forageG.clear(); for(const f of S.forage){ const c=[0xe8c040,0xd86a8a,0x8ad06a,0xd89a4a][Math.abs(f.id.length)%4], g=new THREE.Group(); const s=new THREE.Mesh(new THREE.CylinderGeometry(.02,.03,.3,5),pm(0x5a8a3a)); s.position.y=.15; const h=new THREE.Mesh(new THREE.IcosahedronGeometry(.13,1),pm(c)); h.position.y=.34; g.add(s,h); g.position.set(f.x,walkH(f.x,f.z),f.z); forageG.add(g); } }
+function rebuildDebris(){ debrisG.clear(); let i=0; for(const d of S.debris.values()){ const g=debrisMesh(d.t,Math.abs(d.x*3+d.z*7)|0); g.position.set(d.x,terrainH(d.x,d.z),d.z); g.rotation.y=(d.x*2.4+d.z)%6.28; debrisG.add(g); i++; } }
+function rebuildForage(){ forageG.clear(); for(const f of S.forage){ const g=forageMesh(f.id); g.position.set(f.x,walkH(f.x,f.z),f.z); g.rotation.y=(f.x*1.7+f.z)%6.28; g.scale.setScalar(1.25); forageG.add(g); } }
 function rebuildDigs(){ digG.clear(); for(const d of S.digs){ const g=new THREE.Group(); for(let i=0;i<3;i++){ const m=new THREE.Mesh(new THREE.CylinderGeometry(.015,.02,.26,4),pm(0x3a2a1c)); m.position.set((i-1)*.09,.13,(i%2)*.08); m.rotation.z=(i-1)*.3; g.add(m); } g.position.set(d.x,terrainH(d.x,d.z),d.z); digG.add(g); } }
 /* moonlight jellies */
 let jellyOn=false, jellies=null;
@@ -1157,10 +1144,10 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={auditSounds,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
-boot();
+boot().catch(e=>{ console.error(e); const m=$('#loadsub'); if(m){ m.textContent='加载失败,点这里重试 · Could not load, tap to retry'; m.style.cursor='pointer'; m.onclick=()=>location.reload(); } });
 </script>
 </body>
 </html>

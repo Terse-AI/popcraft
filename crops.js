@@ -6,8 +6,8 @@ import { CROPS, CROP_FORM } from './data.js';
 
 const tau=Math.PI*2, lerp=(a,b,t)=>a+(b-a)*t, clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const C=h=>new THREE.Color(h), mix=(a,b,t)=>C(a).lerp(C(b),t).getHex();
-function rng(seed){ let s=seed>>>0; return ()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-class B{ constructor(r){ this.P=[]; this.Co=[]; this.I=[]; this.r=r; }
+export function rng(seed){ let s=seed>>>0; return ()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+export class B{ constructor(r){ this.P=[]; this.Co=[]; this.I=[]; this.r=r; }
   v(x,y,z,c){ this.P.push(x,y,z); this.Co.push(c.r,c.g,c.b); return this.P.length/3-1; }
   // a leaf folded on its midrib, drooping along its length. ruffle waves the edge, lobes cuts it in
   leaf(px,py,pz,yaw,lift,len,wid,col,{droop=.5,fold=.25,ruffle=0,lobes=0,rib=null,segs=7,pale=1.16}={}){ const c0=C(col), cMid=rib===null?c0.clone().multiplyScalar(pale):C(rib), cTip=c0.clone().multiplyScalar(.9), base=this.P.length/3, ca=Math.cos(yaw), sa=Math.sin(yaw); let x=0, y=0, a=lift;
@@ -20,7 +20,7 @@ class B{ constructor(r){ this.P=[]; this.Co=[]; this.I=[]; this.r=r; }
   flower(px,py,pz,n,L,W,col,eye,lift=.04){ for(let i=0;i<n;i++) this.leaf(px,py,pz,i/n*tau,lift*5,L,W,col,{droop:.08,fold:.1,segs:3,pale:1.05}); this.ball(px,py+.012,pz,L*.3,L*.2,L*.3,eye,null,4,6); return this; }
   geometry(){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(this.P,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(this.Co,3)); g.setIndex(this.I); g.computeVertexNormals(); return g; } }
 let MAT=null;
-function cropMat(){ if(MAT) return MAT; const m=new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide});
+export function cropMat(){ if(MAT) return MAT; const m=new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide});
   m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uTime:U.uTime,uWindAmp:U.uWindAmp,uWindDir:U.uWindDir,uSunDirW:U.uSunDirW,uGlow:U.uGlow,uLitC:U.uLit});
     sh.vertexShader='uniform float uTime,uWindAmp,uGlow; uniform vec2 uWindDir; uniform vec3 uSunDirW; varying float vBack;\n'+sh.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
       vec2 wb=(modelMatrix*vec4(0.,0.,0.,1.)).xz; float hh=max(position.y,0.); float sw=sin(uTime*2.1+wb.x*.9+wb.y*.7+position.y*1.6)*.03+sin(uTime*3.7+wb.x*2.+position.x*7.)*.012; transformed.xz+=uWindDir*(sw+.012)*uWindAmp*hh*(.6+hh);
