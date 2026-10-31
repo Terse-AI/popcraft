@@ -299,8 +299,11 @@ export function buildLighthouse(world,x,z){
   windowAt(K,0,6.2,1.62,.5,.7); windowAt(K,0,10.2,1.32,.5,.7);
   K.bake(G); G.position.set(x,base,z); world.add(G); addObstacle(x,z,2.8);
   logHouse({world,x:x+7.5,z:z+2,w:4.6,d:3.6,h:2.1,rh:1.5,porch:false,chimney:true,roof:'shingle',wins:1,ry:0});
-  const m=new THREE.MeshBasicMaterial({color:0xfff0c0,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false,fog:false});
-  const g=new THREE.ConeGeometry(16,120,16,1,true); g.translate(0,-60,0); g.rotateX(-Math.PI/2+.0); beam=new THREE.Mesh(g,m); beam.position.set(x,base+14.2,z); beam.frustumCulled=false; world.add(beam);
+  /* a shaft of light has no edge: bright along its axis, gone by its rim and by its far end */
+  const beamM=new THREE.ShaderMaterial({ transparent:true, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, toneMapped:false, fog:false, uniforms:{ opacity:{value:0} },
+    vertexShader:'varying vec3 vN,vV; varying float vL; void main(){ vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); vL=uv.y; gl_Position=projectionMatrix*mv; }',
+    fragmentShader:'uniform float opacity; varying vec3 vN,vV; varying float vL; void main(){ float f=abs(dot(normalize(vN),normalize(vV))); f=f*f*f; float a=f*pow(vL,1.6)*opacity*2.2; gl_FragColor=vec4(vec3(1.,.93,.74)*a,a); }' });
+  const g=new THREE.ConeGeometry(12,120,32,8,true); g.translate(0,-60,0); g.rotateX(-Math.PI/2+.0); beam=new THREE.Mesh(g,beamM); beam.position.set(x,base+14.2,z); beam.frustumCulled=false; world.add(beam);
   const lamp=new THREE.PointLight(0xffe0a0,0,70,1.6); lamp.position.set(x,base+14.4,z); world.add(lamp); nightLamps.push({l:lamp,i:40});
 }
 
@@ -371,7 +374,7 @@ export function updateBuildings(t,dt,night,dusk){
   const k=Math.min(1,night+dusk); if(M.glass) M.glass.color.setRGB(lerp(.13,1,k),lerp(.17,.72,k),lerp(.22,.34,k),THREE.SRGBColorSpace);
   for(const l of nightLamps) l.l.intensity=l.i*k;
   if(M.lantern) M.lantern.color.setRGB(lerp(.1,1,k),lerp(.07,.74,k),lerp(.05,.36,k),THREE.SRGBColorSpace); if(glowPts) glowPts.material.uniforms.uK.value=k; if(poolMesh) poolMesh.material.uniforms.uK.value=k;
-  if(beam){ beam.rotation.y=t*.32; beam.material.opacity=.075*k; }
+  if(beam){ beam.rotation.y=t*.32; beam.material.uniforms.opacity.value=.1*k; beam.visible=k>.01; }
   if(puffs&&smokes.length){ const p=puffs.geometry.attributes.position, T=puffs.userData.t;
     for(let i=0;i<T.length;i++){ T[i]+=dt*.09; if(T[i]>1) T[i]-=1; const s=smokes[i%smokes.length], q=T[i]; p.setXYZ(i,s.x+Math.sin(q*6+i)*.5*q+q*3,s.y+q*9,s.z+Math.cos(q*5+i)*.4*q); }
     p.needsUpdate=true; }
