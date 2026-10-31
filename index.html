@@ -926,6 +926,7 @@ const paused=()=>!!document.querySelector('.panel:not(.hidden)');
 function frame(now){
   if(!(DBG&&DBG.manual)) requestAnimationFrame(frame);
   const raw=(now-last)/1000, dt=Math.min(0.05,raw); last=now;
+  if(G.film) G.film.tick(dt);
   updateRain(dt); updateCritters(now*0.001); if(lastRig) updateLife(now*0.001,dt,camera.position,S.season,lastRig,S.inMine||S.inHouse); G.updatePeople(dt); updateAnimals(dt); G.updateFishing(dt); updateFireflies(now*0.001); updatePetals(dt); G.mine.update(dt); if(G.festTick) G.festTick(dt); updateFx(dt);
   fCnt++; fAcc+=raw; if(fAcc>=0.5){ const fe=$('#fps'), v=Math.round(fCnt/fAcc); if(fe) fe.textContent=v+' fps'; window.__fps=v; fCnt=0; fAcc=0; }
 
@@ -967,6 +968,8 @@ function frame(now){
   updateBoat(dt,now); updateBeasts(dt,now);
   if(S.inMine){ const mo=G.mine.mode, area=mo==='desert'?DESERT:mo==='island'?ISLAND:null, lim=area?area.R:17, r=Math.hypot(player.pos.x,player.pos.z); if(r>lim){ player.pos.x*=lim/r; player.pos.z*=lim/r; } if(area) for(const o of area.solid){ const dx=player.pos.x-o.x, dz=player.pos.z-o.z, d=Math.hypot(dx,dz), q=o.r+.4; if(d<q&&d>.01){ player.pos.x=o.x+dx/d*q; player.pos.z=o.z+dz/d*q; } } player.pos.y=0; }
   if(S.inHouse){ player.pos.x=clamp(player.pos.x,-5.6,5.6); player.pos.z=clamp(player.pos.z,-4,4); player.pos.y=0; }
+  if(G.film) G.film.pose(dt);
+  if(G.film) player.pos.y=(S.inMine||S.inHouse)?0:walkH(player.pos.x,player.pos.z);
   avatar.position.copy(player.pos);
   avatar.rotation.y=angDamp(avatar.rotation.y,player.yaw,S.boating?4:13,dt);
   animateWalk(dt);
@@ -984,6 +987,7 @@ function frame(now){
   camAim.x=DBG?player.pos.x:damp(camAim.x,player.pos.x,14,dt); camAim.y=DBG?player.pos.y:damp(camAim.y,player.pos.y,9,dt); camAim.z=DBG?player.pos.z:damp(camAim.z,player.pos.z,14,dt);
   if(cut.k>.001){ const k=cut.k; camera.lookAt(lerp(camAim.x,cut.x,k),lerp(camAim.y+(cam.look||1.5),WATER_Y+1.1,k),lerp(camAim.z,cut.z,k)); }
   else camera.lookAt(camAim.x, camAim.y+(cam.look||1.5), camAim.z);
+  if(G.film) G.film.camera();
 
   if((sTick&1)===0) updateTarget();
   // selector pulse
@@ -1262,7 +1266,8 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={SITES,OUTER,terrainH,lakeField,inWater,obstacles,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={SITES,OUTER,terrainH,lakeField,inWater,obstacles,composer,syncRes,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  if(DBG&&DBG.film) import('./film.js').then(m=>{ m.setup(window.__sv); window.__filmReady=true; });
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
 boot().catch(e=>{ console.error(e); const m=$('#loadsub'); if(m){ m.textContent='加载失败,点这里重试 · Could not load, tap to retry'; m.style.cursor='pointer'; m.onclick=()=>location.reload(); } });
