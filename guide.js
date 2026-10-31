@@ -1,7 +1,7 @@
 /* A first day with a friend beside you: four short cards, then a checklist that ticks itself as you play. */
 const CARDS=[
  {ic:'🌾',zh:['欢迎来到星谷','爷爷把湖边的小农场留给了你。这里没有时间压力:种地、钓鱼、下矿、认识邻居,怎么过都行。'],en:['Welcome to StarVale','Grandpa left you a little farm by the lake. No rush here: farm, fish, explore the mine, meet the neighbours. Live it your way.']},
- {ic:'🎮',zh:['怎么操作','WASD 走路 · Shift 跑 · 鼠标转视角\n1 到 6 换工具 · 左键使用\nE 交互、对话、睡觉 · F 钓鱼\nTab 背包 · C 制作 · J 日志 · M 大地图'],en:['Controls','WASD walk · Shift run · mouse look\n1 to 6 tools · left click to use\nE interact, talk, sleep · F fish\nTab bag · C craft · J journal · M map']},
+ {ic:'🎮',zh:['怎么操作','WASD 走路 · Shift 跑 · 鼠标转视角\n1 到 6 换工具 · 左键使用\nE 交互、对话、睡觉 · F 钓鱼\nTab 背包 · C 制作 · J 日志 · M 大地图 · H 隐藏面板'],en:['Controls','WASD walk · Shift run · mouse look\n1 to 6 tools · left click to use\nE interact, talk, sleep · F fish\nTab bag · C craft · J journal · M map · H hide panels']},
  {ic:'🌱',zh:['能做什么','种 28 种作物、养鸡养牛、酿酒做果酱\n去镇上买卖、交朋友、参加 9 个节日\n下矿打怪、钓 23 种鱼、修复社区中心\n累了就回屋睡觉,新的一天从早上 6 点开始'],en:['What you can do','Grow 28 crops, raise animals, brew and preserve\nTrade in town, make friends, join 9 festivals\nMine, fight, catch 23 fish, restore the community centre\nTired? Sleep in your cabin. Each day starts at 6 AM']},
  {ic:'💾',zh:['关于存档','每晚睡觉时自动存档,也可以点 💾 随时保存。\n存档保存在你的 NOVA 账号里,需要先登录,换设备也能接着玩。'],en:['Saving','The game saves when you sleep, or tap 💾 any time.\nSaves live in your NOVA account, so sign in first. Then carry on from any device.']}];
 const STEPS=[

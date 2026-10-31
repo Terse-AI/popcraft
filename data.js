@@ -1,7 +1,7 @@
 /* StarVale game data. Mechanics, prices and growth times follow Stardew Valley; people and places are our own. */
 const n=(zh,en)=>({zh,en});
 
-/* id: nm, season(s), days to mature, sell price, seed cost, optional regrow days, yield, colours, plant form */
+/* id: nm, season(s), days to mature, sell price, seed cost, optional regrow days, yield, colours, plant form. shop: where the seeds are sold if not the general store. y2: from the second year */
 export const CROPS={
   parsnip:{em:'🥕',nm:n('防风草','Parsnip'),season:[0],days:4,price:35,seed:20,col:0xe8c35a,fruit:0xd9a12e},
   potato:{em:'🥔',nm:n('土豆','Potato'),season:[0],days:6,price:80,seed:50,col:0x7fae5b,fruit:0xb98a4e,extra:.25},
@@ -9,8 +9,8 @@ export const CROPS={
   kale:{em:'🥬',nm:n('羽衣甘蓝','Kale'),season:[0],days:6,price:110,seed:70,col:0x6fae5b,fruit:0x4f8f3a},
   garlic:{em:'🧄',nm:n('大蒜','Garlic'),season:[0],days:4,price:60,seed:40,col:0x8fb86a,fruit:0xefe6d6},
   green_bean:{em:'🫛',nm:n('四季豆','Green Bean'),season:[0],days:10,price:40,seed:60,regrow:3,col:0x5fa84e,fruit:0x58a040},
-  strawberry:{em:'🍓',nm:n('草莓','Strawberry'),season:[0],days:8,price:120,seed:100,regrow:4,col:0x6fbf5a,fruit:0xe84b56},
-  rhubarb:{em:'🌿',nm:n('大黄','Rhubarb'),season:[0],days:13,price:220,seed:100,col:0x7fae5b,fruit:0xc0404e},
+  strawberry:{em:'🍓',nm:n('草莓','Strawberry'),season:[0],days:8,price:120,seed:100,regrow:4,shop:'festival',col:0x6fbf5a,fruit:0xe84b56},
+  rhubarb:{em:'🌿',nm:n('大黄','Rhubarb'),season:[0],days:13,price:220,seed:100,shop:'oasis',col:0x7fae5b,fruit:0xc0404e},
   melon:{em:'🍈',nm:n('甜瓜','Melon'),season:[1],days:12,price:250,seed:80,col:0x8fc35a,fruit:0xa8d26a},
   tomato:{em:'🍅',nm:n('番茄','Tomato'),season:[1],days:11,price:60,seed:50,regrow:4,col:0x62a24d,fruit:0xe5503a},
   blueberry:{em:'🫐',nm:n('蓝莓','Blueberry'),season:[1],days:13,price:50,seed:80,regrow:4,yield:3,col:0x5fa85a,fruit:0x4a6fd1},
@@ -19,125 +19,293 @@ export const CROPS={
   radish:{em:'🔴',nm:n('萝卜','Radish'),season:[1],days:6,price:90,seed:40,col:0x8fc35a,fruit:0xe0506a},
   wheat:{em:'🌾',nm:n('小麦','Wheat'),season:[1,2],days:4,price:25,seed:10,col:0xd8c25a,fruit:0xe8d06a},
   hops:{em:'🌿',nm:n('啤酒花','Hops'),season:[1],days:11,price:25,seed:60,regrow:1,col:0x7fae5b,fruit:0xb8cc6a},
-  red_cabbage:{em:'🥬',nm:n('红叶卷心菜','Red Cabbage'),season:[1],days:9,price:260,seed:100,col:0x7a5a9a,fruit:0x8a4a9a},
-  sunflower:{em:'🌻',nm:n('向日葵','Sunflower'),season:[1,2],days:8,price:80,seed:200,col:0x7fae5b,fruit:0xf0c02a},
-  poppy:{em:'🌺',nm:n('虞美人','Poppy'),season:[1],days:7,price:140,seed:100,col:0x7fae5b,fruit:0xe84030},
+  red_cabbage:{em:'🥬',nm:n('红叶卷心菜','Red Cabbage'),season:[1],days:9,price:260,seed:100,y2:1,col:0x7a5a9a,fruit:0x8a4a9a},
+  sunflower:{em:'🌻',flower:1,nm:n('向日葵','Sunflower'),season:[1,2],days:8,price:80,seed:200,col:0x7fae5b,fruit:0xf0c02a},
+  poppy:{em:'🌺',flower:1,nm:n('虞美人','Poppy'),season:[1],days:7,price:140,seed:100,col:0x7fae5b,fruit:0xe84030},
   eggplant:{em:'🍆',nm:n('茄子','Eggplant'),season:[2],days:5,price:60,seed:20,regrow:5,col:0x6f9b4d,fruit:0x7a4ba0},
   pumpkin:{em:'🎃',nm:n('南瓜','Pumpkin'),season:[2],days:13,price:320,seed:100,col:0x8aad55,fruit:0xe08a2a},
   yam:{em:'🍠',nm:n('山药','Yam'),season:[2],days:10,price:160,seed:60,col:0x9ab35a,fruit:0xc87d3a},
   cranberry:{em:'🔴',nm:n('蔓越莓','Cranberries'),season:[2],days:7,price:75,seed:240,regrow:5,yield:2,col:0x5fa05a,fruit:0xc0392b},
   bok_choy:{em:'🥬',nm:n('小白菜','Bok Choy'),season:[2],days:4,price:80,seed:50,col:0x6fae5b,fruit:0xeaf0d0},
-  beet:{em:'🔴',nm:n('甜菜','Beet'),season:[2],days:6,price:100,seed:20,col:0x7f9e5b,fruit:0x8a2040},
+  beet:{em:'🔴',nm:n('甜菜','Beet'),season:[2],days:6,price:100,seed:20,shop:'oasis',col:0x7f9e5b,fruit:0x8a2040},
   amaranth:{em:'🌾',nm:n('苋菜','Amaranth'),season:[2],days:7,price:150,seed:70,col:0x8a5a6a,fruit:0xa83060},
-  artichoke:{em:'🌿',nm:n('洋蓟','Artichoke'),season:[2],days:8,price:160,seed:30,col:0x6f9e6a,fruit:0x5a8a5a},
-  grape:{em:'🍇',nm:n('葡萄','Grape'),season:[2],days:10,price:80,seed:60,regrow:3,col:0x7fae5b,fruit:0x7a4ba0}
+  artichoke:{em:'🌿',nm:n('洋蓟','Artichoke'),season:[2],days:8,price:160,seed:30,y2:1,col:0x6f9e6a,fruit:0x5a8a5a},
+  grape:{em:'🍇',nm:n('葡萄','Grape'),season:[2],days:10,price:80,seed:60,regrow:3,col:0x7fae5b,fruit:0x7a4ba0},
+  tulip:{em:'🌷',nm:n('郁金香','Tulip'),season:[0],days:6,price:30,seed:20,col:0x7fae5b,fruit:0xe0506a,flower:1},
+  blue_jazz:{em:'💠',nm:n('蓝爵','Blue Jazz'),season:[0],days:7,price:50,seed:30,col:0x7fae5b,fruit:0x5a8ae0,flower:1},
+  summer_spangle:{em:'🌼',nm:n('夏季亮片','Summer Spangle'),season:[1],days:8,price:90,seed:50,col:0x7fae5b,fruit:0xe8a030,flower:1},
+  fairy_rose:{em:'🌸',nm:n('玫瑰仙子','Fairy Rose'),season:[2],days:12,price:290,seed:200,col:0x7fae5b,fruit:0xe080c0,flower:1},
+  rice:{em:'🌾',nm:n('未碾米','Unmilled Rice'),season:[0],days:8,price:30,seed:40,col:0x8fc35a,fruit:0xd8d0a0},
+  coffee:{em:'☕',nm:n('咖啡豆','Coffee Bean'),season:[0,1],days:10,price:15,seed:2500,regrow:2,yield:4,col:0x5f9a4a,fruit:0x7a3a20,shop:'cart'},
+  starfruit:{em:'⭐',nm:n('杨桃','Starfruit'),season:[1],days:13,price:750,seed:400,col:0x8fc35a,fruit:0xf0d040,shop:'oasis'},
+  ancient:{em:'🫛',nm:n('上古水果','Ancient Fruit'),season:[0,1,2],days:28,price:550,seed:0,regrow:7,col:0x4f8a6a,fruit:0x4ac0c0,shop:'none'},
+  sweet_gem:{em:'💎',nm:n('甜宝石莓','Sweet Gem Berry'),season:[2],days:24,price:3000,seed:0,col:0x6f9e5a,fruit:0xe04080,shop:'none'},
+  cactus:{em:'🌵',nm:n('仙人掌果','Cactus Fruit'),season:[],days:12,price:75,seed:150,regrow:3,col:0x4f9a5a,fruit:0xe05a70,shop:'oasis',indoor:1},
+  carrot:{em:'🥕',nm:n('胡萝卜','Carrot'),season:[0],days:3,price:35,seed:0,col:0x8fb86a,fruit:0xe8842a,shop:'none'},
+  summer_squash:{em:'🥒',nm:n('西葫芦','Summer Squash'),season:[1],days:6,price:45,seed:0,regrow:3,col:0x6fa84a,fruit:0xe8cc4a,shop:'none'},
+  broccoli:{em:'🥦',nm:n('西兰花','Broccoli'),season:[2],days:8,price:70,seed:0,regrow:4,col:0x5f9a4a,fruit:0x3f8a3a,shop:'none'},
+  powdermelon:{em:'🍈',nm:n('霜瓜','Powdermelon'),season:[3],days:7,price:60,seed:0,col:0x8ab0a0,fruit:0xc8e8e0,shop:'none'},
+  wild_sp:{em:'🌱',nm:n('春季野种','Spring Seeds'),season:[0],days:7,price:0,seed:0,col:0x7fae5b,fruit:0xe8c040,shop:'none',wild:1},
+  wild_su:{em:'🌱',nm:n('夏季野种','Summer Seeds'),season:[1],days:7,price:0,seed:0,col:0x7fae5b,fruit:0xe8a040,shop:'none',wild:1},
+  wild_fa:{em:'🌱',nm:n('秋季野种','Fall Seeds'),season:[2],days:7,price:0,seed:0,col:0x7fae5b,fruit:0xc06a3a,shop:'none',wild:1},
+  wild_wi:{em:'🌱',nm:n('冬季野种','Winter Seeds'),season:[3],days:7,price:0,seed:0,col:0x8ab0a0,fruit:0xc8e0f0,shop:'none',wild:1}
 };
-export const CROP_FORM={parsnip:'root',radish:'root',beet:'root',garlic:'root',potato:'tuber',yam:'tuber',cauliflower:'head',kale:'head',red_cabbage:'head',bok_choy:'head',artichoke:'head',
-  tomato:'fruiting',pepper:'fruiting',eggplant:'fruiting',green_bean:'fruiting',strawberry:'berry',blueberry:'berry',cranberry:'berry',
-  pumpkin:'vine',melon:'vine',grape:'vine',hops:'vine',corn:'grain',wheat:'grain',amaranth:'grain',rhubarb:'head',sunflower:'grain',poppy:'grain'};
-
-/* loc: lake, river, any; time [from,to] in minutes; w: clear, rain, any; diff 15-110; motion: mixed dart smooth sinker floater */
+export const CROP_FORM={parsnip:'root',radish:'root',beet:'root',garlic:'root',carrot:'root',potato:'tuber',yam:'tuber',cauliflower:'head',kale:'head',red_cabbage:'head',bok_choy:'head',artichoke:'head',broccoli:'head',
+  tomato:'fruiting',pepper:'fruiting',eggplant:'fruiting',green_bean:'fruiting',summer_squash:'fruiting',coffee:'fruiting',strawberry:'berry',blueberry:'berry',cranberry:'berry',sweet_gem:'berry',ancient:'fruiting',starfruit:'fruiting',cactus:'fruiting',
+  pumpkin:'vine',melon:'vine',powdermelon:'vine',grape:'vine',hops:'vine',corn:'grain',wheat:'grain',rice:'grain',amaranth:'grain',rhubarb:'head',sunflower:'grain',poppy:'grain',tulip:'grain',blue_jazz:'grain',summer_spangle:'grain',fairy_rose:'grain'};
+/* loc: lists where it bites. sea (the outer bay, from the dock or a boat), lake, river, pond, swamp, mine20/60/100, desert, sewer. time [from,to] in minutes, or several; w: clear, rain, any; diff 15-110; motion: mixed dart smooth sinker floater */
+const ANY_T=[360,1560], ALL=[0,1,2,3];
+const f=(zh,en,price,season,loc,time,w,diff,motion,col,more)=>({em:'🐟',nm:n(zh,en),price,season,loc,time,w,diff,motion,col,...more});
 export const FISH={
-  carp:{em:'🐟',nm:n('鲤鱼','Carp'),price:30,season:[0,1,2],loc:'lake',time:[360,1560],w:'any',diff:15,motion:'mixed',col:0x9a8a4a},
-  bass:{em:'🐟',nm:n('大嘴鲈鱼','Largemouth Bass'),price:100,season:[0,1,2,3],loc:'lake',time:[360,1140],w:'any',diff:50,motion:'mixed',col:0x6a7a3a},
-  bullhead:{em:'🐟',nm:n('大头鱼','Bullhead'),price:75,season:[0,1,2,3],loc:'lake',time:[360,1560],w:'any',diff:46,motion:'smooth',col:0x4a4a3a},
-  chub:{em:'🐟',nm:n('鲢鱼','Chub'),price:50,season:[0,1,2,3],loc:'any',time:[360,1560],w:'any',diff:35,motion:'dart',col:0x7a8a8a},
-  perch:{em:'🐟',nm:n('河鲈','Perch'),price:55,season:[3],loc:'lake',time:[360,1560],w:'any',diff:35,motion:'dart',col:0x9a8a3a},
-  pike:{em:'🐟',nm:n('狗鱼','Pike'),price:100,season:[1,3],loc:'any',time:[360,1560],w:'any',diff:60,motion:'dart',col:0x5a7a4a},
-  sturgeon:{em:'🐟',nm:n('鲟鱼','Sturgeon'),price:200,season:[1,3],loc:'lake',time:[360,1140],w:'any',diff:78,motion:'mixed',col:0x5a5a6a},
-  walleye:{em:'🐟',nm:n('大眼鱼','Walleye'),price:105,season:[2],loc:'any',time:[720,1560],w:'rain',diff:45,motion:'smooth',col:0x8a8a5a},
-  midnight_carp:{em:'🐟',nm:n('午夜鲤鱼','Midnight Carp'),price:150,season:[2,3],loc:'lake',time:[1320,1560],w:'any',diff:55,motion:'mixed',col:0x3a3a5a},
-  lingcod:{em:'🐟',nm:n('蛇齿单线鱼','Lingcod'),price:120,season:[3],loc:'any',time:[360,1560],w:'any',diff:85,motion:'mixed',col:0x6a6a4a},
-  sunfish:{em:'🐠',nm:n('太阳鱼','Sunfish'),price:30,season:[0,1],loc:'river',time:[360,1140],w:'clear',diff:30,motion:'mixed',col:0xd8a83a},
-  bream:{em:'🐟',nm:n('鳊鱼','Bream'),price:45,season:[0,1,2,3],loc:'river',time:[1080,1560],w:'any',diff:35,motion:'smooth',col:0x8a9a7a},
-  smallmouth:{em:'🐟',nm:n('小嘴鲈鱼','Smallmouth Bass'),price:50,season:[0,2],loc:'river',time:[360,1560],w:'any',diff:28,motion:'mixed',col:0x7a8a4a},
-  rainbow_trout:{em:'🐟',nm:n('虹鳟鱼','Rainbow Trout'),price:65,season:[1],loc:'river',time:[360,1140],w:'clear',diff:45,motion:'mixed',col:0xd88a8a},
-  catfish:{em:'🐠',nm:n('鲶鱼','Catfish'),price:200,season:[0,2],loc:'river',time:[360,1440],w:'rain',diff:75,motion:'mixed',col:0x4a4a42},
-  salmon:{em:'🐟',nm:n('鲑鱼','Salmon'),price:75,season:[2],loc:'river',time:[360,1140],w:'any',diff:50,motion:'mixed',col:0xd86a4a},
-  shad:{em:'🐟',nm:n('西鲱','Shad'),price:60,season:[0,1,2],loc:'river',time:[540,1560],w:'rain',diff:45,motion:'smooth',col:0xaab0a0},
-  tiger_trout:{em:'🐟',nm:n('虎纹鳟鱼','Tiger Trout'),price:150,season:[2,3],loc:'river',time:[360,1140],w:'any',diff:60,motion:'dart',col:0xb09a4a},
-  dorado:{em:'🐠',nm:n('金鲯鳅','Dorado'),price:100,season:[1],loc:'river',time:[360,1140],w:'any',diff:78,motion:'mixed',col:0xe0b82a},
-  // legends: one each, deep lake or under the falls
-  legend:{em:'🐉',nm:n('传说之鱼','Legend'),price:5000,season:[0],loc:'lake',time:[360,1200],w:'rain',diff:110,motion:'mixed',col:0x3a8a7a,legend:true,deep:true,lvl:10},
-  crimsonfish:{em:'🐉',nm:n('绯红鱼','Crimsonfish'),price:1500,season:[1],loc:'lake',time:[360,1200],w:'any',diff:95,motion:'mixed',col:0xc83030,legend:true,deep:true,lvl:5},
-  angler:{em:'🐉',nm:n('琵琶鱼','Angler'),price:900,season:[2],loc:'river',time:[360,1560],w:'any',diff:85,motion:'smooth',col:0x5a4a3a,legend:true,lvl:3},
-  glacierfish:{em:'🐉',nm:n('冰川鱼','Glacierfish'),price:1000,season:[3],loc:'river',time:[360,1560],w:'any',diff:100,motion:'mixed',col:0x9ac8e8,legend:true,lvl:6}
+  carp:f('鲤鱼','Carp',30,[0,1,2],['lake','pond','sewer'],ANY_T,'any',15,'mixed',0x9a8a4a),
+  bass:f('大嘴鲈鱼','Largemouth Bass',100,ALL,['lake'],[360,1140],'any',50,'mixed',0x6a7a3a),
+  bullhead:f('大头鱼','Bullhead',75,ALL,['lake'],ANY_T,'any',46,'smooth',0x4a4a3a),
+  chub:f('鲢鱼','Chub',50,ALL,['lake','river'],ANY_T,'any',35,'dart',0x7a8a8a),
+  perch:f('河鲈','Perch',55,[3],['river','lake','pond'],ANY_T,'any',35,'dart',0x9a8a3a),
+  pike:f('狗鱼','Pike',100,[1,3],['river','pond'],ANY_T,'any',60,'dart',0x5a7a4a),
+  sturgeon:f('鲟鱼','Sturgeon',200,[1,3],['lake'],[360,1140],'any',78,'mixed',0x5a5a6a),
+  walleye:f('大眼鱼','Walleye',105,[2],['river','lake','pond'],[720,1560],'rain',45,'smooth',0x8a8a5a),
+  midnight_carp:f('午夜鲤鱼','Midnight Carp',150,[2,3],['lake','pond'],[1320,1560],'any',55,'mixed',0x3a3a5a),
+  lingcod:f('蛇齿单线鱼','Lingcod',120,[3],['river','lake'],ANY_T,'any',85,'mixed',0x6a6a4a),
+  sunfish:f('太阳鱼','Sunfish',30,[0,1],['river'],[360,1140],'clear',30,'mixed',0xd8a83a,{em:'🐠'}),
+  bream:f('鳊鱼','Bream',45,ALL,['river'],[1080,1560],'any',35,'smooth',0x8a9a7a),
+  smallmouth:f('小嘴鲈鱼','Smallmouth Bass',50,[0,2],['river','pond'],ANY_T,'any',28,'mixed',0x7a8a4a),
+  rainbow_trout:f('虹鳟鱼','Rainbow Trout',65,[1],['river','lake'],[360,1140],'clear',45,'mixed',0xd88a8a),
+  catfish:f('鲶鱼','Catfish',200,[0,2],['river','swamp'],[360,1440],'rain',75,'mixed',0x4a4a42,{em:'🐠'}),
+  salmon:f('鲑鱼','Salmon',75,[2],['river'],[360,1140],'any',50,'mixed',0xd86a4a),
+  shad:f('西鲱','Shad',60,[0,1,2],['river'],[540,1560],'rain',45,'smooth',0xaab0a0),
+  tiger_trout:f('虎纹鳟鱼','Tiger Trout',150,[2,3],['river'],[360,1140],'any',60,'dart',0xb09a4a),
+  dorado:f('金鲯鳅','Dorado',100,[1],['river'],[360,1140],'any',78,'mixed',0xe0b82a,{em:'🐠'}),
+  pufferfish:f('河豚','Pufferfish',200,[1],['sea'],[720,960],'clear',80,'floater',0xc8c060,{em:'🐡'}),
+  anchovy:f('鳀鱼','Anchovy',30,[0,2],['sea'],ANY_T,'any',30,'dart',0x8aa0b0),
+  tuna:f('金枪鱼','Tuna',100,[1,3],['sea'],[360,1140],'any',70,'smooth',0x4a6a9a),
+  sardine:f('沙丁鱼','Sardine',40,[0,2,3],['sea'],[360,1140],'any',30,'dart',0x9ab0c0),
+  red_mullet:f('红鲻鱼','Red Mullet',75,[1,3],['sea'],[360,1140],'any',55,'smooth',0xd05a4a),
+  herring:f('鲱鱼','Herring',30,[0,3],['sea'],ANY_T,'any',25,'dart',0xa0b0c0),
+  eel:f('鳗鱼','Eel',85,[0,2],['sea'],[960,1560],'rain',70,'smooth',0x5a5a3a),
+  octopus:f('章鱼','Octopus',150,[1],['sea'],[360,780],'any',95,'sinker',0xb05a70,{em:'🐙'}),
+  red_snapper:f('红鲷鱼','Red Snapper',50,[1,2],['sea'],[360,1140],'rain',40,'mixed',0xd8604a),
+  squid:f('鱿鱼','Squid',80,[3],['sea'],[1080,1560],'any',75,'sinker',0xd8a0a0,{em:'🦑'}),
+  sea_cucumber:f('海参','Sea Cucumber',75,[2,3],['sea'],[360,1140],'any',40,'sinker',0x5a4a3a),
+  super_cucumber:f('超级海参','Super Cucumber',250,[1,2],['sea'],[1080,1560],'any',80,'sinker',0x7a4a8a),
+  flounder:f('比目鱼','Flounder',100,[0,1],['sea'],[360,1200],'any',50,'sinker',0x8a7a5a),
+  tilapia:f('罗非鱼','Tilapia',75,[1,2],['sea'],[360,840],'any',50,'mixed',0x8a9a8a),
+  albacore:f('长鳍金枪鱼','Albacore',75,[2,3],['sea'],[[360,660],[1080,1560]],'any',60,'mixed',0x7a8aa0),
+  halibut:f('大比目鱼','Halibut',80,[0,1,3],['sea'],[[360,660],[1140,1560]],'any',50,'sinker',0x9a8a6a),
+  ghostfish:f('幽灵鱼','Ghostfish',45,ALL,['mine20','mine60'],ANY_T,'any',50,'mixed',0xd8e0e8),
+  stonefish:f('石鱼','Stonefish',300,ALL,['mine20'],ANY_T,'any',65,'sinker',0x7a7a72),
+  ice_pip:f('冰柱鱼','Ice Pip',500,ALL,['mine60'],ANY_T,'any',85,'dart',0x9ad8f0),
+  lava_eel:f('熔岩鳗鱼','Lava Eel',700,ALL,['mine100'],ANY_T,'any',90,'mixed',0xe8502a),
+  sandfish:f('沙鱼','Sandfish',75,ALL,['desert'],[360,1200],'any',65,'mixed',0xd8b878),
+  scorpion_carp:f('蝎鲤','Scorpion Carp',150,ALL,['desert'],[360,1200],'any',90,'dart',0xc08a3a),
+  woodskip:f('木跃鱼','Woodskip',75,ALL,['swamp'],ANY_T,'any',50,'mixed',0x8a6a3a),
+  void_salmon:f('虚空鲑鱼','Void Salmon',150,ALL,['witch'],ANY_T,'any',80,'mixed',0x4a2a6a),
+  slimejack:f('史莱姆鱼','Slimejack',100,ALL,['bug'],ANY_T,'any',55,'dart',0x6ad04a),
+  blobfish:f('水滴鱼','Blobfish',500,[3],['night'],ANY_T,'any',75,'floater',0xe0a8b0,{night:1}),
+  midnight_squid:f('午夜鱿鱼','Midnight Squid',100,[3],['night'],ANY_T,'any',55,'sinker',0x5a4a9a,{night:1,em:'🦑'}),
+  spook_fish:f('鬼鱼','Spook Fish',220,[3],['night'],ANY_T,'any',60,'dart',0xc0d0e0,{night:1}),
+  legend:f('传说之鱼','Legend',5000,[0],['lake'],[360,1200],'rain',110,'mixed',0x3a8a7a,{em:'🐉',legend:true,deep:true,lvl:10}),
+  crimsonfish:f('绯红鱼','Crimsonfish',1500,[1],['sea'],[960,1200],'any',95,'mixed',0xc83030,{em:'🐉',legend:true,lvl:5}),
+  angler:f('琵琶鱼','Angler',900,[2],['river'],[360,1560],'any',85,'smooth',0x5a4a3a,{em:'🐉',legend:true,lvl:3}),
+  glacierfish:f('冰川鱼','Glacierfish',1000,[3],['river'],[360,1200],'any',100,'mixed',0x9ac8e8,{em:'🐉',legend:true,lvl:6}),
+  mutant_carp:f('变种鲤鱼','Mutant Carp',1000,ALL,['sewer'],ANY_T,'any',80,'dart',0x6a9a4a,{em:'🐉',legend:true,lvl:0}),
+  lobster:f('龙虾','Lobster',120,ALL,['pot'],ANY_T,'any',0,'mixed',0xc8402a,{em:'🦞',pot:'sea'}),
+  crab:f('螃蟹','Crab',100,ALL,['pot'],ANY_T,'any',0,'mixed',0xd05a3a,{em:'🦀',pot:'sea'}),
+  shrimp:f('虾','Shrimp',60,ALL,['pot'],ANY_T,'any',0,'mixed',0xe89a7a,{em:'🍤',pot:'sea'}),
+  clam:f('蛤','Clam',50,ALL,['pot'],ANY_T,'any',0,'mixed',0xc8c0a8,{em:'🐚',pot:'sea'}),
+  cockle:f('鸟蛤','Cockle',50,ALL,['pot'],ANY_T,'any',0,'mixed',0xc8a890,{em:'🐚',pot:'sea'}),
+  mussel:f('贻贝','Mussel',30,ALL,['pot'],ANY_T,'any',0,'mixed',0x3a4a6a,{em:'🐚',pot:'sea'}),
+  oyster:f('牡蛎','Oyster',40,ALL,['pot'],ANY_T,'any',0,'mixed',0x9a9a8a,{em:'🐚',pot:'sea'}),
+  crayfish:f('小龙虾','Crayfish',75,ALL,['pot'],ANY_T,'any',0,'mixed',0xb04a2a,{em:'🦞',pot:'fresh'}),
+  snail:f('蜗牛','Snail',65,ALL,['pot'],ANY_T,'any',0,'mixed',0x8a6a4a,{em:'🐌',pot:'fresh'}),
+  periwinkle:f('玉黍螺','Periwinkle',20,ALL,['pot'],ANY_T,'any',0,'mixed',0x6a7a8a,{em:'🐚',pot:'fresh'})
 };
-export const TRASH={ driftwood:{em:'🪵',nm:n('浮木','Driftwood'),price:0}, seaweed:{em:'🌿',nm:n('海草','Seaweed'),price:20}, algae:{em:'🌿',nm:n('绿藻','Green Algae'),price:15}, broken_cd:{em:'💿',nm:n('破旧唱片','Broken Disc'),price:0} };
+export const TRASH={ driftwood:{em:'🪵',nm:n('浮木','Driftwood'),price:0}, seaweed:{em:'🌿',nm:n('海草','Seaweed'),price:20}, algae:{em:'🌿',nm:n('绿藻','Green Algae'),price:15}, white_algae:{em:'🌿',nm:n('白藻','White Algae'),price:25}, broken_cd:{em:'💿',nm:n('破损的唱片','Broken CD'),price:0}, broken_glasses:{em:'👓',nm:n('破损的眼镜','Broken Glasses'),price:0}, soggy_paper:{em:'📰',nm:n('湿透的报纸','Soggy Newspaper'),price:0}, trash:{em:'🗑️',nm:n('垃圾','Trash'),price:0}, cola_can:{em:'🥫',nm:n('汽水罐','Cola Can'),price:0} };
 
 export const ORES={
-  coal:{em:'⚫',nm:n('煤','Coal'),price:15}, copper:{em:'🟠',nm:n('铜矿','Copper Ore'),price:5}, iron:{em:'⚙️',nm:n('铁矿','Iron Ore'),price:10}, gold_ore:{em:'🟡',nm:n('金矿','Gold Ore'),price:25}, iridium:{em:'🟣',nm:n('铱矿','Iridium Ore'),price:100},
-  gem:{em:'💎',nm:n('钻石','Diamond'),price:750}
+  coal:{em:'⚫',nm:n('煤','Coal'),price:15}, copper:{em:'🟠',nm:n('铜矿','Copper Ore'),price:5}, iron:{em:'⚙️',nm:n('铁矿','Iron Ore'),price:10}, gold_ore:{em:'🟡',nm:n('金矿','Gold Ore'),price:25}, iridium:{em:'🟣',nm:n('铱矿','Iridium Ore'),price:100}, radioactive:{em:'☢️',nm:n('放射性矿','Radioactive Ore'),price:300}
 };
-export const BARS={ copper_bar:{em:'🟧',nm:n('铜锭','Copper Bar'),price:60}, iron_bar:{em:'⬜',nm:n('铁锭','Iron Bar'),price:120}, gold_bar:{em:'🟨',nm:n('金锭','Gold Bar'),price:250}, iridium_bar:{em:'🟪',nm:n('铱锭','Iridium Bar'),price:1000}, refined_quartz:{em:'🔲',nm:n('精炼石英','Refined Quartz'),price:50} };
-export const GEMS={ quartz:{em:'🔹',nm:n('石英','Quartz'),price:25}, amethyst:{em:'🟪',nm:n('紫水晶','Amethyst'),price:100}, topaz:{em:'🟨',nm:n('黄玉','Topaz'),price:80}, aquamarine:{em:'🟦',nm:n('海蓝宝石','Aquamarine'),price:180}, jade:{em:'🟩',nm:n('翡翠','Jade'),price:200}, ruby:{em:'🟥',nm:n('红宝石','Ruby'),price:250}, emerald:{em:'💚',nm:n('祖母绿','Emerald'),price:250} };
-export const PRODUCTS={ egg:{em:'🥚',nm:n('鸡蛋','Egg'),price:50}, big_egg:{em:'🥚',nm:n('大鸡蛋','Large Egg'),price:95}, milk:{em:'🥛',nm:n('牛奶','Milk'),price:125}, big_milk:{em:'🥛',nm:n('大壶牛奶','Large Milk'),price:190}, duck_egg:{em:'🥚',nm:n('鸭蛋','Duck Egg'),price:95}, wool:{em:'🧶',nm:n('羊毛','Wool'),price:340}, goat_milk:{em:'🥛',nm:n('羊奶','Goat Milk'),price:225}, truffle:{em:'🍄',nm:n('松露','Truffle'),price:625} };
-export const ARTISAN={ wine:{em:'🍷',nm:n('葡萄酒','Wine'),suf:'酒',mult:3,price:0}, juice:{em:'🧃',nm:n('果蔬汁','Juice'),suf:'汁',mult:2.25,price:0}, jelly:{em:'🍯',nm:n('果酱','Jelly'),suf:'酱',mult:2,add:50,price:0}, pickles:{em:'🥒',nm:n('泡菜','Pickles'),suf:'泡菜',mult:2,add:50,price:0},
-  mayo:{em:'🥫',nm:n('蛋黄酱','Mayonnaise'),price:190}, cheese:{em:'🧀',nm:n('奶酪','Cheese'),price:230}, goat_cheese:{em:'🧀',nm:n('山羊奶酪','Goat Cheese'),price:400}, cloth:{em:'🧵',nm:n('布料','Cloth'),price:470}, honey:{em:'🍯',nm:n('蜂蜜','Honey'),price:100}, pale_ale:{em:'🍺',nm:n('淡啤酒','Pale Ale'),price:300}, beer:{em:'🍺',nm:n('啤酒','Beer'),price:200}, oil:{em:'🫙',nm:n('食用油','Oil'),price:100}, truffle_oil:{em:'🫙',nm:n('松露油','Truffle Oil'),price:1065}, roe:{em:'🟠',nm:n('鱼籽','Aged Roe'),price:120} };
-export const MATS={ wood:{em:'🪵',nm:n('木头','Wood'),price:2}, stone:{em:'🪨',nm:n('石头','Stone'),price:2}, fiber:{em:'🌿',nm:n('纤维','Fiber'),price:1}, clay:{em:'🟤',nm:n('粘土','Clay'),price:20}, sap:{em:'💧',nm:n('树液','Sap'),price:2}, hardwood:{em:'🪵',nm:n('硬木','Hardwood'),price:15}, hay:{em:'🌾',nm:n('干草','Hay'),price:0}, bait:{em:'🪱',nm:n('鱼饵','Bait'),price:1}, slime:{em:'🟢',nm:n('史莱姆泥','Slime'),price:5}, bug_meat:{em:'🐛',nm:n('虫肉','Bug Meat'),price:8}, bat_wing:{em:'🦇',nm:n('蝙蝠翅膀','Bat Wing'),price:15}, sugar:{em:'🍚',nm:n('糖','Sugar'),price:50}, flour:{em:'🌾',nm:n('小麦粉','Wheat Flour'),price:50}, rice:{em:'🍚',nm:n('大米','Rice'),price:100}, geode:{em:'🪨',nm:n('晶洞','Geode'),price:50}, frozen_geode:{em:'🪨',nm:n('冰封晶洞','Frozen Geode'),price:100}, magma_geode:{em:'🪨',nm:n('岩浆晶洞','Magma Geode'),price:150} };
+export const BARS={ copper_bar:{em:'🟧',nm:n('铜锭','Copper Bar'),price:60}, iron_bar:{em:'⬜',nm:n('铁锭','Iron Bar'),price:120}, gold_bar:{em:'🟨',nm:n('金锭','Gold Bar'),price:250}, iridium_bar:{em:'🟪',nm:n('铱锭','Iridium Bar'),price:1000}, radioactive_bar:{em:'🟩',nm:n('放射性锭','Radioactive Bar'),price:3000}, refined_quartz:{em:'🔲',nm:n('精炼石英','Refined Quartz'),price:50} };
+const g=(em,zh,en,price)=>({em,nm:n(zh,en),price});
+/* everything the museum wants from the ground: gems, then what geodes hold */
+export const GEMS={ quartz:g('🔹','石英','Quartz',25), earth_crystal:g('🟤','地晶','Earth Crystal',50), frozen_tear:g('💧','泪晶','Frozen Tear',75), fire_quartz:g('🔥','火水晶','Fire Quartz',100), amethyst:g('🟪','紫水晶','Amethyst',100), topaz:g('🟨','黄玉','Topaz',80), aquamarine:g('🟦','海蓝宝石','Aquamarine',180), jade:g('🟩','翡翠','Jade',200), ruby:g('🟥','红宝石','Ruby',250), emerald:g('💚','祖母绿','Emerald',250), diamond:g('💎','钻石','Diamond',750), prismatic:g('🌈','五彩碎片','Prismatic Shard',2000),
+  alamite:g('🪨','铝硅石','Alamite',150), bixite:g('🪨','红铁矿','Bixite',300), baryte:g('🪨','重晶石','Baryte',50), aerinite:g('🪨','青铁矿','Aerinite',125), calcite:g('🪨','方解石','Calcite',75), dolomite:g('🪨','白云石','Dolomite',300), esperite:g('🪨','硅钙铅矿','Esperite',100), fluorapatite:g('🪨','氟磷灰石','Fluorapatite',200), geminite:g('🪨','双生石','Geminite',150), helvite:g('🪨','日光榴石','Helvite',450), jamborite:g('🪨','绿钴矿','Jamborite',150), jagoite:g('🪨','硅铁铅矿','Jagoite',115), kyanite:g('🪨','蓝晶石','Kyanite',150), lunarite:g('🪨','月光石','Lunarite',200), malachite:g('🪨','孔雀石','Malachite',100), neptunite:g('🪨','柱星叶石','Neptunite',400), lemon_stone:g('🪨','柠檬石','Lemon Stone',200), nekoite:g('🪨','水硅钙石','Nekoite',80), orpiment:g('🪨','雌黄','Orpiment',80), petrified_slime:g('🪨','石化史莱姆','Petrified Slime',120), thunder_egg:g('🪨','雷公蛋','Thunder Egg',100), pyrite:g('🪨','黄铁矿','Pyrite',120), ocean_stone:g('🪨','海石','Ocean Stone',220), ghost_crystal:g('🪨','幽灵水晶','Ghost Crystal',200), tigerseye:g('🪨','虎眼石','Tigerseye',275), jasper:g('🪨','碧玉','Jasper',150), opal:g('🪨','蛋白石','Opal',150), fire_opal:g('🪨','火蛋白石','Fire Opal',350), celestine:g('🪨','天青石','Celestine',125), marble:g('🪨','大理石','Marble',110), sandstone:g('🪨','砂岩','Sandstone',60), granite:g('🪨','花岗岩','Granite',75), basalt:g('🪨','玄武岩','Basalt',175), limestone:g('🪨','石灰岩','Limestone',15), soapstone:g('🪨','皂石','Soapstone',120), hematite:g('🪨','赤铁矿','Hematite',150), mudstone:g('🪨','泥岩','Mudstone',25), obsidian:g('🪨','黑曜石','Obsidian',200), slate:g('🪨','板岩','Slate',85), fairy_stone:g('🪨','仙石','Fairy Stone',300), star_shards:g('🪨','星碎片','Star Shards',500) };
+export const GEODES={ geode:['alamite','calcite','celestine','granite','jagoite','jamborite','limestone','malachite','mudstone','nekoite','orpiment','petrified_slime','sandstone','slate','thunder_egg'], frozen_geode:['aerinite','esperite','fluorapatite','geminite','ghost_crystal','hematite','kyanite','lunarite','marble','ocean_stone','opal','pyrite','soapstone'], magma_geode:['baryte','basalt','bixite','dolomite','fire_opal','helvite','jasper','lemon_stone','neptunite','obsidian','star_shards','tigerseye'] };
+GEODES.omni_geode=[...GEODES.geode,...GEODES.frozen_geode,...GEODES.magma_geode];
+export const PRODUCTS={ egg:{em:'🥚',nm:n('鸡蛋','Egg'),price:50}, big_egg:{em:'🥚',nm:n('大鸡蛋','Large Egg'),price:95}, milk:{em:'🥛',nm:n('牛奶','Milk'),price:125}, big_milk:{em:'🥛',nm:n('大壶牛奶','Large Milk'),price:190}, duck_egg:{em:'🥚',nm:n('鸭蛋','Duck Egg'),price:95}, duck_feather:{em:'🪶',nm:n('鸭毛','Duck Feather'),price:250}, wool:{em:'🧶',nm:n('羊毛','Wool'),price:340}, rabbit_foot:{em:'🐇',nm:n('兔子的脚','Rabbit\'s Foot'),price:565}, goat_milk:{em:'🥛',nm:n('羊奶','Goat Milk'),price:225}, big_goat_milk:{em:'🥛',nm:n('大壶羊奶','Large Goat Milk'),price:345}, truffle:{em:'🍄',nm:n('松露','Truffle'),price:625}, void_egg:{em:'🥚',nm:n('虚空蛋','Void Egg'),price:65}, dino_egg:{em:'🥚',nm:n('恐龙蛋','Dinosaur Egg'),price:350}, golden_egg:{em:'🥚',nm:n('金蛋','Golden Egg'),price:500} };
+export const ARTISAN={ wine:{em:'🍷',nm:n('葡萄酒','Wine'),suf:'酒',mult:3,price:0}, juice:{em:'🧃',nm:n('果蔬汁','Juice'),suf:'汁',mult:2.25,price:0}, jelly:{em:'🍯',nm:n('果酱','Jelly'),suf:'酱',mult:2,add:50,price:0}, pickles:{em:'🥒',nm:n('泡菜','Pickles'),suf:'泡菜',mult:2,add:50,price:0}, smoked:{em:'🐟',nm:n('熏鱼','Smoked'),suf:'熏制',mult:2,price:0}, dried:{em:'🍂',nm:n('干果','Dried'),suf:'干',mult:7.5,add:25,price:0}, flower_honey:{em:'🍯',nm:n('蜂蜜','Honey'),suf:'蜜',mult:2,add:100,price:0},
+  mayo:{em:'🥫',nm:n('蛋黄酱','Mayonnaise'),price:190}, duck_mayo:{em:'🥫',nm:n('鸭蛋黄酱','Duck Mayonnaise'),price:375}, void_mayo:{em:'🥫',nm:n('虚空蛋黄酱','Void Mayonnaise'),price:275}, dino_mayo:{em:'🥫',nm:n('恐龙蛋黄酱','Dinosaur Mayonnaise'),price:800}, cheese:{em:'🧀',nm:n('奶酪','Cheese'),price:230}, goat_cheese:{em:'🧀',nm:n('山羊奶酪','Goat Cheese'),price:400}, cloth:{em:'🧵',nm:n('布料','Cloth'),price:470}, honey:{em:'🍯',nm:n('蜂蜜','Honey'),price:100}, pale_ale:{em:'🍺',nm:n('淡啤酒','Pale Ale'),price:300}, beer:{em:'🍺',nm:n('啤酒','Beer'),price:200}, mead:{em:'🍯',nm:n('蜂蜜酒','Mead'),price:200}, coffee_drink:{em:'☕',nm:n('咖啡','Coffee'),price:150}, green_tea:{em:'🍵',nm:n('绿茶','Green Tea'),price:100}, oil:{em:'🫙',nm:n('食用油','Oil'),price:100}, truffle_oil:{em:'🫙',nm:n('松露油','Truffle Oil'),price:1065}, roe:{em:'🟠',nm:n('鱼籽','Roe'),price:30}, aged_roe:{em:'🟠',nm:n('陈年鱼籽','Aged Roe'),price:60}, caviar:{em:'⚫',nm:n('鱼子酱','Caviar'),price:500}, maple_syrup:{em:'🍁',nm:n('枫糖浆','Maple Syrup'),price:200}, oak_resin:{em:'🟤',nm:n('橡树树脂','Oak Resin'),price:150}, pine_tar:{em:'⚫',nm:n('松焦油','Pine Tar'),price:100}, vinegar:{em:'🫙',nm:n('醋','Vinegar'),price:100} };
+export const MATS={ wood:{em:'🪵',nm:n('木头','Wood'),price:2}, stone:{em:'🪨',nm:n('石头','Stone'),price:2}, fiber:{em:'🌿',nm:n('纤维','Fiber'),price:1}, clay:{em:'🟤',nm:n('粘土','Clay'),price:20}, sap:{em:'💧',nm:n('树液','Sap'),price:2}, hardwood:{em:'🪵',nm:n('硬木','Hardwood'),price:15}, hay:{em:'🌾',nm:n('干草','Hay'),price:0}, bait:{em:'🪱',nm:n('鱼饵','Bait'),price:1}, wild_bait:{em:'🪱',nm:n('野生鱼饵','Wild Bait'),price:15}, magnet:{em:'🧲',nm:n('磁铁','Magnet'),price:15}, slime:{em:'🟢',nm:n('史莱姆泥','Slime'),price:5}, bug_meat:{em:'🐛',nm:n('虫肉','Bug Meat'),price:8}, bat_wing:{em:'🦇',nm:n('蝙蝠翅膀','Bat Wing'),price:15}, solar_essence:{em:'☀️',nm:n('太阳精华','Solar Essence'),price:40}, void_essence:{em:'🌑',nm:n('虚空精华','Void Essence'),price:50}, bone_fragment:{em:'🦴',nm:n('骨头碎片','Bone Fragment'),price:12}, squid_ink:{em:'🖤',nm:n('鱿鱼墨汁','Squid Ink'),price:110}, sugar:{em:'🍚',nm:n('糖','Sugar'),price:50}, flour:{em:'🌾',nm:n('小麦粉','Wheat Flour'),price:50}, rice:{em:'🍚',nm:n('大米','Rice'),price:100}, battery:{em:'🔋',nm:n('电池组','Battery Pack'),price:500}, geode:{em:'🪨',nm:n('晶洞','Geode'),price:50}, frozen_geode:{em:'🪨',nm:n('冰封晶洞','Frozen Geode'),price:100}, magma_geode:{em:'🪨',nm:n('岩浆晶洞','Magma Geode'),price:150}, omni_geode:{em:'🪨',nm:n('万象晶洞','Omni Geode'),price:0}, acorn:{em:'🌰',nm:n('橡子','Acorn'),price:20}, maple_seed:{em:'🍁',nm:n('枫树种子','Maple Seed'),price:5}, pine_cone:{em:'🌲',nm:n('松果','Pine Cone'),price:5}, mahogany_seed:{em:'🌰',nm:n('桃花心木种子','Mahogany Seed'),price:0}, bouquet:{em:'💐',nm:n('花束','Bouquet'),price:0}, pendant:{em:'🧜',nm:n('美人鱼吊坠','Mermaid Pendant'),price:0}, stardrop:{em:'⭐',nm:n('星之果实','Stardrop'),price:0}, skull_key:{em:'🗝️',nm:n('骷髅钥匙','Skull Key'),price:0}, rusty_key:{em:'🗝️',nm:n('生锈的钥匙','Rusty Key'),price:0}, club_card:{em:'🃏',nm:n('俱乐部会员卡','Club Card'),price:0}, rain_totem:{em:'🌧️',nm:n('雨图腾','Rain Totem'),price:0}, slime_egg:{em:'🟢',nm:n('史莱姆蛋','Slime Egg'),price:100}, heater:{em:'🔥',nm:n('加热器','Heater'),price:0}, moss:{em:'🌿',nm:n('苔藓','Moss'),price:5} };
 export const FORAGE={
-  horseradish:{em:'🌱',nm:n('野山葵','Wild Horseradish'),price:50,season:[0]}, daffodil:{em:'🌼',nm:n('黄水仙','Daffodil'),price:30,season:[0]}, leek:{em:'🌱',nm:n('韭葱','Leek'),price:60,season:[0]}, dandelion:{em:'🌼',nm:n('蒲公英','Dandelion'),price:40,season:[0]},
-  spice_berry:{em:'🫐',nm:n('香味浆果','Spice Berry'),price:80,season:[1]}, wild_grape:{em:'🍇',nm:n('野葡萄','Wild Grape'),price:80,season:[1]}, sweet_pea:{em:'🌸',nm:n('甜豌豆','Sweet Pea'),price:50,season:[1]},
-  mushroom:{em:'🍄',nm:n('普通蘑菇','Common Mushroom'),price:40,season:[2]}, wild_plum:{em:'🟣',nm:n('野梅','Wild Plum'),price:80,season:[2]}, hazelnut:{em:'🌰',nm:n('榛子','Hazelnut'),price:90,season:[2]}, blackberry:{em:'🫐',nm:n('黑莓','Blackberry'),price:20,season:[2]},
-  crystal_fruit:{em:'❄️',nm:n('水晶果','Crystal Fruit'),price:150,season:[3]}, crocus:{em:'🌷',nm:n('番红花','Crocus'),price:60,season:[3]}, holly:{em:'🌿',nm:n('冬青','Holly'),price:80,season:[3]}, winter_root:{em:'🥔',nm:n('冬根','Winter Root'),price:70,season:[3]}
+  horseradish:{em:'🌱',nm:n('野山葵','Wild Horseradish'),price:50,season:[0]}, daffodil:{em:'🌼',nm:n('黄水仙','Daffodil'),price:30,season:[0]}, leek:{em:'🌱',nm:n('韭葱','Leek'),price:60,season:[0]}, dandelion:{em:'🌼',nm:n('蒲公英','Dandelion'),price:40,season:[0]}, spring_onion:{em:'🌱',nm:n('大葱','Spring Onion'),price:8,season:[0]}, salmonberry:{em:'🫐',nm:n('鲑莓','Salmonberry'),price:5,season:[],fruit:1}, morel:{em:'🍄',nm:n('羊肚菌','Morel'),price:150,season:[0],wood:1},
+  spice_berry:{em:'🫐',nm:n('香味浆果','Spice Berry'),price:80,season:[1],fruit:1}, wild_grape:{em:'🍇',nm:n('野葡萄','Wild Grape'),price:80,season:[1],fruit:1}, sweet_pea:{em:'🌸',nm:n('甜豌豆','Sweet Pea'),price:50,season:[1]}, red_mushroom:{em:'🍄',nm:n('红蘑菇','Red Mushroom'),price:75,season:[1,2],wood:1}, fiddlehead:{em:'🌿',nm:n('蕨菜','Fiddlehead Fern'),price:90,season:[1],wood:1},
+  mushroom:{em:'🍄',nm:n('普通蘑菇','Common Mushroom'),price:40,season:[0,2]}, wild_plum:{em:'🟣',nm:n('野梅','Wild Plum'),price:80,season:[2],fruit:1}, hazelnut:{em:'🌰',nm:n('榛子','Hazelnut'),price:90,season:[2]}, blackberry:{em:'🫐',nm:n('黑莓','Blackberry'),price:20,season:[],fruit:1}, chanterelle:{em:'🍄',nm:n('鸡油菌','Chanterelle'),price:160,season:[2],wood:1}, purple_mushroom:{em:'🍄',nm:n('紫蘑菇','Purple Mushroom'),price:250,season:[],cave:1},
+  crystal_fruit:{em:'❄️',nm:n('水晶果','Crystal Fruit'),price:150,season:[3],fruit:1}, crocus:{em:'🌷',nm:n('番红花','Crocus'),price:60,season:[3]}, holly:{em:'🌿',nm:n('冬青','Holly'),price:80,season:[3]}, winter_root:{em:'🥔',nm:n('冬根','Winter Root'),price:70,season:[],dig:1}, snow_yam:{em:'🍠',nm:n('雪山药','Snow Yam'),price:100,season:[],dig:1},
+  nautilus:{em:'🐚',nm:n('鹦鹉螺','Nautilus Shell'),price:120,season:[],beach:1}, coral:{em:'🪸',nm:n('珊瑚','Coral'),price:80,season:[],beach:1}, sea_urchin:{em:'🟣',nm:n('海胆','Sea Urchin'),price:160,season:[],beach:1}, rainbow_shell:{em:'🌈',nm:n('彩虹贝壳','Rainbow Shell'),price:300,season:[],beach:1},
+  coconut:{em:'🥥',nm:n('椰子','Coconut'),price:100,season:[],desert:1,fruit:1}, cave_carrot:{em:'🥕',nm:n('洞穴萝卜','Cave Carrot'),price:25,season:[],cave:1}
 };
-export const ARTIFACTS={ arrowhead:{em:'🏹',nm:n('箭头','Arrowhead'),price:40}, ancient_doll:{em:'🧸',nm:n('古代玩偶','Ancient Doll'),price:60}, rusty_spoon:{em:'🥄',nm:n('生锈的勺子','Rusty Spoon'),price:25}, ancient_seed:{em:'🌰',nm:n('古代种子','Ancient Seed'),price:30}, chipped_amphora:{em:'🏺',nm:n('破损的双耳瓶','Chipped Amphora'),price:40}, old_coin:{em:'🪙',nm:n('古钱币','Old Coin'),price:70}, bone_flute:{em:'🦴',nm:n('骨笛','Bone Flute'),price:100}, prehistoric_tool:{em:'🪓',nm:n('史前工具','Prehistoric Tool'),price:50} };
+const art=(em,zh,en,price)=>({em,nm:n(zh,en),price});
+export const ARTIFACTS={ dwarf_scroll_1:art('📜','矮人卷轴 I','Dwarf Scroll I',1), dwarf_scroll_2:art('📜','矮人卷轴 II','Dwarf Scroll II',1), dwarf_scroll_3:art('📜','矮人卷轴 III','Dwarf Scroll III',1), dwarf_scroll_4:art('📜','矮人卷轴 IV','Dwarf Scroll IV',1), chipped_amphora:art('🏺','破损的双耳瓶','Chipped Amphora',40), arrowhead:art('🏹','箭头','Arrowhead',40), ancient_doll:art('🧸','古代玩偶','Ancient Doll',60), elvish_jewelry:art('💍','精灵首饰','Elvish Jewelry',200), chewing_stick:art('🥢','咀嚼棒','Chewing Stick',50), ornamental_fan:art('🪭','装饰扇','Ornamental Fan',300), dinosaur_egg:art('🥚','恐龙蛋化石','Dinosaur Egg Fossil',350), rare_disc:art('💿','稀有圆盘','Rare Disc',300), ancient_sword:art('🗡️','古剑','Ancient Sword',100), rusty_spoon:art('🥄','生锈的勺子','Rusty Spoon',25), rusty_spur:art('⚙️','生锈的马刺','Rusty Spur',25), rusty_cog:art('⚙️','生锈的齿轮','Rusty Cog',25), chicken_statue:art('🐔','鸡雕像','Chicken Statue',50), ancient_seed:art('🌰','古代种子','Ancient Seed',30), prehistoric_tool:art('🪓','史前工具','Prehistoric Tool',50), dried_starfish:art('⭐','干海星','Dried Starfish',40), anchor:art('⚓','船锚','Anchor',100), glass_shards:art('🔷','玻璃碎片','Glass Shards',20), bone_flute:art('🦴','骨笛','Bone Flute',100), prehistoric_handaxe:art('🪓','史前手斧','Prehistoric Handaxe',50), dwarvish_helm:art('⛑️','矮人头盔','Dwarvish Helm',100), dwarf_gadget:art('⚙️','矮人机械','Dwarf Gadget',200), ancient_drum:art('🥁','古代鼓','Ancient Drum',100), golden_mask:art('🎭','金面具','Golden Mask',500), golden_relic:art('🏆','金圣物','Golden Relic',250), strange_doll_g:art('🪆','怪异玩偶(绿)','Strange Doll (green)',1000), strange_doll_y:art('🪆','怪异玩偶(黄)','Strange Doll (yellow)',1000), prehistoric_scapula:art('🦴','史前肩胛骨','Prehistoric Scapula',100), prehistoric_tibia:art('🦴','史前胫骨','Prehistoric Tibia',100), prehistoric_skull:art('💀','史前头骨','Prehistoric Skull',100), skeletal_hand:art('🦴','骨手','Skeletal Hand',100), prehistoric_rib:art('🦴','史前肋骨','Prehistoric Rib',100), prehistoric_vertebra:art('🦴','史前椎骨','Prehistoric Vertebra',100), skeletal_tail:art('🦴','骨尾','Skeletal Tail',100), nautilus_fossil:art('🐚','鹦鹉螺化石','Nautilus Fossil',80), amphibian_fossil:art('🦎','两栖动物化石','Amphibian Fossil',150), palm_fossil:art('🌴','棕榈化石','Palm Fossil',100), trilobite:art('🪲','三叶虫','Trilobite',50) };
+/* em, name, sell price, energy, health, buffs (farm fish mine forage luck atk def speed maxe mag), minutes they last */
+const d=(em,zh,en,price,energy,hp,buff,dur)=>({em,nm:n(zh,en),price,energy,hp,...(buff?{buff,dur:dur||420}:{})});
 export const FOOD={
-  fried_egg:{em:'🍳',nm:n('煎蛋','Fried Egg'),price:35,energy:50,hp:22}, omelet:{em:'🍲',nm:n('蛋卷','Omelet'),price:125,energy:100,hp:45}, baked_potato:{em:'🥔',nm:n('烤土豆','Baked Potato'),price:90,energy:55,hp:25},
-  salad:{em:'🥗',nm:n('田园沙拉','Salad'),price:110,energy:113,hp:50}, pumpkin_pie:{em:'🥧',nm:n('南瓜派','Pumpkin Pie'),price:385,energy:225,hp:101}, sashimi:{em:'🍣',nm:n('生鱼片','Sashimi'),price:75,energy:75,hp:33},
-  bread:{em:'🍞',nm:n('面包','Bread'),price:60,energy:50,hp:22}, fish_taco:{em:'🌮',nm:n('鱼肉卷','Fish Taco'),price:500,energy:165,hp:74}, maki:{em:'🍙',nm:n('寿司卷','Maki Roll'),price:220,energy:100,hp:45}, cheese_cauli:{em:'🥘',nm:n('芝士花椰菜','Cheese Cauliflower'),price:300,energy:138,hp:62},
-  beer_food:{em:'🍺',nm:n('酒馆麦酒','Tavern Ale'),price:100,energy:50,hp:22}, pizza:{em:'🍕',nm:n('披萨','Pizza'),price:300,energy:150,hp:67}, spaghetti:{em:'🍝',nm:n('意大利面','Spaghetti'),price:120,energy:75,hp:33}, tortilla:{em:'🫓',nm:n('玉米饼','Tortilla'),price:50,energy:25,hp:11}, parsnip_soup:{em:'🍜',nm:n('防风草汤','Parsnip Soup'),price:120,energy:113,hp:50}, cranberry_sauce:{em:'🥫',nm:n('蔓越莓酱','Cranberry Sauce'),price:120,energy:125,hp:56},
-  grilled_trout:{em:'🐟',nm:n('烤鳟鱼','Trout Soup'),price:100,energy:50,hp:22}, coffee:{em:'☕',nm:n('咖啡','Coffee'),price:150,energy:3,hp:1,speed:1}
+  fried_egg:d('🍳','煎蛋','Fried Egg',35,50,22), omelet:d('🍲','蛋卷','Omelet',125,100,45), salad:d('🥗','田园沙拉','Salad',110,113,50), cheese_cauli:d('🥘','奶酪花椰菜','Cheese Cauliflower',300,138,62), baked_fish:d('🐟','烤鱼','Baked Fish',100,75,33), parsnip_soup:d('🍜','防风草汤','Parsnip Soup',120,85,38), veg_medley:d('🥘','蔬菜杂烩','Vegetable Medley',120,165,74),
+  complete_breakfast:d('🍳','全套早餐','Complete Breakfast',350,200,90,{farm:2,maxe:50},420), fried_calamari:d('🦑','炸鱿鱼圈','Fried Calamari',150,80,36), strange_bun:d('🥮','奇怪的小面包','Strange Bun',225,100,45), lucky_lunch:d('🍱','幸运午餐','Lucky Lunch',250,40,18,{luck:3},660), fried_mushroom:d('🍄','炸蘑菇','Fried Mushroom',200,135,60,{atk:2},420), pizza:d('🍕','披萨','Pizza',300,150,67), bean_hotpot:d('🍲','豆子火锅','Bean Hotpot',100,125,56,{maxe:30,mag:32},420), glazed_yams:d('🍠','蜜汁山药','Glazed Yams',255,200,90), carp_surprise:d('🐟','鲤鱼惊喜','Carp Surprise',150,90,40),
+  hashbrowns:d('🥔','薯饼','Hashbrowns',120,90,40,{farm:1},300), pancakes:d('🥞','薄煎饼','Pancakes',80,90,40,{forage:2},660), salmon_dinner:d('🍣','鲑鱼晚餐','Salmon Dinner',300,125,56), fish_taco:d('🌮','鱼肉卷','Fish Taco',500,165,74,{fish:2},420), crispy_bass:d('🐟','香脆鲈鱼','Crispy Bass',150,90,40,{mag:64},420), pepper_poppers:d('🌶️','辣椒芝士球','Pepper Poppers',200,130,58,{farm:2,speed:1},420), bread:d('🍞','面包','Bread',60,50,22), tom_kha:d('🍲','冬阴椰汁汤','Tom Kha Soup',250,175,78,{farm:2,maxe:30},420), trout_soup:d('🍲','鳟鱼汤','Trout Soup',100,100,45,{fish:1},240), choc_cake:d('🍰','巧克力蛋糕','Chocolate Cake',200,150,67), pink_cake:d('🎂','粉红蛋糕','Pink Cake',480,250,112), rhubarb_pie:d('🥧','大黄派','Rhubarb Pie',400,215,96), cookie:d('🍪','曲奇','Cookie',140,90,40), spaghetti:d('🍝','意大利面','Spaghetti',120,75,33), fried_eel:d('🐟','炸鳗鱼','Fried Eel',120,30,13,{luck:1},420), spicy_eel:d('🌶️','香辣鳗鱼','Spicy Eel',175,115,51,{luck:1,speed:1},420), sashimi:d('🍣','生鱼片','Sashimi',75,75,33), maki:d('🍙','寿司卷','Maki Roll',220,100,45), tortilla:d('🫓','玉米饼','Tortilla',50,50,22), red_plate:d('🍽️','红色大餐','Red Plate',400,240,108,{maxe:50},180),
+  eggplant_parm:d('🍆','茄子帕尔马','Eggplant Parmesan',200,175,78,{mine:1,def:3},280), rice_pudding:d('🍮','米布丁','Rice Pudding',260,115,51), ice_cream:d('🍨','冰淇淋','Ice Cream',120,100,45), blueberry_tart:d('🥧','蓝莓挞','Blueberry Tart',150,125,56), autumn_bounty:d('🍽️','秋日丰收','Autumn\'s Bounty',350,220,99,{forage:2,def:2},420), pumpkin_soup:d('🎃','南瓜汤','Pumpkin Soup',300,200,90,{def:2,luck:2},420), super_meal:d('🥗','超级大餐','Super Meal',220,160,72,{maxe:40,speed:1},180), cranberry_sauce:d('🥫','蔓越莓酱','Cranberry Sauce',120,125,56,{mine:2},210), stuffing:d('🥘','填料','Stuffing',165,170,76,{def:2},300), farmers_lunch:d('🍱','农夫午餐','Farmer\'s Lunch',150,200,90,{farm:3},300), survival_burger:d('🍔','生存汉堡','Survival Burger',180,125,56,{forage:3},300), dish_sea:d('🍲','海之味','Dish O\' The Sea',220,150,67,{fish:3},300), miners_treat:d('🍮','矿工特供','Miner\'s Treat',200,125,56,{mine:3,mag:32},300), roots_platter:d('🥕','根菜拼盘','Roots Platter',100,125,56,{atk:3},300), triple_espresso:d('☕','三倍浓缩咖啡','Triple Shot Espresso',450,8,3,{speed:1},240), seafoam_pudding:d('🍮','海泡布丁','Seafoam Pudding',300,175,78,{fish:4},180), algae_soup:d('🍲','海藻汤','Algae Soup',100,75,33), pale_broth:d('🍲','白藻汤','Pale Broth',150,75,33), plum_pudding:d('🍮','李子布丁','Plum Pudding',260,175,78), artichoke_dip:d('🥣','洋蓟蘸酱','Artichoke Dip',210,100,45), stir_fry:d('🥘','爆炒菜','Stir Fry',335,200,90), roasted_hazelnuts:d('🌰','烤榛子','Roasted Hazelnuts',270,175,78), pumpkin_pie:d('🥧','南瓜派','Pumpkin Pie',385,225,101), radish_salad:d('🥗','萝卜沙拉','Radish Salad',300,200,90), fruit_salad:d('🥗','水果沙拉','Fruit Salad',450,263,118), blackberry_cobbler:d('🥧','黑莓馅饼','Blackberry Cobbler',260,175,78), cranberry_candy:d('🍬','蔓越莓糖','Cranberry Candy',175,125,56), bruschetta:d('🥖','烤面包片','Bruschetta',210,113,50), coleslaw:d('🥗','卷心菜沙拉','Coleslaw',345,213,95), fiddlehead_risotto:d('🍚','蕨菜烩饭','Fiddlehead Risotto',350,225,101), poppyseed_muffin:d('🧁','罂粟籽松饼','Poppyseed Muffin',250,150,67), chowder:d('🍲','杂烩汤','Chowder',135,225,101), fish_stew:d('🍲','鱼汤','Fish Stew',175,90,40), escargot:d('🐌','法式蜗牛','Escargot',125,90,40), lobster_bisque:d('🦞','龙虾浓汤','Lobster Bisque',205,225,101), maple_bar:d('🍩','枫糖棒','Maple Bar',300,90,40), crab_cakes:d('🦀','蟹饼','Crab Cakes',275,225,101), shrimp_cocktail:d('🍤','鸡尾酒虾','Shrimp Cocktail',160,90,40),
+  baked_potato:d('🥔','烤土豆','Baked Potato',90,55,25), beer_food:d('🍺','酒馆麦酒','Tavern Ale',100,50,22), coffee:d('☕','咖啡','Coffee',150,3,1,{speed:1},83), joja_cola:d('🥤','汽水','Cola',25,13,5), field_snack:d('🥜','野外小吃','Field Snack',20,45,20), life_elixir:d('🧪','生命药水','Life Elixir',500,0,999), oil_of_garlic:d('🧄','大蒜油','Oil of Garlic',1000,0,0,{atk:2},600), energy_tonic:d('🧪','能量补剂','Energy Tonic',500,450,0)
 };
+/* who teaches each dish: tv (the Sunday cooking show), [villager,hearts] by post, skill level, saloon price, or known from the start */
 export const COOK={
-  fried_egg:{cost:{'product:egg':1}}, omelet:{cost:{'product:egg':1,'product:milk':1}}, baked_potato:{cost:{'crop:potato':1}}, salad:{cost:{'forage:leek':1,'forage:dandelion':1,'mat:sugar':1}},
-  pumpkin_pie:{cost:{'crop:pumpkin':1,'mat:flour':1,'product:milk':1,'mat:sugar':1}}, sashimi:{cost:{'fish:*':1}}, bread:{cost:{'mat:flour':1}}, maki:{cost:{'fish:*':1,'mat:rice':1,'mat:seaweed':1}}, cheese_cauli:{cost:{'crop:cauliflower':1,'artisan:cheese':1}},
-  pizza:{cost:{'mat:flour':1,'crop:tomato':1,'artisan:cheese':1}}, tortilla:{cost:{'crop:corn':1}}, fish_taco:{cost:{'fish:*':1,'crop:tomato':1,'crop:corn':1}}, parsnip_soup:{cost:{'crop:parsnip':1,'product:milk':1,'mat:sugar':1}}, cranberry_sauce:{cost:{'crop:cranberry':1,'mat:sugar':1}}, spaghetti:{cost:{'mat:flour':1,'crop:tomato':1}}
+  fried_egg:{cost:{'product:egg':1},src:'start'}, omelet:{cost:{'product:egg':1,'product:milk':1},src:{shop:100}}, salad:{cost:{'forage:leek':1,'forage:dandelion':1,'artisan:vinegar':1},src:{npc:['mei',3]}}, cheese_cauli:{cost:{'crop:cauliflower':1,'artisan:cheese':1},src:{npc:['nan',3]}}, baked_fish:{cost:{'fish:sunfish':1,'fish:bream':1,'mat:flour':1},src:{tv:1}}, parsnip_soup:{cost:{'crop:parsnip':1,'product:milk':1,'artisan:vinegar':1},src:{npc:['leo',3]}}, veg_medley:{cost:{'crop:tomato':1,'crop:beet':1},src:{npc:['nan',7]}}, complete_breakfast:{cost:{'food:fried_egg':1,'product:milk':1,'food:hashbrowns':1,'food:pancakes':1},src:{tv:2}}, fried_calamari:{cost:{'fish:squid':1,'mat:flour':1,'artisan:oil':1},src:{npc:['finn',3]}}, strange_bun:{cost:{'mat:flour':1,'fish:periwinkle':1,'artisan:void_mayo':1},src:{npc:['sora',7]}}, lucky_lunch:{cost:{'fish:sea_cucumber':1,'food:tortilla':1,'crop:blue_jazz':1},src:{tv:3}}, fried_mushroom:{cost:{'forage:mushroom':1,'forage:morel':1,'artisan:oil':1},src:{npc:['ken',3]}}, pizza:{cost:{'mat:flour':1,'crop:tomato':1,'artisan:cheese':1},src:{shop:150}}, bean_hotpot:{cost:{'crop:green_bean':2},src:{npc:['hal',7]}}, glazed_yams:{cost:{'crop:yam':1,'mat:sugar':1},src:{tv:4}}, carp_surprise:{cost:{'fish:carp':4},src:{tv:5}}, hashbrowns:{cost:{'crop:potato':1,'artisan:oil':1},src:{shop:50}}, pancakes:{cost:{'mat:flour':1,'product:egg':1},src:{shop:100}}, salmon_dinner:{cost:{'fish:salmon':1,'crop:amaranth':1,'crop:kale':1},src:{npc:['ivy',3]}}, fish_taco:{cost:{'fish:tuna':1,'food:tortilla':1,'crop:red_cabbage':1,'artisan:mayo':1},src:{npc:['tom',7]}}, crispy_bass:{cost:{'fish:bass':1,'mat:flour':1,'artisan:oil':1},src:{npc:['tom',3]}}, pepper_poppers:{cost:{'crop:pepper':1,'artisan:cheese':1},src:{npc:['rosa',3]}}, bread:{cost:{'mat:flour':1},src:{shop:100}}, tom_kha:{cost:{'forage:coconut':1,'fish:shrimp':1,'forage:mushroom':1},src:{npc:['sora',3]}}, trout_soup:{cost:{'fish:rainbow_trout':1,'trash:algae':1},src:{tv:6}}, choc_cake:{cost:{'mat:flour':1,'mat:sugar':1,'product:egg':1},src:{tv:7}}, pink_cake:{cost:{'crop:melon':1,'mat:flour':1,'mat:sugar':1,'product:egg':1},src:{tv:8}}, rhubarb_pie:{cost:{'crop:rhubarb':1,'mat:flour':1,'mat:sugar':1},src:{npc:['mei',7]}}, cookie:{cost:{'mat:flour':1,'mat:sugar':1,'product:egg':1},src:{npc:['pip',7]}}, spaghetti:{cost:{'mat:flour':1,'crop:tomato':1},src:{npc:['leo',3]}}, fried_eel:{cost:{'fish:eel':1,'artisan:oil':1},src:{npc:['rosa',3]}}, spicy_eel:{cost:{'fish:eel':1,'crop:pepper':1},src:{npc:['rosa',7]}}, sashimi:{cost:{'fish:*':1},src:{npc:['finn',3]}}, maki:{cost:{'fish:*':1,'trash:seaweed':1,'mat:rice':1},src:{shop:300}}, tortilla:{cost:{'crop:corn':1},src:{shop:100}}, red_plate:{cost:{'crop:red_cabbage':1,'crop:radish':1},src:{npc:['nan',7]}}, eggplant_parm:{cost:{'crop:eggplant':1,'crop:tomato':1},src:{npc:['ken',7]}}, rice_pudding:{cost:{'product:milk':1,'mat:sugar':1,'mat:rice':1},src:{npc:['ivy',7]}}, ice_cream:{cost:{'product:milk':1,'mat:sugar':1},src:{npc:['pip',7]}}, blueberry_tart:{cost:{'crop:blueberry':1,'mat:flour':1,'mat:sugar':1,'product:egg':1},src:{npc:['luna',3]}}, autumn_bounty:{cost:{'crop:yam':1,'crop:pumpkin':1},src:{npc:['luna',7]}}, pumpkin_soup:{cost:{'crop:pumpkin':1,'product:milk':1},src:{npc:['ken',7]}}, super_meal:{cost:{'crop:bok_choy':1,'crop:cranberry':1,'crop:artichoke':1},src:{npc:['hal',7]}}, cranberry_sauce:{cost:{'crop:cranberry':1,'mat:sugar':1},src:{npc:['ivy',7]}}, stuffing:{cost:{'food:bread':1,'crop:cranberry':1,'forage:hazelnut':1},src:{npc:['mei',7]}}, farmers_lunch:{cost:{'food:omelet':1,'crop:parsnip':1},src:{lvl:['farm',3]}}, survival_burger:{cost:{'food:bread':1,'forage:cave_carrot':1,'crop:eggplant':1},src:{lvl:['forage',2]}}, dish_sea:{cost:{'fish:sardine':2,'food:hashbrowns':1},src:{lvl:['fish',3]}}, miners_treat:{cost:{'forage:cave_carrot':2,'mat:sugar':1,'product:milk':1},src:{lvl:['mine',3]}}, roots_platter:{cost:{'forage:cave_carrot':1,'forage:winter_root':1},src:{lvl:['combat',3]}}, triple_espresso:{cost:{'artisan:coffee_drink':3},src:{npc:['leo',7]}}, seafoam_pudding:{cost:{'fish:flounder':1,'fish:midnight_carp':1,'mat:squid_ink':1},src:{lvl:['fish',9]}}, algae_soup:{cost:{'trash:algae':4},src:{npc:['sora',3]}}, pale_broth:{cost:{'trash:white_algae':2},src:{npc:['sora',7]}}, plum_pudding:{cost:{'forage:wild_plum':2,'mat:flour':1,'mat:sugar':1},src:{tv:9}}, artichoke_dip:{cost:{'crop:artichoke':1,'product:milk':1},src:{tv:10}}, stir_fry:{cost:{'forage:cave_carrot':1,'forage:mushroom':1,'crop:kale':1,'artisan:oil':1},src:{tv:11}}, roasted_hazelnuts:{cost:{'forage:hazelnut':3},src:{tv:12}}, pumpkin_pie:{cost:{'crop:pumpkin':1,'mat:flour':1,'product:milk':1,'mat:sugar':1},src:{tv:13}}, radish_salad:{cost:{'artisan:oil':1,'artisan:vinegar':1,'crop:radish':1},src:{tv:14}}, fruit_salad:{cost:{'crop:blueberry':1,'crop:melon':1,'fruit:apricot':1},src:{tv:15}}, blackberry_cobbler:{cost:{'forage:blackberry':2,'mat:sugar':1,'mat:flour':1},src:{tv:16}}, cranberry_candy:{cost:{'crop:cranberry':1,'fruit:apple':1,'mat:sugar':1},src:{tv:17}}, bruschetta:{cost:{'food:bread':1,'artisan:oil':1,'crop:tomato':1},src:{tv:18}}, coleslaw:{cost:{'crop:red_cabbage':1,'artisan:vinegar':1,'artisan:mayo':1},src:{tv:19}}, fiddlehead_risotto:{cost:{'artisan:oil':1,'forage:fiddlehead':1,'crop:garlic':1},src:{tv:20}}, poppyseed_muffin:{cost:{'crop:poppy':1,'mat:flour':1,'mat:sugar':1},src:{tv:21}}, chowder:{cost:{'fish:clam':1,'product:milk':1},src:{npc:['tom',3]}}, fish_stew:{cost:{'fish:crayfish':1,'fish:mussel':1,'fish:periwinkle':1,'crop:tomato':1},src:{npc:['tom',7]}}, escargot:{cost:{'fish:snail':1,'crop:garlic':1},src:{npc:['tom',5]}}, lobster_bisque:{cost:{'fish:lobster':1,'product:milk':1},src:{tv:22}}, maple_bar:{cost:{'artisan:maple_syrup':1,'mat:sugar':1,'mat:flour':1},src:{tv:23}}, crab_cakes:{cost:{'fish:crab':1,'mat:flour':1,'product:egg':1,'artisan:oil':1},src:{tv:24}}, shrimp_cocktail:{cost:{'crop:tomato':1,'fish:shrimp':1,'forage:horseradish':1},src:{tv:25}},
+  baked_potato:{cost:{'crop:potato':1},src:'start'}
 };
 
 /* fruit trees: bought as saplings, mature in 28 days, then fruit daily in their season */
 export const FRUIT={ apricot:{em:'🍑',nm:n('杏子','Apricot'),price:50,season:0,sapling:2000}, cherry:{em:'🍒',nm:n('樱桃','Cherry'),price:80,season:0,sapling:3400}, peach:{em:'🍑',nm:n('桃子','Peach'),price:140,season:1,sapling:6000}, orange:{em:'🍊',nm:n('橙子','Orange'),price:100,season:1,sapling:4000}, apple:{em:'🍎',nm:n('苹果','Apple'),price:100,season:2,sapling:4000}, pomegranate:{em:'🍎',nm:n('石榴','Pomegranate'),price:140,season:2,sapling:6000} };
-/* crafting: machines take time, keyed by minutes of game time */
+/* crafting: machines take time, keyed by minutes of game time. give: what the recipe makes when it isn't the item itself */
+const c=(em,zh,en,cost,lvl,more)=>({em,nm:n(zh,en),cost,lvl:lvl||['',0],...more});
 export const CRAFTABLES={
-  chest:{em:'🧰',nm:n('箱子','Chest'),cost:{'mat:wood':50},lvl:['',0]},
-  scarecrow:{em:'🥷',nm:n('稻草人','Scarecrow'),cost:{'mat:wood':50,'ore:coal':1,'mat:fiber':20},lvl:['farm',1]},
-  fence:{em:'🪵',nm:n('栅栏','Wood Fence'),cost:{'mat:wood':2},lvl:['',0]},
-  torch:{em:'🔥',nm:n('火把','Torch'),cost:{'mat:wood':1,'mat:sap':2},lvl:['',0]},
-  sprinkler:{em:'💧',nm:n('洒水器','Sprinkler'),cost:{'bar:copper_bar':1,'bar:iron_bar':1},lvl:['farm',2],range:1},
-  quality_sprinkler:{em:'💦',nm:n('优质洒水器','Quality Sprinkler'),cost:{'bar:iron_bar':1,'bar:gold_bar':1,'bar:refined_quartz':1},lvl:['farm',6],range:2},
-  iridium_sprinkler:{em:'🌊',nm:n('铱制洒水器','Iridium Sprinkler'),cost:{'bar:gold_bar':1,'bar:iridium_bar':1,'mat:sap':1},lvl:['farm',9],range:3},
-  basic_fert:{em:'🟤',nm:n('基础肥料','Basic Fertilizer'),cost:{'mat:sap':2},lvl:['farm',1],fert:'q1'},
-  speed_gro:{em:'🟢',nm:n('生长激素','Speed-Gro'),cost:{'mat:bug_meat':1,'mat:sap':5},lvl:['farm',3],fert:'s1'},
-  furnace:{em:'🔥',nm:n('熔炉','Furnace'),cost:{'ore:copper':20,'mat:stone':25},lvl:['',0],machine:1},
-  keg:{em:'🛢️',nm:n('小桶','Keg'),cost:{'mat:wood':30,'bar:copper_bar':1,'bar:iron_bar':1},lvl:['farm',8],machine:1},
-  preserves_jar:{em:'🫙',nm:n('罐头瓶','Preserves Jar'),cost:{'mat:wood':50,'mat:stone':40,'ore:coal':8},lvl:['farm',4],machine:1},
-  mayo_machine:{em:'🥫',nm:n('蛋黄酱机','Mayonnaise Machine'),cost:{'mat:wood':15,'mat:stone':15,'bar:copper_bar':1},lvl:['farm',2],machine:1},
-  cheese_press:{em:'🧀',nm:n('奶酪压制机','Cheese Press'),cost:{'mat:wood':45,'mat:stone':45,'mat:hardwood':10},lvl:['farm',6],machine:1},
-  loom:{em:'🧵',nm:n('织布机','Loom'),cost:{'mat:wood':60,'mat:fiber':30},lvl:['farm',7],machine:1},
-  bee_house:{em:'🐝',nm:n('蜂房','Bee House'),cost:{'mat:wood':40,'ore:coal':8,'bar:iron_bar':1},lvl:['farm',3],machine:1},
-  charcoal_kiln:{em:'♨️',nm:n('炭窑','Charcoal Kiln'),cost:{'mat:wood':20,'bar:copper_bar':2},lvl:['forage',4],machine:1},
-  crab_pot:{em:'🦀',nm:n('蟹笼','Crab Pot'),cost:{'mat:wood':40,'bar:iron_bar':3},lvl:['fish',3],water:1},
+  chest:c('🧰','箱子','Chest',{'mat:wood':50}),
+  stone_chest:c('🧰','石箱子','Stone Chest',{'mat:stone':50}),
+  scarecrow:c('🥷','稻草人','Scarecrow',{'mat:wood':50,'ore:coal':1,'mat:fiber':20},['farm',1]),
+  fence:c('🪵','木栅栏','Wood Fence',{'mat:wood':2}),
+  stone_fence:c('🪨','石栅栏','Stone Fence',{'mat:stone':2},['farm',2]),
+  iron_fence:c('⛓️','铁栅栏','Iron Fence',{'bar:iron_bar':1},['farm',4]),
+  gate:c('🚪','大门','Gate',{'mat:wood':10},['farm',1]),
+  torch:c('🔥','火把','Torch',{'mat:wood':1,'mat:sap':2}),
+  campfire:c('🔥','篝火','Campfire',{'mat:stone':10,'mat:wood':10,'mat:fiber':10}),
+  sprinkler:c('💧','洒水器','Sprinkler',{'bar:copper_bar':1,'bar:iron_bar':1},['farm',2],{range:1}),
+  quality_sprinkler:c('💦','优质洒水器','Quality Sprinkler',{'bar:iron_bar':1,'bar:gold_bar':1,'bar:refined_quartz':1},['farm',6],{range:2}),
+  iridium_sprinkler:c('🌊','铱制洒水器','Iridium Sprinkler',{'bar:gold_bar':1,'bar:iridium_bar':1,'mat:battery':1},['farm',9],{range:3}),
+  basic_fert:c('🟤','基础肥料','Basic Fertilizer',{'mat:sap':2},['farm',1],{fert:'q1'}),
+  quality_fert:c('🟠','优质肥料','Quality Fertilizer',{'mat:sap':2,'fish:*':1},['farm',9],{fert:'q2',makes:2}),
+  deluxe_fert:c('🔶','豪华肥料','Deluxe Fertilizer',{'bar:iridium_bar':1,'mat:sap':40},null,{fert:'q3',makes:5,noCraft:1}),
+  speed_gro:c('🟢','生长激素','Speed-Gro',{'artisan:pine_tar':1,'fish:clam':1},['farm',3],{fert:'s1',makes:5}),
+  deluxe_speed_gro:c('💚','高级生长激素','Deluxe Speed-Gro',{'artisan:oak_resin':1,'mat:bone_fragment':5},['farm',8],{fert:'s2',makes:5}),
+  retain1:c('🟫','基础保湿土','Basic Retaining Soil',{'mat:stone':2},['farm',4],{fert:'r1',makes:2}),
+  retain2:c('🟫','优质保湿土','Quality Retaining Soil',{'mat:stone':3,'mat:clay':1},['farm',7],{fert:'r2',makes:2}),
+  tree_fert:c('🌲','树肥','Tree Fertilizer',{'mat:fiber':5,'mat:stone':5},['forage',7],{tree_fert:1}),
+  wild_sp_mix:c('🌱','春季野种','Spring Seeds',{'forage:horseradish':1,'forage:daffodil':1,'forage:leek':1,'forage:dandelion':1},['forage',1],{give:['seed','wild_sp',10]}),
+  wild_su_mix:c('🌱','夏季野种','Summer Seeds',{'forage:spice_berry':1,'forage:wild_grape':1,'forage:sweet_pea':1},['forage',4],{give:['seed','wild_su',10]}),
+  wild_fa_mix:c('🌱','秋季野种','Fall Seeds',{'forage:mushroom':1,'forage:wild_plum':1,'forage:hazelnut':1,'forage:blackberry':1},['forage',6],{give:['seed','wild_fa',10]}),
+  wild_wi_mix:c('🌱','冬季野种','Winter Seeds',{'forage:winter_root':1,'forage:crystal_fruit':1,'forage:snow_yam':1,'forage:crocus':1},['forage',7],{give:['seed','wild_wi',10]}),
+  field_snack:c('🥜','野外小吃','Field Snack',{'mat:acorn':1,'mat:maple_seed':1,'mat:pine_cone':1},['forage',1],{give:['food','field_snack',1]}),
+  life_elixir:c('🧪','生命药水','Life Elixir',{'forage:red_mushroom':1,'forage:purple_mushroom':1,'forage:morel':1,'forage:chanterelle':1},['combat',2],{give:['food','life_elixir',1]}),
+  oil_of_garlic:c('🧄','大蒜油','Oil of Garlic',{'crop:garlic':10,'artisan:oil':1},['combat',6],{give:['food','oil_of_garlic',1]}),
+  furnace:c('🔥','熔炉','Furnace',{'ore:copper':20,'mat:stone':25},null,{machine:1}),
+  keg:c('🛢️','小桶','Keg',{'mat:wood':30,'bar:copper_bar':1,'bar:iron_bar':1,'artisan:oak_resin':1},['farm',8],{machine:1}),
+  preserves_jar:c('🫙','罐头瓶','Preserves Jar',{'mat:wood':50,'mat:stone':40,'ore:coal':8},['farm',4],{machine:1}),
+  mayo_machine:c('🥫','蛋黄酱机','Mayonnaise Machine',{'mat:wood':15,'mat:stone':15,'gem:earth_crystal':1,'bar:copper_bar':1},['farm',2],{machine:1}),
+  cheese_press:c('🧀','奶酪压制机','Cheese Press',{'mat:wood':45,'mat:stone':45,'mat:hardwood':10,'bar:copper_bar':1},['farm',6],{machine:1}),
+  loom:c('🧵','织布机','Loom',{'mat:wood':60,'mat:fiber':30,'artisan:pine_tar':1},['farm',7],{machine:1}),
+  oil_maker:c('🫗','榨油机','Oil Maker',{'mat:slime':50,'mat:hardwood':20,'bar:gold_bar':1},['farm',8],{machine:1}),
+  seed_maker:c('🌰','种子生产器','Seed Maker',{'mat:wood':25,'ore:coal':10,'bar:gold_bar':1},['farm',9],{machine:1}),
+  bee_house:c('🐝','蜂房','Bee House',{'mat:wood':40,'ore:coal':8,'bar:iron_bar':1,'artisan:maple_syrup':1},['farm',3],{machine:1}),
+  cask:c('🛢️','木桶','Cask',{'mat:wood':20,'mat:hardwood':1},null,{machine:1,cellar:1}),
+  charcoal_kiln:c('♨️','炭窑','Charcoal Kiln',{'mat:wood':20,'bar:copper_bar':2},['forage',4],{machine:1}),
+  tapper:c('🚰','树液采集器','Tapper',{'mat:wood':40,'bar:copper_bar':2},['forage',3]),
+  lightning_rod:c('⚡','避雷针','Lightning Rod',{'bar:iron_bar':1,'bar:refined_quartz':1,'mat:bat_wing':5},['forage',6],{machine:1}),
+  recycling_machine:c('♻️','回收机','Recycling Machine',{'mat:wood':25,'mat:stone':25,'bar:iron_bar':1},['fish',4],{machine:1}),
+  worm_bin:c('🪱','虫箱','Worm Bin',{'mat:hardwood':25,'bar:gold_bar':1,'bar:iron_bar':1,'mat:fiber':50},['fish',8],{machine:1}),
+  fish_smoker:c('🐟','熏鱼机','Fish Smoker',{'mat:hardwood':10,'trash:driftwood':5,'ore:coal':10},['fish',6],{machine:1}),
+  dehydrator:c('🍂','脱水机','Dehydrator',{'mat:wood':30,'mat:clay':2,'gem:fire_quartz':1},['forage',8],{machine:1}),
+  crab_pot:c('🦀','蟹笼','Crab Pot',{'mat:wood':40,'bar:iron_bar':3},['fish',3],{water:1}),
+  crystalarium:c('💎','宝石复制机','Crystalarium',{'mat:stone':99,'bar:gold_bar':5,'bar:iridium_bar':2,'mat:battery':1},['mine',9],{machine:1}),
+  geode_crusher:c('🔨','晶洞粉碎机','Geode Crusher',{'bar:gold_bar':2,'mat:stone':50,'gem:diamond':1},['mine',9],{machine:1}),
+  bone_mill:c('🦴','骨磨机','Bone Mill',{'mat:bone_fragment':10,'bar:copper_bar':3,'mat:stone':20},null,{machine:1}),
+  slime_press:c('🟢','史莱姆压蛋机','Slime Egg-Press',{'ore:coal':25,'gem:fire_quartz':1,'mat:battery':1},['combat',6],{machine:1}),
+  solar_panel:c('☀️','太阳能板','Solar Panel',{'bar:refined_quartz':10,'bar:iron_bar':5,'bar:gold_bar':5},['forage',9],{machine:1}),
+  bait:c('🪱','鱼饵','Bait',{'mat:bug_meat':1},['fish',2],{give:['mat','bait',5]}),
+  wild_bait:c('🪱','野生鱼饵','Wild Bait',{'mat:fiber':10,'mat:slime':5},['fish',4],{give:['mat','wild_bait',5]}),
+  spinner:c('🌀','旋式鱼饵','Spinner',{'bar:iron_bar':2},['fish',6],{tackle:'spinner'}),
+  trap_bobber:c('🔴','陷阱浮标','Trap Bobber',{'bar:copper_bar':1,'mat:sap':10},['fish',6],{tackle:'trap'}),
+  cork_bobber:c('🟡','软木浮标','Cork Bobber',{'mat:wood':10,'mat:hardwood':5,'mat:slime':10},['fish',7],{tackle:'cork'}),
+  treasure_hunter:c('🧭','寻宝器','Treasure Hunter',{'bar:gold_bar':2},['fish',7],{tackle:'treasure'}),
+  barbed_hook:c('🪝','倒刺钩','Barbed Hook',{'bar:copper_bar':1,'bar:iron_bar':1,'bar:gold_bar':1},['fish',8],{tackle:'barbed'}),
+  dressed_spinner:c('🌀','加料旋饵','Dressed Spinner',{'bar:iron_bar':2,'artisan:cloth':1},['fish',8],{tackle:'dressed'}),
+  cherry_bomb:c('💣','樱桃炸弹','Cherry Bomb',{'ore:copper':4,'ore:coal':1},['mine',1],{bomb:3}),
+  bomb:c('💣','炸弹','Bomb',{'ore:iron':4,'ore:coal':1},['mine',6],{bomb:5}),
+  mega_bomb:c('💣','超级炸弹','Mega Bomb',{'ore:gold_ore':4,'mat:solar_essence':1,'mat:void_essence':1},['mine',8],{bomb:7}),
+  staircase:c('🪜','楼梯','Staircase',{'mat:stone':99},['mine',2],{stairs:1}),
+  transmute_fe:c('🔄','转化(铁)','Transmute (Fe)',{'bar:copper_bar':3},['mine',4],{give:['bar','iron_bar',1]}),
+  transmute_au:c('🔄','转化(金)','Transmute (Au)',{'bar:iron_bar':2},['mine',7],{give:['bar','gold_bar',1]}),
+  warp_farm:c('🗿','传送图腾:农场','Warp Totem: Farm',{'mat:hardwood':1,'mat:fiber':20,'mat:sap':20},['forage',8],{warp:'farm'}),
+  warp_town:c('🗿','传送图腾:小镇','Warp Totem: Town',{'mat:hardwood':1,'gem:quartz':1},['forage',7],{warp:'town'}),
+  warp_dock:c('🗿','传送图腾:海湾','Warp Totem: Bay',{'mat:hardwood':1,'trash:seaweed':2,'mat:fiber':20},['forage',6],{warp:'dock'}),
+  rain_totem:c('🌧️','雨图腾','Rain Totem',{'mat:hardwood':1,'artisan:truffle_oil':1,'artisan:pine_tar':5},['forage',9],{give:['mat','rain_totem',1]}),
   sapling_apricot:{em:'🌱',nm:n('杏树苗','Apricot Sapling'),shop:1,tree:'apricot',machine:1}, sapling_cherry:{em:'🌱',nm:n('樱桃树苗','Cherry Sapling'),shop:1,tree:'cherry',machine:1}, sapling_peach:{em:'🌱',nm:n('桃树苗','Peach Sapling'),shop:1,tree:'peach',machine:1}, sapling_orange:{em:'🌱',nm:n('橙树苗','Orange Sapling'),shop:1,tree:'orange',machine:1}, sapling_apple:{em:'🌱',nm:n('苹果树苗','Apple Sapling'),shop:1,tree:'apple',machine:1}, sapling_pomegranate:{em:'🌱',nm:n('石榴树苗','Pomegranate Sapling'),shop:1,tree:'pomegranate',machine:1}
 };
-/* input → output, minutes */
+/* input → output, minutes. tag picks a class of goods; a bare out is flavoured by what went in */
 export const MACHINES={
-  furnace:[{in:'ore:copper',n:5,fuel:1,out:'bar:copper_bar',min:30},{in:'ore:iron',n:5,fuel:1,out:'bar:iron_bar',min:120},{in:'ore:gold_ore',n:5,fuel:1,out:'bar:gold_bar',min:300},{in:'ore:iridium',n:5,fuel:1,out:'bar:iridium_bar',min:480},{in:'gem:quartz',n:1,fuel:1,out:'bar:refined_quartz',min:90}],
-  mayo_machine:[{in:'product:egg',n:1,out:'artisan:mayo',min:180},{in:'product:big_egg',n:1,out:'artisan:mayo',min:180,q:2}],
-  cheese_press:[{in:'product:milk',n:1,out:'artisan:cheese',min:200},{in:'product:big_milk',n:1,out:'artisan:cheese',min:200,q:2},{in:'product:goat_milk',n:1,out:'artisan:goat_cheese',min:200}],
+  furnace:[{in:'ore:copper',n:5,fuel:1,out:'bar:copper_bar',min:30},{in:'ore:iron',n:5,fuel:1,out:'bar:iron_bar',min:120},{in:'ore:gold_ore',n:5,fuel:1,out:'bar:gold_bar',min:300},{in:'ore:iridium',n:5,fuel:1,out:'bar:iridium_bar',min:480},{in:'ore:radioactive',n:5,fuel:1,out:'bar:radioactive_bar',min:560},{in:'gem:quartz',n:1,fuel:1,out:'bar:refined_quartz',min:90},{in:'gem:fire_quartz',n:1,fuel:1,out:'bar:refined_quartz',min:90,makes:3},{in:'trash:broken_glasses',n:1,fuel:1,out:'bar:refined_quartz',min:90}],
+  mayo_machine:[{in:'product:egg',n:1,out:'artisan:mayo',min:180},{in:'product:big_egg',n:1,out:'artisan:mayo',min:180,q:2},{in:'product:duck_egg',n:1,out:'artisan:duck_mayo',min:180},{in:'product:void_egg',n:1,out:'artisan:void_mayo',min:180},{in:'product:dino_egg',n:1,out:'artisan:dino_mayo',min:180}],
+  cheese_press:[{in:'product:milk',n:1,out:'artisan:cheese',min:200},{in:'product:big_milk',n:1,out:'artisan:cheese',min:200,q:2},{in:'product:goat_milk',n:1,out:'artisan:goat_cheese',min:200},{in:'product:big_goat_milk',n:1,out:'artisan:goat_cheese',min:200,q:2}],
   loom:[{in:'product:wool',n:1,out:'artisan:cloth',min:240}],
+  oil_maker:[{in:'product:truffle',n:1,out:'artisan:truffle_oil',min:360},{in:'crop:corn',n:1,out:'artisan:oil',min:1000},{in:'seed:sunflower',n:1,out:'artisan:oil',min:3200},{in:'crop:sunflower',n:1,out:'artisan:oil',min:60}],
   charcoal_kiln:[{in:'mat:wood',n:10,out:'ore:coal',min:30}],
-  keg:[{in:'crop:*',n:1,out:'wine',min:7*1440,fruit:1},{in:'crop:*',n:1,out:'juice',min:4*1440},{in:'crop:hops',n:1,out:'artisan:pale_ale',min:2250},{in:'crop:wheat',n:1,out:'artisan:beer',min:1750}],
-  preserves_jar:[{in:'crop:*',n:1,out:'jelly',min:3*1440,fruit:1},{in:'crop:*',n:1,out:'pickles',min:3*1440}]
+  keg:[{in:'crop:hops',n:1,out:'artisan:pale_ale',min:2250},{in:'crop:wheat',n:1,out:'artisan:beer',min:1750},{in:'artisan:honey',n:1,out:'artisan:mead',min:600},{in:'crop:coffee',n:5,out:'artisan:coffee_drink',min:120},{tag:'fruit',n:1,out:'wine',min:7*1440},{tag:'veg',n:1,out:'juice',min:4*1440}],
+  preserves_jar:[{tag:'fruit',n:1,out:'jelly',min:3*1440},{tag:'veg',n:1,out:'pickles',min:3*1440},{in:'artisan:roe',n:1,out:'artisan:aged_roe',min:3*1440}],
+  fish_smoker:[{tag:'fish',n:1,fuel:1,out:'smoked',min:50}],
+  dehydrator:[{tag:'fruit',n:5,out:'dried',min:1440}],
+  bone_mill:[{in:'mat:bone_fragment',n:5,out:'craft:quality_fert',min:240,makes:2}],
+  slime_press:[{in:'mat:slime',n:100,out:'mat:slime_egg',min:1200}],
+  cask:[{in:'artisan:pale_ale',n:1,out:'artisan:pale_ale',min:34*1440,q:3,from:0},{in:'artisan:beer',n:1,out:'artisan:beer',min:28*1440,q:3,from:0},{in:'artisan:mead',n:1,out:'artisan:mead',min:28*1440,q:3,from:0},{in:'artisan:cheese',n:1,out:'artisan:cheese',min:56*1440,q:3,from:0},{in:'artisan:goat_cheese',n:1,out:'artisan:goat_cheese',min:56*1440,q:3,from:0},{tag:'wine',n:1,out:'same',min:56*1440,q:3,from:0}]
 };
-export const FRUITY=['strawberry','melon','tomato','blueberry','cranberry','grape','pepper'];
+/* one copy of a gem at a time: minutes each */
+export const CRYSTAL={ quartz:1560, earth_crystal:1440, frozen_tear:1560, fire_quartz:1680, amethyst:1680, topaz:1440, aquamarine:2520, jade:1920, ruby:2880, emerald:2880, diamond:7200, prismatic:10080 };
+export const RECYCLE={ trash:[['mat','stone',.45],['ore','coal',.3],['ore','iron',.25]], driftwood:[['mat','wood',.7],['ore','coal',.3]], soggy_paper:[['craft','torch',.5],['artisan','cloth',.1],['mat','fiber',.4]], broken_glasses:[['bar','refined_quartz',1]], broken_cd:[['bar','refined_quartz',1]], cola_can:[['mat','stone',.5],['ore','copper',.5]] };
+/* tapping a wild tree: what, and days between jars */
+export const TAP={ oak:['artisan:oak_resin',7], maple:['artisan:maple_syrup',9], pine:['artisan:pine_tar',5] };
+/* fruit and vegetables are told apart the way the kegs tell them apart */
+export const FRUITY=['strawberry','melon','blueberry','cranberry','grape','pepper','rhubarb','starfruit','ancient','powdermelon','cactus'];
 export const TOOL_TIERS=[
   {ab:'Cu',nm:n('铜','Copper'),gold:2000,bar:'copper_bar'},{ab:'Fe',nm:n('钢','Steel'),gold:5000,bar:'iron_bar'},
   {ab:'Au',nm:n('金','Gold'),gold:10000,bar:'gold_bar'},{ab:'Ir',nm:n('铱','Iridium'),gold:25000,bar:'iridium_bar'}
 ];
-export const WEAPONS=[{nm:n('生锈的剑','Rusty Sword'),dmg:[2,5],gold:0},{nm:n('钢制小剑','Steel Smallsword'),dmg:[4,8],gold:500},{nm:n('银剑','Silver Saber'),dmg:[8,15],gold:1500},{nm:n('海盗剑','Cutlass'),dmg:[9,17],gold:3000},{nm:n('黑曜石刃','Obsidian Edge'),dmg:[30,45],gold:9000}];
-export const RODS=[{nm:n('竹制鱼竿','Bamboo Pole'),gold:0,bar:0},{nm:n('训练鱼竿','Training Rod'),gold:25,bar:40},{nm:n('玻璃纤维鱼竿','Fiberglass Rod'),gold:1800,bar:14,bait:1},{nm:n('铱鱼竿','Iridium Rod'),gold:7500,bar:28,bait:1,tackle:1}];
-export const ANIMALS={ chicken:{nm:n('鸡','Chicken'),cost:800,house:'coop',days:1,prod:'egg',big:'big_egg',em:'🐔'}, duck:{nm:n('鸭','Duck'),cost:1200,house:'coop',days:2,prod:'duck_egg',em:'🦆'}, cow:{nm:n('牛','Cow'),cost:1500,house:'barn',days:1,prod:'milk',big:'big_milk',em:'🐄'}, goat:{nm:n('山羊','Goat'),cost:4000,house:'barn',days:2,prod:'goat_milk',em:'🐐'}, sheep:{nm:n('绵羊','Sheep'),cost:8000,house:'barn',days:3,prod:'wool',em:'🐑'}, pig:{nm:n('猪','Pig'),cost:16000,house:'barn',days:1,prod:'truffle',em:'🐖'} };
-export const BUILDINGS={ coop:{nm:n('鸡舍','Coop'),gold:4000,cost:{'mat:wood':300,'mat:stone':100},days:3}, barn:{nm:n('畜棚','Barn'),gold:6000,cost:{'mat:wood':350,'mat:stone':150},days:3}, silo:{nm:n('筒仓','Silo'),gold:100,cost:{'mat:stone':100,'mat:clay':10,'bar:copper_bar':5},days:3}, kitchen:{nm:n('房屋扩建(厨房)','House Upgrade (Kitchen)'),gold:10000,cost:{'mat:wood':450},days:3}, nursery:{nm:n('二次扩建(卧室)','Second Upgrade'),gold:50000,cost:{'mat:hardwood':150},days:3} };
+/* kind: sword, dagger, club. speed changes swing time, crit is on top of the base 2% */
+const w=(zh,en,lo,hi,gold,kind='sword',more)=>({nm:n(zh,en),dmg:[lo,hi],gold,kind,...more});
+export const WEAPONS=[w('生锈的剑','Rusty Sword',2,5,0),w('钢制小剑','Steel Smallsword',4,8,500),w('银剑','Silver Saber',8,15,750),w('海盗剑','Cutlass',9,17,1500),w('黑曜石刃','Obsidian Edge',30,45,9000),
+  w('木剑','Wooden Blade',3,7,250),w('铁刃','Iron Edge',12,25,3000),w('圣殿剑','Templar\'s Blade',22,29,4000),w('阔剑','Claymore',20,32,2000,'sword',{speed:-.2}),w('熔岩武士刀','Lava Katana',55,64,25000),w('银河剑','Galaxy Sword',60,80,0,'sword',{noShop:1}),
+  w('雕刻刀','Carving Knife',1,3,250,'dagger',{crit:.04}),w('铁短剑','Iron Dirk',4,8,500,'dagger',{crit:.04}),w('精灵刃','Elf Blade',3,5,800,'dagger',{crit:.04}),w('水晶匕首','Crystal Dagger',4,10,1200,'dagger',{crit:.1}),w('暗影匕首','Shadow Dagger',10,20,2500,'dagger',{crit:.04}),
+  w('木槌','Wood Mallet',5,12,300,'club',{speed:-.3}),w('铅棍','Lead Rod',18,27,1500,'club',{speed:-.3}),w('大头棒','Kudgel',27,40,3000,'club',{speed:-.35})];
+export const RODS=[{nm:n('竹制鱼竿','Bamboo Pole'),gold:0,bar:0},{nm:n('训练鱼竿','Training Rod'),gold:25,bar:40},{nm:n('玻璃纤维鱼竿','Fiberglass Rod'),gold:1800,bar:14,bait:1,lvl:2},{nm:n('铱鱼竿','Iridium Rod'),gold:7500,bar:28,bait:1,tackle:1,lvl:6}];
+/* rings: atk def and so on are small steady bonuses; two can be worn */
+export const RINGS={ small_glow:{em:'💍',nm:n('小发光戒指','Small Glow Ring'),price:100}, glow:{em:'💍',nm:n('发光戒指','Glow Ring'),price:200}, small_magnet:{em:'🧲',nm:n('小磁铁戒指','Small Magnet Ring'),price:100}, magnet:{em:'🧲',nm:n('磁铁戒指','Magnet Ring'),price:200}, slime_charmer:{em:'🟢',nm:n('史莱姆魅力戒指','Slime Charmer Ring'),price:700,slimeProof:1}, sturdy:{em:'💍',nm:n('坚固戒指','Sturdy Ring'),price:400,fx:{def:1}}, warrior:{em:'⚔️',nm:n('战士戒指','Warrior Ring'),price:750,fx:{atk:3}}, vampire:{em:'🩸',nm:n('吸血鬼戒指','Vampire Ring'),price:1000,leech:2}, savage:{em:'🗡️',nm:n('野蛮戒指','Savage Ring'),price:750,fx:{speed:1}}, burglar:{em:'💰',nm:n('窃贼戒指','Burglar\'s Ring'),price:1500,drops:1}, crabshell:{em:'🦀',nm:n('蟹壳戒指','Crabshell Ring'),price:1000,fx:{def:5}}, napalm:{em:'🔥',nm:n('凝固汽油戒指','Napalm Ring'),price:1500,fx:{atk:2}}, iridium_band:{em:'💍',nm:n('铱环','Iridium Band'),price:2000,fx:{atk:5,def:2}}, amethyst:{em:'🟪',nm:n('紫水晶戒指','Amethyst Ring'),price:200,fx:{atk:1}}, topaz:{em:'🟨',nm:n('黄玉戒指','Topaz Ring'),price:200,fx:{def:1}}, jade:{em:'🟩',nm:n('翡翠戒指','Jade Ring'),price:400,fx:{crit:.1}}, emerald:{em:'💚',nm:n('祖母绿戒指','Emerald Ring'),price:600,fx:{speed:1}}, ruby:{em:'🟥',nm:n('红宝石戒指','Ruby Ring'),price:600,fx:{atk:2}}, lucky:{em:'🍀',nm:n('幸运戒指','Lucky Ring'),price:1000,fx:{luck:1}}, yoba:{em:'✨',nm:n('尤巴戒指','Ring of Blessing'),price:1500,fx:{def:3}} };
+export const BOOTS={ leather:{em:'🥾',nm:n('皮靴','Leather Boots'),price:500,def:1}, tundra:{em:'🥾',nm:n('苔原靴','Tundra Boots'),price:1000,def:2}, firewalker:{em:'🥾',nm:n('火行靴','Firewalker Boots'),price:2000,def:3}, space:{em:'🥾',nm:n('太空靴','Space Boots'),price:5000,def:4} };
+/* need: the building level the animal requires */
+export const ANIMALS={ chicken:{nm:n('鸡','Chicken'),cost:800,house:'coop',need:1,days:1,prod:'egg',big:'big_egg',em:'🐔'}, duck:{nm:n('鸭','Duck'),cost:1200,house:'coop',need:2,days:2,prod:'duck_egg',rare:'duck_feather',em:'🦆'}, rabbit:{nm:n('兔子','Rabbit'),cost:8000,house:'coop',need:3,days:4,prod:'wool',rare:'rabbit_foot',em:'🐇'}, cow:{nm:n('牛','Cow'),cost:1500,house:'barn',need:1,days:1,prod:'milk',big:'big_milk',em:'🐄',tool:'pail'}, goat:{nm:n('山羊','Goat'),cost:4000,house:'barn',need:2,days:2,prod:'goat_milk',big:'big_goat_milk',em:'🐐',tool:'pail'}, sheep:{nm:n('绵羊','Sheep'),cost:8000,house:'barn',need:3,days:3,prod:'wool',em:'🐑',tool:'shears'}, pig:{nm:n('猪','Pig'),cost:16000,house:'barn',need:3,days:1,prod:'truffle',em:'🐖',dig:1} };
+/* up: this replaces a lower level of the building; site: where a new one stands */
+export const BUILDINGS={ coop:{nm:n('鸡舍','Coop'),gold:4000,cost:{'mat:wood':300,'mat:stone':100},days:3}, big_coop:{nm:n('大鸡舍','Big Coop'),gold:10000,cost:{'mat:wood':400,'mat:stone':150},days:3,up:'coop',lv:2}, deluxe_coop:{nm:n('豪华鸡舍','Deluxe Coop'),gold:20000,cost:{'mat:wood':500,'mat:stone':200},days:3,up:'coop',lv:3}, barn:{nm:n('畜棚','Barn'),gold:6000,cost:{'mat:wood':350,'mat:stone':150},days:3}, big_barn:{nm:n('大畜棚','Big Barn'),gold:12000,cost:{'mat:wood':450,'mat:stone':200},days:3,up:'barn',lv:2}, deluxe_barn:{nm:n('豪华畜棚','Deluxe Barn'),gold:25000,cost:{'mat:wood':550,'mat:stone':300},days:3,up:'barn',lv:3}, silo:{nm:n('筒仓','Silo'),gold:100,cost:{'mat:stone':100,'mat:clay':10,'bar:copper_bar':5},days:3,many:1}, well:{nm:n('水井','Well'),gold:1000,cost:{'mat:stone':75},days:3}, shed:{nm:n('棚屋','Shed'),gold:15000,cost:{'mat:wood':300},days:3}, stable:{nm:n('马厩','Stable'),gold:10000,cost:{'mat:hardwood':100,'bar:iron_bar':5},days:2}, mill:{nm:n('磨坊','Mill'),gold:2500,cost:{'mat:stone':50,'mat:wood':150,'artisan:cloth':4},days:2}, fish_pond:{nm:n('鱼塘','Fish Pond'),gold:5000,cost:{'mat:stone':200,'trash:seaweed':5,'trash:algae':5},days:2}, slime_hutch:{nm:n('史莱姆屋','Slime Hutch'),gold:10000,cost:{'mat:stone':500,'bar:refined_quartz':10,'bar:iridium_bar':1},days:3}, kitchen:{nm:n('房屋扩建(厨房)','House Upgrade (Kitchen)'),gold:10000,cost:{'mat:wood':450},days:3}, nursery:{nm:n('二次扩建(卧室)','Second Upgrade (Bedroom)'),gold:65000,cost:{'mat:hardwood':100},days:3,after:'kitchen'}, cellar:{nm:n('三次扩建(地窖)','Third Upgrade (Cellar)'),gold:100000,cost:{},days:3,after:'nursery'} };
+/* floors: where it lives. drops: [item, chance]. group: what the guild counts it as */
+const m=(zh,en,hp,dmg,def,sp,xp,floors,col,model,drops,group,more)=>({nm:n(zh,en),hp,dmg,def,sp,xp,floors,col,model,drops,group,r:.5,...more});
+export const MONSTERS={
+  slime:m('绿色史莱姆','Green Slime',24,5,1,1.5,3,[1,29],0x6ad04a,'slime',[['mat:slime',.8]],'slime'),
+  bug:m('虫子','Bug',18,6,0,2.2,4,[1,39],0x8a5a3a,'bug',[['mat:bug_meat',.5]],'insect',{r:.4}),
+  crab:m('岩石蟹','Rock Crab',30,8,3,1.3,4,[1,29],0x6a6660,'crab',[['mat:bug_meat',.3],['ore:copper',.3]],'crab',{r:.55}),
+  fly:m('洞穴飞虫','Cave Fly',22,6,0,2.6,5,[1,39],0x5a6a3a,'bat',[['mat:bug_meat',.6]],'insect',{fly:1,r:.4}),
+  duggy:m('地鼠','Duggy',40,8,2,1.4,10,[6,29],0x7a5a3a,'bug',[['mat:clay',.4],['ore:copper',.3]],'duggy'),
+  grub:m('幼虫','Grub',20,4,1,1.6,3,[17,39],0xc8d060,'bug',[['mat:bug_meat',.5]],'insect',{r:.4}),
+  bat:m('蝙蝠','Bat',24,6,1,2.8,6,[31,39],0x4a3a5a,'bat',[['mat:bat_wing',.5]],'bat',{fly:1,r:.4}),
+  golem:m('石魔','Stone Golem',45,5,2,1.1,5,[11,29],0x7a7a70,'crab',[['mat:stone',.8],['ore:coal',.3]],'golem',{r:.65}),
+  sprite:m('灰尘精灵','Dust Sprite',40,6,0,3,2,[41,79],0x3a3a42,'bat',[['ore:coal',.5]],'dust',{fly:1,r:.35}),
+  frost:m('霜冻史莱姆','Frost Jelly',106,7,1,1.8,6,[41,79],0x7ad8f0,'frost',[['mat:slime',.8],['gem:frozen_tear',.05]],'slime',{r:.55}),
+  frost_bat:m('霜冻蝙蝠','Frost Bat',36,7,1,2.8,7,[41,79],0x8ac0e8,'bat',[['mat:bat_wing',.6]],'bat',{fly:1,r:.4}),
+  ghost:m('幽灵','Ghost',96,10,2,2,15,[51,79],0xd8d8f0,'ghost',[['ore:coal',.3],['mat:solar_essence',.1]],'void',{fly:1}),
+  skeleton:m('骷髅','Skeleton',140,10,1,1.9,8,[71,79],0xd8d0c0,'ghost',[['mat:bone_fragment',.8]],'skeleton'),
+  lava_bat:m('熔岩蝙蝠','Lava Bat',80,15,1,3,15,[81,119],0xc84a2a,'bat',[['mat:bat_wing',.7],['ore:gold_ore',.1]],'bat',{fly:1,r:.4}),
+  lava:m('红色史莱姆','Red Sludge',205,16,0,2.4,10,[81,119],0xe84a2a,'lava',[['mat:slime',.8],['ore:gold_ore',.2]],'slime',{r:.6}),
+  lava_crab:m('熔岩蟹','Lava Crab',120,15,3,1.6,12,[81,119],0xa83a22,'crab',[['mat:bug_meat',.3],['fish:crab',.2]],'crab',{r:.55}),
+  brute:m('暗影粗汉','Shadow Brute',160,18,2,1.8,20,[81,119],0x2a2a3a,'ghost',[['mat:void_essence',.5]],'void',{r:.6}),
+  squid_kid:m('鱿鱼小子','Squid Kid',60,12,0,2.4,15,[81,119],0xd86a8a,'ghost',[['mat:squid_ink',.2]],'void',{fly:1}),
+  mummy:m('木乃伊','Mummy',260,20,1,1.8,30,[201,400],0xc8b890,'ghost',[['mat:solar_essence',.4]],'mummy',{cavern:1}),
+  serpent:m('飞蛇','Serpent',150,23,0,3.4,20,[201,400],0x5a8a4a,'bat',[['mat:void_essence',.5]],'serpent',{fly:1,cavern:1})
+};
+/* the mine's chests on every tenth floor */
+export const MINE_CHEST={ 10:['boot','leather'], 20:['weapon',1], 40:['weapon',5], 50:['boot','tundra'], 60:['weapon',14], 70:['gold',2500], 80:['boot','firewalker'], 90:['weapon',4], 100:['item','mat:stardrop'], 110:['boot','space'], 120:['item','mat:skull_key'] };
+/* the guild's goals: kill this many, claim the prize */
+export const GUILD_GOALS=[ {g:'slime',n:1000,nm:n('史莱姆','Slimes'),ring:'slime_charmer'}, {g:'void',n:150,nm:n('虚空灵','Void Spirits'),ring:'savage'}, {g:'bat',n:200,nm:n('蝙蝠','Bats'),ring:'vampire'}, {g:'skeleton',n:50,nm:n('骷髅','Skeletons'),ring:'warrior'}, {g:'insect',n:125,nm:n('洞穴昆虫','Cave Insects'),ring:'sturdy'}, {g:'duggy',n:30,nm:n('地鼠','Duggies'),ring:'small_glow'}, {g:'dust',n:500,nm:n('灰尘精灵','Dust Sprites'),ring:'burglar'}, {g:'crab',n:60,nm:n('岩石蟹','Rock Crabs'),ring:'crabshell'}, {g:'mummy',n:100,nm:n('木乃伊','Mummies'),ring:'yoba'}, {g:'serpent',n:250,nm:n('飞蛇','Serpents'),ring:'napalm'} ];
+export const ACHIEVEMENTS=[ {id:'gold_15k',nm:n('攒下 15,000 金','Greenhorn'),g:{earned:15000}}, {id:'gold_50k',nm:n('攒下 50,000 金','Cowpoke'),g:{earned:50000}}, {id:'gold_250k',nm:n('攒下 250,000 金','Homesteader'),g:{earned:250000}}, {id:'gold_1m',nm:n('攒下 1,000,000 金','Millionaire'),g:{earned:1000000}}, {id:'gold_10m',nm:n('攒下 10,000,000 金','Legend'),g:{earned:10000000}}, {id:'fish_10',nm:n('钓到 10 种鱼','Fisherman'),g:{species:10}}, {id:'fish_24',nm:n('钓到 24 种鱼','Ol\' Mariner'),g:{species:24}}, {id:'fish_all',nm:n('钓到所有的鱼','Master Angler'),g:{species:62}}, {id:'ship_all',nm:n('所有农产品都出过货','Full Shipment'),g:{shippedKinds:145}}, {id:'cook_10',nm:n('做过 10 道菜','Cook'),g:{cooked:10}}, {id:'cook_25',nm:n('做过 25 道菜','Sous Chef'),g:{cooked:25}}, {id:'cook_all',nm:n('所有菜都做过','Gourmet Chef'),g:{cooked:74}}, {id:'craft_15',nm:n('做过 15 样东西','D.I.Y.'),g:{crafted:15}}, {id:'craft_30',nm:n('做过 30 样东西','Artisan'),g:{crafted:30}}, {id:'friends_1',nm:n('和 1 位村民满心','A New Friend'),g:{fullHearts:1}}, {id:'friends_5',nm:n('和 5 位村民满心','Best Friends'),g:{fullHearts:5}}, {id:'friends_12',nm:n('和 12 位村民满心','Popular'),g:{fullHearts:12}}, {id:'skill_max',nm:n('一项技能满级','Singular Talent'),g:{maxSkills:1}}, {id:'skill_all',nm:n('所有技能满级','Master of the Five Ways'),g:{maxSkills:5}}, {id:'floor_120',nm:n('到达矿洞底部','The Bottom'),g:{floor:120}}, {id:'stardrops',nm:n('吃掉全部星之果实','Protector of the Valley'),g:{stardrops:7}}, {id:'museum_all',nm:n('捐齐博物馆','A Complete Collection'),g:{donated:95}}, {id:'cc_done',nm:n('修复社区中心','Local Legend'),g:{ccRooms:6}} ];
 
 /* villagers: original people. love/like are item keys or kind wildcards. sched: [minute, place]. */
 export const NPCS=[
@@ -162,49 +330,74 @@ export const LINES={
 };
 export const HEART_EVENTS={ 2:n('你们坐在码头边聊了很久,关于这座小镇,也关于离开过的人。','You sat by the dock talking for a long while, about this town and those who left it.'), 4:n('雨天里,对方把伞分给了你一半。','In the rain you were offered half an umbrella.'), 6:n('对方给你看了一本旧相册,里面有这片湖几十年前的样子。','You were shown an old album of the lake as it looked decades ago.'), 8:n('傍晚的灯火里,对方说:“有你在,这里才像家。”','In the evening lamplight: "With you here, this feels like home."') };
 
-/* community centre: bundles of items, each room pays out */
+/* community centre: bundles of items, each room pays out. items are 'kind:id', 'kind:id~quality' for a star, '*n' for a stack; pay is gold, for the vault; reward is what the bundle returns */
 export const ROOMS=[
-  {id:'pantry',nm:n('茶水间','Pantry'),reward:n('温室修复了!','The greenhouse is restored!'),unlock:'greenhouse',bundles:[
-    {nm:n('春季作物','Spring Crops'),need:4,items:['crop:parsnip','crop:potato','crop:cauliflower','crop:green_bean']},
-    {nm:n('夏季作物','Summer Crops'),need:4,items:['crop:tomato','crop:pepper','crop:blueberry','crop:melon']},
-    {nm:n('秋季作物','Fall Crops'),need:4,items:['crop:corn','crop:eggplant','crop:pumpkin','crop:yam']},
-    {nm:n('畜牧','Animal'),need:3,items:['product:milk','product:egg','product:wool','product:goat_milk']}]},
   {id:'crafts',nm:n('工艺室','Crafts Room'),reward:n('通往采石场的桥修好了!','The bridge to the quarry is repaired!'),unlock:'quarry',bundles:[
-    {nm:n('春季采集','Spring Foraging'),need:4,items:['forage:horseradish','forage:daffodil','forage:leek','forage:dandelion']},
-    {nm:n('夏季采集','Summer Foraging'),need:3,items:['forage:spice_berry','forage:wild_grape','forage:sweet_pea']},
-    {nm:n('秋季采集','Fall Foraging'),need:4,items:['forage:mushroom','forage:wild_plum','forage:hazelnut','forage:blackberry']},
-    {nm:n('建筑材料','Construction'),need:4,items:['mat:wood','mat:stone','mat:hardwood','mat:clay']}]},
-  {id:'fish',nm:n('鱼缸','Fish Tank'),reward:n('矿车通往小镇各处了!','The minecarts run again!'),unlock:'minecart',bundles:[
-    {nm:n('河鱼','River Fish'),need:4,items:['fish:sunfish','fish:catfish','fish:shad','fish:tiger_trout']},
-    {nm:n('湖鱼','Lake Fish'),need:4,items:['fish:bass','fish:carp','fish:bullhead','fish:sturgeon']},
-    {nm:n('夜钓','Night Fishing'),need:2,items:['fish:walleye','fish:bream','fish:midnight_carp']}]},
-  {id:'boiler',nm:n('锅炉房','Boiler Room'),reward:n('矿洞的电梯恢复运行!','The mine lifts are powered!'),unlock:'lift',bundles:[
-    {nm:n('铁匠','Blacksmith'),need:3,items:['bar:copper_bar','bar:iron_bar','bar:gold_bar']},
-    {nm:n('地质学家','Geologist'),need:4,items:['gem:quartz','gem:amethyst','gem:topaz','gem:aquamarine']},
-    {nm:n('冒险家','Adventurer'),need:3,items:['mat:slime','mat:bat_wing','mat:bug_meat']}]},
+    {nm:n('春季采集','Spring Foraging'),need:4,items:['forage:horseradish','forage:daffodil','forage:leek','forage:dandelion'],give:'seed:wild_sp*30'},
+    {nm:n('夏季采集','Summer Foraging'),need:3,items:['forage:spice_berry','forage:wild_grape','forage:sweet_pea'],give:'seed:wild_su*30'},
+    {nm:n('秋季采集','Fall Foraging'),need:4,items:['forage:mushroom','forage:wild_plum','forage:hazelnut','forage:blackberry'],give:'seed:wild_fa*30'},
+    {nm:n('冬季采集','Winter Foraging'),need:4,items:['forage:winter_root','forage:crystal_fruit','forage:snow_yam','forage:crocus'],give:'seed:wild_wi*30'},
+    {nm:n('建筑材料','Construction'),need:4,items:['mat:wood*99','mat:wood*99','mat:stone*99','mat:hardwood*10'],give:'craft:charcoal_kiln*1'},
+    {nm:n('异国采集','Exotic Foraging'),need:5,items:['forage:coconut','crop:cactus','forage:cave_carrot','forage:red_mushroom','forage:purple_mushroom','artisan:maple_syrup','artisan:oak_resin','artisan:pine_tar','forage:morel'],give:'food:autumn_bounty*5'}]},
+  {id:'pantry',nm:n('茶水间','Pantry'),reward:n('温室修复了!','The greenhouse is restored!'),unlock:'greenhouse',bundles:[
+    {nm:n('春季作物','Spring Crops'),need:4,items:['crop:parsnip','crop:green_bean','crop:cauliflower','crop:potato'],give:'craft:speed_gro*20'},
+    {nm:n('夏季作物','Summer Crops'),need:4,items:['crop:tomato','crop:pepper','crop:blueberry','crop:melon'],give:'craft:quality_sprinkler*1'},
+    {nm:n('秋季作物','Fall Crops'),need:4,items:['crop:corn','crop:eggplant','crop:pumpkin','crop:yam'],give:'craft:bee_house*1'},
+    {nm:n('优质作物','Quality Crops'),need:3,items:['crop:parsnip~2*5','crop:melon~2*5','crop:pumpkin~2*5','crop:corn~2*5'],give:'craft:preserves_jar*1'},
+    {nm:n('畜牧','Animal'),need:5,items:['product:big_milk','product:big_egg','product:big_goat_milk','product:wool','product:duck_egg','product:egg'],give:'craft:cheese_press*1'},
+    {nm:n('匠人','Artisan'),need:6,items:['artisan:truffle_oil','artisan:cloth','artisan:goat_cheese','artisan:cheese','artisan:honey','artisan:jelly.apple','fruit:apple','fruit:apricot','fruit:orange','fruit:peach','fruit:pomegranate','fruit:cherry'],give:'craft:keg*1'}]},
+  {id:'fish',nm:n('鱼缸','Fish Tank'),reward:n('挡路的巨石消失了,镇上的渔夫开始教你淘金。','The glittering boulder is gone, and panning is open to you.'),unlock:'panning',bundles:[
+    {nm:n('河鱼','River Fish'),need:4,items:['fish:sunfish','fish:catfish','fish:shad','fish:tiger_trout'],give:'mat:bait*30'},
+    {nm:n('湖鱼','Lake Fish'),need:4,items:['fish:bass','fish:carp','fish:bullhead','fish:sturgeon'],give:'craft:dressed_spinner*1'},
+    {nm:n('海鱼','Ocean Fish'),need:4,items:['fish:sardine','fish:tuna','fish:red_snapper','fish:tilapia'],give:'craft:warp_dock*5'},
+    {nm:n('夜钓','Night Fishing'),need:3,items:['fish:walleye','fish:bream','fish:eel'],give:'ring:small_glow'},
+    {nm:n('蟹笼','Crab Pot'),need:5,items:['fish:lobster','fish:crayfish','fish:crab','fish:cockle','fish:mussel','fish:shrimp','fish:snail','fish:periwinkle','fish:oyster','fish:clam'],give:'craft:crab_pot*3'},
+    {nm:n('特产鱼','Specialty Fish'),need:4,items:['fish:pufferfish','fish:ghostfish','fish:sandfish','fish:woodskip'],give:'food:dish_sea*5'}]},
+  {id:'boiler',nm:n('锅炉房','Boiler Room'),reward:n('矿车恢复运行了!','The minecarts run again!'),unlock:'minecart',bundles:[
+    {nm:n('铁匠','Blacksmith'),need:3,items:['bar:copper_bar','bar:iron_bar','bar:gold_bar'],give:'craft:furnace*1'},
+    {nm:n('地质学家','Geologist'),need:4,items:['gem:quartz','gem:earth_crystal','gem:frozen_tear','gem:fire_quartz'],give:'mat:omni_geode*5'},
+    {nm:n('冒险家','Adventurer'),need:2,items:['mat:slime*99','mat:bat_wing*10','mat:solar_essence','mat:void_essence'],give:'ring:small_magnet'}]},
   {id:'board',nm:n('公告栏','Bulletin Board'),reward:n('村民们对你的好感都提升了!','Everyone in town warms to you!'),unlock:'friends',bundles:[
-    {nm:n('厨师','Chef'),need:4,items:['food:fried_egg','food:bread','food:salad','food:pizza']},
-    {nm:n('匠人','Artisan'),need:4,items:['artisan:cheese','artisan:mayo','artisan:wine','artisan:honey']}]}
+    {nm:n('厨师','Chef'),need:6,items:['artisan:maple_syrup','forage:fiddlehead','product:truffle','crop:poppy','food:maki','food:fried_egg'],give:'food:pink_cake*3'},
+    {nm:n('实地考察','Field Research'),need:4,items:['forage:purple_mushroom','forage:nautilus','fish:chub','mat:frozen_geode'],give:'craft:recycling_machine*1'},
+    {nm:n('魔法师','Enchanter'),need:4,items:['artisan:oak_resin','artisan:wine.ancient','product:rabbit_foot','fruit:pomegranate'],give:'bar:gold_bar*5'},
+    {nm:n('染料','Dye'),need:6,items:['forage:red_mushroom','forage:sea_urchin','crop:sunflower','product:duck_feather','gem:aquamarine','crop:red_cabbage'],give:'craft:seed_maker*1'},
+    {nm:n('饲料','Fodder'),need:3,items:['crop:wheat*10','mat:hay*10','fruit:apple*3'],give:'mat:heater*1'}]},
+  {id:'vault',nm:n('金库','Vault'),reward:n('巴士修好了,去沙漠的路通了!','The bus is repaired: the desert is open!'),unlock:'bus',locked:4,bundles:[
+    {nm:n('2,500 金','2,500g'),need:1,pay:2500,items:[],give:'food:choc_cake*3'},
+    {nm:n('5,000 金','5,000g'),need:1,pay:5000,items:[],give:'craft:quality_fert*30'},
+    {nm:n('10,000 金','10,000g'),need:1,pay:10000,items:[],give:'craft:lightning_rod*5'},
+    {nm:n('25,000 金','25,000g'),need:1,pay:25000,items:[],give:'craft:crystalarium*1'}]}
 ];
-export const MUSEUM_REWARDS=[[5,'seed:sunflower',3,n('向日葵种子','Sunflower Seeds')],[10,'gold',1000,n('1000 金币','1000 gold')],[15,'food:pumpkin_pie',1,n('南瓜派','Pumpkin Pie')],[20,'gem:gem',1,n('钻石','Diamond')]];
+export const MUSEUM_REWARDS=[[5,'seed:cauliflower',9,n('花椰菜种子','Cauliflower Seeds')],[10,'seed:melon',9,n('甜瓜种子','Melon Seeds')],[15,'seed:starfruit',9,n('杨桃种子','Starfruit Seeds')],[20,'gold',1000,n('1000 金币','1000 gold')],[30,'gem:diamond',1,n('钻石','Diamond')],[40,'food:pumpkin_pie',3,n('南瓜派','Pumpkin Pie')],[60,'mat:rusty_key',1,n('生锈的钥匙:下水道开了','Rusty Key: the sewer opens')],[95,'mat:stardrop',1,n('星之果实','Stardrop')]];
 
-/* day, season, hours and what happens */
+/* day, season, hours and what happens. days: how many days it runs */
 export const FESTIVALS=[
-  {id:'egg',s:0,d:13,nm:n('复活蛋节','Egg Festival'),open:[540,840],kind:'egg',desc:n('在广场上找彩蛋,限时比赛!','Hunt painted eggs across the plaza before time runs out!')},
+  {id:'egg',s:0,d:13,nm:n('复活蛋节','Egg Festival'),open:[540,840],kind:'egg',sells:[['seed','strawberry',100]],desc:n('在广场上找彩蛋,限时比赛!','Hunt painted eggs across the plaza before time runs out!')},
   {id:'flower',s:0,d:24,nm:n('花舞节','Flower Dance'),open:[540,840],kind:'dance',desc:n('邀请一位朋友跳舞(需要 4 颗心)。','Ask a friend to dance (needs 4 hearts).')},
   {id:'luau',s:1,d:11,nm:n('夏威夷宴会','Luau'),open:[540,840],kind:'soup',desc:n('往大锅里加一样你最好的食材。','Add your best ingredient to the great pot.')},
   {id:'jellies',s:1,d:28,nm:n('月光水母之舞','Moonlight Jellies'),open:[1320,1440],kind:'jellies',desc:n('到码头看发光的水母从湖面经过。','Go to the dock and watch the glowing jellies pass.')},
-  {id:'fair',s:2,d:16,nm:n('星露谷展览会','Fall Fair'),open:[540,900],kind:'fair',desc:n('布置你的展台,赢星星币。','Dress your grange display and win tokens.')},
+  {id:'fair',s:2,d:16,nm:n('星露谷展览会','Fall Fair'),open:[540,900],kind:'fair',desc:n('布置你的展台,玩游戏,赢星星币。','Dress your grange display, play the stalls, win star tokens.')},
   {id:'spirit',s:2,d:27,nm:n('万灵节','Spirit\'s Eve'),open:[1320,1440],kind:'maze',desc:n('穿过雾中迷宫,找到金南瓜。','Find the golden pumpkin in the misty maze.')},
   {id:'ice',s:3,d:8,nm:n('冰雪节','Festival of Ice'),open:[540,840],kind:'icefish',desc:n('冰钓比赛:两分钟,钓得最多的人赢。','Ice-fishing contest: two minutes, most fish wins.')},
-  {id:'market',s:3,d:16,nm:n('夜市','Night Market'),open:[1020,1440],kind:'market',desc:n('湖上的船坞夜市:稀有种子和小礼物。','Boat market on the lake: rare seeds and gifts.')},
+  {id:'market',s:3,d:15,days:3,nm:n('夜市','Night Market'),open:[1020,1560],kind:'market',desc:n('湖上的船坞夜市:稀有种子、潜水艇和小礼物。','Boat market on the lake: rare seeds, a submarine and gifts.')},
   {id:'star',s:3,d:25,nm:n('冬日星盛宴','Feast of the Winter Star'),open:[540,840],kind:'gift',desc:n('一年的终点,和大家交换礼物。','The year ends with an exchange of gifts.')}
 ];
+/* the journal's own quests. after: only opens once the named quest is done */
 export const QUESTS=[
   {id:'intro_farm',nm:n('开垦土地','Till the land'),goal:{till:15},reward:100,msg:n('用锄头开垦 15 块土地。','Till 15 plots.')},
-  {id:'intro_ship',nm:n('第一次收获','First harvest'),goal:{ship:1},reward:200,msg:n('把一样作物放进出货箱。','Put a crop in the shipping bin.')},
+  {id:'intro_ship',nm:n('第一次收获','Getting started'),goal:{ship:1},reward:200,msg:n('把一样作物放进出货箱。','Put a crop in the shipping bin.')},
   {id:'intro_fish',nm:n('湖边的第一条鱼','First catch'),goal:{fish:1},reward:200,msg:n('钓到一条鱼。','Catch a fish.')},
-  {id:'intro_mine',nm:n('下到矿洞','Into the mine'),goal:{floor:5},reward:300,msg:n('抵达矿洞第 5 层。','Reach mine floor 5.')},
-  {id:'intro_friend',nm:n('认识大家','Meet everyone'),goal:{meet:6},reward:300,msg:n('和 6 位村民打招呼。','Talk to 6 villagers.')},
-  {id:'intro_build',nm:n('安个家','Put down roots'),goal:{build:1},reward:500,msg:n('在木匠那里建一座农场建筑。','Commission a farm building.')}
+  {id:'intro_mine',nm:n('探索矿洞','Explore the mine'),goal:{floor:5},reward:300,msg:n('抵达矿洞第 5 层。','Reach mine floor 5.')},
+  {id:'intro_friend',nm:n('自我介绍','Introductions'),goal:{meet:12},reward:500,msg:n('和每位村民打招呼。','Greet everyone in town.')},
+  {id:'intro_gift',nm:n('广交朋友','How to win friends'),goal:{gifts:1},reward:100,msg:n('送一位村民礼物。','Give someone a gift.')},
+  {id:'intro_build',nm:n('养动物','Raising animals'),goal:{build:1},reward:500,msg:n('在木匠那里建一座农场建筑。','Commission a farm building.')},
+  {id:'q_copper',nm:n('打造之路','Forging ahead'),goal:{smelted:1},reward:300,msg:n('用熔炉炼出一根金属锭。','Smelt a bar in a furnace.')},
+  {id:'q_donate',nm:n('考古学','Archaeology'),goal:{donated:1},reward:250,msg:n('向博物馆捐赠一件收藏。','Donate something to the museum.')},
+  {id:'q_deeper',nm:n('矿洞深处','Deeper in the mine'),goal:{floor:40},reward:1000,msg:n('抵达矿洞第 40 层。','Reach mine floor 40.')},
+  {id:'q_bottom',nm:n('矿洞底部','To the bottom'),goal:{floor:120},reward:5000,msg:n('抵达矿洞第 120 层。','Reach mine floor 120.')},
+  {id:'q_guild',nm:n('入会测试','Initiation'),goal:{slain:10},reward:500,msg:n('消灭 10 只怪物,加入冒险家公会。','Slay 10 monsters to join the guild.')},
+  {id:'q_cook',nm:n('下厨','First meal'),goal:{cooked:1},reward:200,msg:n('做一道菜。','Cook a dish.')}
 ];
+/* 1.5 scale: the Sunday cooking show runs through tv recipes in order */
+export const WILD={ wild_sp:['horseradish','daffodil','leek','dandelion'], wild_su:['spice_berry','wild_grape','sweet_pea'], wild_fa:['mushroom','wild_plum','hazelnut','blackberry'], wild_wi:['winter_root','crystal_fruit','snow_yam','crocus'] };
