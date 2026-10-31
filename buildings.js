@@ -214,8 +214,9 @@ export function makeVillager(col,style=0,idx=0){
 
 /* a shop sign, lettered on a canvas */
 export function signBoard(world,x,y,z,text,ry=0){
-  mats(); const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d'); g.fillStyle='#4a3020'; g.fillRect(0,0,512,128); g.strokeStyle='#c8a468'; g.lineWidth=8; g.strokeRect(8,8,496,112); g.fillStyle='#f1e4c8'; g.font='600 58px "PingFang SC",system-ui,sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(text,256,68);
-  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const m=new THREE.Mesh(new THREE.BoxGeometry(3.2,.8,.1),[M.trim,M.trim,M.trim,M.trim,new THREE.MeshBasicMaterial({map:t,toneMapped:false}),M.trim]); m.position.set(x,y,z); m.rotation.y=ry; m.castShadow=true; world.add(m); return m;
+  mats(); const c=document.createElement('canvas'); c.width=512; c.height=128; const g=c.getContext('2d'); g.fillStyle='#4a3020'; g.fillRect(0,0,512,128); g.strokeStyle='#c8a468'; g.lineWidth=8; g.strokeRect(8,8,496,112); g.font='600 58px "PingFang SC",system-ui,sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  const paint=s=>{ g.fillStyle='#4a3020'; g.fillRect(14,14,484,100); g.fillStyle='#f1e4c8'; const w=g.measureText(s).width, k=Math.min(1,456/w); g.save(); g.translate(256,68); g.scale(k,k); g.fillText(s,0,0); g.restore(); }; paint(text);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const m=new THREE.Mesh(new THREE.BoxGeometry(3.2,.8,.1),[M.trim,M.trim,M.trim,M.trim,new THREE.MeshBasicMaterial({map:t,toneMapped:false}),M.trim]); m.position.set(x,y,z); m.rotation.y=ry; m.castShadow=true; m.userData.setText=s=>{ paint(s); t.needsUpdate=true; }; world.add(m); return m;
 }
 export function mailbox(world,x,z){ mats(); const K=new Kit(), G=new THREE.Group(); K.post('log',.06,1.1,0,0,0); K.box('red',.5,.34,.74,0,1.24,0); K.box('dark',.4,.2,.02,0,1.26,.38); K.bake(G); G.position.set(x,terrainH(x,z),z); world.add(G); addObstacle(x,z,.4); return G; }
 export function greenhouse(world,x,z,w=11,d=10){ mats(); const K=new Kit(), G=new THREE.Group(); const glass=new THREE.MeshBasicMaterial({color:0xcfe6e8,transparent:true,opacity:.22,side:THREE.DoubleSide,depthWrite:false,toneMapped:false}); M.gl=glass;

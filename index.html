@@ -225,7 +225,7 @@ const clamp = (v,a,b)=>v<a?a:v>b?b:v;
 const lerp = (a,b,t)=>a+(b-a)*t;
 
 /* ---------- i18n ---------- */
-let LANG = localStorage.getItem('sv_lang') || 'zh';
+let LANG = new URLSearchParams(location.search).get('lang') || localStorage.getItem('sv_lang') || ((navigator.language||'').startsWith('zh')?'zh':'en'); if(LANG!=='zh') LANG='en';
 const T = {
   zh:{ gen:'星星人露谷 · 正在生成世界…', season:['春','夏','秋','冬'], map:'地图 MAP', energy:'体力 Energy',
     ops:'操作', move:'移动', run:'奔跑', mouse:'鼠标', view:'视角', tool:'工具', use:'使用工具',
@@ -756,7 +756,9 @@ function openInv(){
 }
 
 /* language */
+const signs=[];
 function applyLang(){
+  $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
   document.documentElement.lang = LANG==='zh'?'zh':'en';
   $('#langbtn').textContent=t('lang'); $('#minit').textContent=t('map');
   $('#enlab').textContent=t('energy');
@@ -766,7 +768,8 @@ function applyLang(){
   $('#h10').textContent=L('制作','craft'); $('#h11').textContent=L('钓鱼','fish'); $('#h12').textContent=L('日志','journal');
   $('#shopt').textContent=t('shopt'); $('#shoph').textContent=t('shoph');
   $('#invt').textContent=t('invt'); $('#invh').textContent=t('invh');
-  renderStatus(); renderHotbar();
+  for(const [m,b] of signs) m.userData.setText(L(b.zh,b.en));
+  updateQualBtn(); renderStatus(); renderHotbar(); dispatchEvent(new Event('sv-lang'));
 }
 $('#langbtn').onclick=()=>{ LANG=LANG==='zh'?'en':'zh'; localStorage.setItem('sv_lang',LANG); applyLang(); };
 $('#qualbtn').onclick=()=>{ const o=['low','med','high']; setQuality(o[(o.indexOf(QUAL)+1)%3]); };
@@ -872,7 +875,7 @@ function setupPost(){
   composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(2);
 }
 function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); }
-function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:'流畅',med:'均衡',high:'极致'}[QUAL]||QUAL); }
+function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:L('流畅','Smooth'),med:L('均衡','Balanced'),high:L('极致','Ultra')}[QUAL]||QUAL); }
 
 const camAim=new THREE.Vector3(0,0,4), cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.Vector3();
 let last=performance.now(), miniT=0, statusT=0, fCnt=0, fAcc=0, sTick=0;
@@ -1075,7 +1078,7 @@ function buildFarmstead(){
   addSpot(0,-11.6,2.6,()=>enterHouse(),()=>L('回屋','go inside')); addSpot(BIN.x,BIN.z,2.6,()=>G.openBin(),()=>L('出货箱','shipping bin')); addSpot(4.6,-8.6,1.8,()=>G.checkMail(),()=>L('信箱','mailbox')+(S.mail.length?' ✉️':'')); addSpot(MINE_ENT.x,MINE_ENT.z+1.5,3.4,()=>G.mine.enter(1),()=>L('进入矿洞','enter the mine'));
 }
 function buildTown(){
-  for(const b of TOWN){ addSmoke(logHouse({world,x:b.x,z:b.z,w:b.w,d:b.d,h:2.9,rh:2.2,porch:false,chimney:b.id!=='museum'}).userData.smoke); signBoard(world,b.x,3.5,b.z+b.d/2+.26,LANG==='zh'?b.zh:b.en); addSpot(b.x,b.z+b.d/2+1.4,2.9,b.fn,()=>L(b.zh,b.en)); G.placeSet(b.id,b.x,b.z+b.d/2+3); }
+  for(const b of TOWN){ addSmoke(logHouse({world,x:b.x,z:b.z,w:b.w,d:b.d,h:2.9,rh:2.2,porch:false,chimney:b.id!=='museum'}).userData.smoke); signs.push([signBoard(world,b.x,3.5,b.z+b.d/2+.26,L(b.zh,b.en)),b]); addSpot(b.x,b.z+b.d/2+1.4,2.9,b.fn,()=>L(b.zh,b.en)); G.placeSet(b.id,b.x,b.z+b.d/2+3); }
   const P=PLAZA; G.placeSet('plaza',P.x,P.z); G.placeSet('lake',8,26); G.placeSet('dock',DOCK.x-.4,DOCK.z0+8); G.placeSet('river',-170,44); G.placeSet('falls',-186,36); G.placeSet('lighthousePath',60,16);
   'ABCDEFGHIJK'.split('').forEach((c,i)=>G.placeSet('home'+c,TOWN[i%TOWN.length].x+((i%3)-1)*2,TOWN[i%TOWN.length].z+TOWN[i%TOWN.length].d/2+1.5));
 }
@@ -1138,7 +1141,7 @@ function setupValley(){
 /* ============================ BOOT ============================ */
 function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; }
 async function boot(){
-  $('#loadsub').textContent='正在铺开湖谷 · painting the valley…';
+  $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
   await loadScenery(p=>setProgress(5+p*35)); setProgress(42); new Image().src='assets/paint/portraits.webp';
   setupValley();
   buildScenery(world,QUAL); setupFlora(world,plantedTrees,plantedPlants,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
