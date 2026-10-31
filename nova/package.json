@@ -1,0 +1,9 @@
+{
+  "name": "nova",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NOVA: open a link, play the game.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
