@@ -888,7 +888,7 @@ class HourGrade extends Effect {
      }`,
     { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)]]) }); }
 }
-let QUAL = localStorage.getItem('sv_qual')||'med';
+let QUAL = localStorage.getItem('sv_qual2')||'high';   // the best picture by default; the governor below still keeps a slower machine smooth
 const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false,ao:0,sharp:.3},
             med:{dpr:1.4,shadow:1536,bloom:true,msaa:0,smaa:true,ao:.46,sharp:.26},
             high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false,ao:.52,sharp:.2} };
@@ -908,7 +908,7 @@ function setupPost(){
   composer.addPass(new EffectPass(camera, ...fx));
   composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(2);
 }
-function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); document.body.classList.toggle('lowfx',q==='low'); }
+function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual2',q); setupPost(); updateQualBtn(); document.body.classList.toggle('lowfx',q==='low'); }
 function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:L('流畅','Smooth'),med:L('均衡','Balanced'),high:L('极致','Ultra')}[QUAL]||QUAL); }
 
 const camAim=new THREE.Vector3(0,0,4), cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.Vector3();
@@ -1238,17 +1238,18 @@ function setupValley(){
 }
 
 /* ============================ BOOT ============================ */
-function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; }
+/* the bar lives here and on NOVA's loading screen. The awaited wait lets it paint before the next heavy step */
+function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; nova('progress',{p,msg:msg||''},300); return new Promise(r=>setTimeout(r,24)); }
 async function boot(){
   $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
-  await loadScenery(p=>setProgress(5+p*35)); setProgress(42); new Image().src='assets/paint/portraits.webp';
+  await setProgress(4,L('正在加载美术资源…','Loading the art…')); await loadScenery(p=>setProgress(5+p*35)); await setProgress(42,L('正在铺开湖谷…','Laying out the valley…')); new Image().src='assets/paint/portraits.webp';
   setupValley();
-  buildScenery(world,QUAL); setupFlora(world,plantedTrees,plantedPlants,QUAL); reskinTrees(bakeFar(renderer)); setSeason(S.season); bakeMap(); setProgress(58);
+  buildScenery(world,QUAL); await setProgress(50,L('正在种下树木…','Planting the trees…')); setupFlora(world,plantedTrees,plantedPlants,QUAL); reskinTrees(bakeFar(renderer)); setSeason(S.season); bakeMap(); await setProgress(58,L('正在建造小镇…','Building the town…'));
   buildRain(); buildCritters(); buildFireflies(); buildPetals();
   buildFarmstead(); buildTown(); outerPlaces(); dressValley(world,TOWN); buildLife(world); mineMouth(world,MINE_ENT.x,MINE_ENT.z); G.mine.build(); G.buildPeople(); boat=buildDock(world); buildLighthouse(world,ISLANDS[4][0],ISLANDS[4][1]); buildSmoke(world); setupBeasts(); house=cabinRoom(scene); setProgress(70);
-  buildAvatar(); await loadTwinkle(); avatar.add(toolMesh); setupPost(); setProgress(84);
+  await setProgress(72,L('星星人醒来了…','The star figure wakes…')); buildAvatar(); await loadTwinkle(); avatar.add(toolMesh); setupPost(); await setProgress(84,L('正在调色…','Mixing the light…'));
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
-  setProgress(90);
+  await setProgress(90);
 
   // a new farmer: fifteen parsnip seeds, and a yard gone to weeds
   // saves belong to your NOVA account: the launcher says whether to continue, and signing in is what makes progress stick
@@ -1260,7 +1261,7 @@ async function boot(){
   if(DBG) applyDebugShot();
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn(); buildTouch(); document.body.classList.toggle('lowfx',QUAL==='low'); paintHud();
-  setProgress(100);
+  await setProgress(100,L('马上就好…','Almost there…'));
   setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ showCards(L,()=>startChecklist(S,L,player,snd)); } if(bootMode==='parked') afterAuth(); } },250); // ensure render targets match the (now-visible) viewport
   requestAnimationFrame(frame);
 }
