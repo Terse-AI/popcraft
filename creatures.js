@@ -31,7 +31,7 @@ export function furLod(A,cx,cz){ if(!A.shells) return; const on=Math.hypot(A.x-c
 function refine(R,k){ if(k<2||R.length<3) return R; const out=[], n=R.length, cr=(a,b,c,d,t)=>.5*(2*b+(c-a)*t+(2*a-5*b+4*c-d)*t*t+(3*b-a-3*c+d)*t*t*t), ca=new THREE.Color(), cb=new THREE.Color();
   for(let i=0;i<n-1;i++){ const a=R[Math.max(0,i-1)], b=R[i], c=R[i+1], d=R[Math.min(n-1,i+2)]; for(let s=0;s<k;s++){ const t=s/k, q=[]; for(let j=0;j<5;j++) q.push(cr(a[j],b[j],c[j],d[j],t)); q[3]=Math.max(.001,q[3]); q[4]=Math.max(.001,q[4]); ca.set(b[5]); cb.set(c[5]); q[5]=ca.clone().lerp(cb,t); out.push(q); } }
   out.push(R[n-1]); return out; }
-function loft(rings0,seg=9,under=null,sub=3){
+export function loft(rings0,seg=9,under=null,sub=3){
   const rings=refine(rings0,sub); seg=Math.round(seg*1.45);
   const P=[],C=[],UV=[],I=[], n=rings.length, c=new THREE.Color(), cu=under===null?null:new THREE.Color(under);
   rings.forEach((r,i)=>{ const prev=rings[Math.max(0,i-1)], next=rings[Math.min(n-1,i+1)];

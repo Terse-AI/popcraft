@@ -121,7 +121,7 @@ function floraMaterial(depth,plantsR,leafy){
     uniforms:{ ...U, uLodT:plantsR?U.uLodP:U.uLodT, uDetail:{value:leafy?.78:.9}, uMipBias:{value:leafy?-1.2:-.6}, uMap:{value:TEX.sheet_near}, uBark:{value:TEX.mt_detail}, uWoodRow:{value:rowV('wood')}, uIceRow:{value:rowV('ice')} }, vertexShader:vs,
     fragmentShader:`precision highp float; uniform sampler2D uMap,uRamps,uBark; uniform vec3 uShade,uLit,uFog,uSunDirW,uFogSun; uniform float uSnow,uWoodRow,uIceRow,uLodT,uDetail,uMipBias,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv,vP; varying vec3 vN,vV; varying float vRow,vTone,vShade,vTrunk,vFog,vD,vY,vF; ${RAMP_GLSL} ${CLOUD_GLSL} ${dith}
-      void main(){ float fade=smoothstep(uLodT-10.,uLodT-1.,vD); if(fade>dith(gl_FragCoord.xy)+.001) discard; if(vF<3.4&&(vF-1.2)/2.2<dith(gl_FragCoord.xy)) discard;
+      void main(){ float fade=smoothstep(uLodT-5.,uLodT-1.,vD); if(fade>dith(gl_FragCoord.xy)+.001) discard; if(vF<3.4&&(vF-1.2)/2.2<dith(gl_FragCoord.xy)) discard;
         if(vD<uReveal.z){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.26){ if(dith(gl_FragCoord.xy*.5)>rr/.26*1.1-.08) discard; } }
         vec3 c; float a=1.; float lam=dot(normalize(vN),uSunDirW);
         if(vTrunk>1.5){ c=ramp(.22+vTone,vRow)*mix(uShade,uLit,.36); }

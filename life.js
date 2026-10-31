@@ -1,7 +1,7 @@
 /* The small life of the valley: dust caught in the sun, leaves and petals tumbling down, dragonflies working
    the shallows, rings where fish rise. Everything here wraps around the camera, so it costs the same anywhere. */
 import * as THREE from 'three';
-import { U, lakeField, WATER_Y, terrainH } from './scenery.js';
+import { U, lakeField, WATER_Y, heightAt } from './scenery.js';
 
 const tau=Math.PI*2;
 let motes=null, leaves=null, leafD=[], flies=null, flyD=[], rings=[], dummy=new THREE.Object3D(), col=new THREE.Color(), active=true;
@@ -57,4 +57,4 @@ export function updateLife(t,dt,cam,season,rig,inside){
   for(const r of rings){ r.t+=dt; if(r.t<0) continue; if(r.t<dt*1.5){ let ok=false; for(let k=0;k<8&&!ok;k++){ const a=Math.random()*tau, d=7+Math.random()*34, x=cam.x+Math.cos(a)*d, z=cam.z+Math.sin(a)*d; if(lakeField(x,z)>.03){ r.m.position.set(x,WATER_Y+.03,z); ok=true; } } r.m.visible=ok&&dayK>.15&&season!==3; }
     const q=r.t/3.2; r.m.scale.setScalar(.1+q*2.3); r.m.material.opacity=.42*(1-q)*(1-q); if(q>=1){ r.t=-2-Math.random()*7; r.m.visible=false; } }
 }
-const terrainHFast=(x,z)=>Math.max(terrainH(x,z),WATER_Y);
+const terrainHFast=(x,z)=>Math.max(heightAt(x,z),WATER_Y);

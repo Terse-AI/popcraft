@@ -111,6 +111,7 @@
 <div id="hud" class="hidden">
   <div id="top">
     <span class="pill" id="qualbtn">⚙ 均衡</span>
+    <span class="pill" id="sndbtn">🔊</span>
     <span class="pill" id="langbtn">🌐 中文</span>
     <a class="pill" href="./mc.html">⛏ Minecraft 模式</a>
     <span class="pill" id="journalbtn">📖</span>
@@ -188,10 +189,12 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
+  collide, addObstacle, addBoxObstacle, splatAt, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
 import { setupFlora, updateFlora, refreshFlora } from './flora.js';
 import { buildLife, updateLife } from './life.js';
+import { cropMesh, soilGeometry } from './crops.js';
+import { startAudio, updateAudio, play as snd, playAt as sndAt, setVolumes, volumes, duckMusic, auditSounds } from './audio.js';
 import { makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, makeSheep, makeGoat, makePig, makeWalkDuck, makeFish, poseQuadruped, poseBird, damp, angDamp, furLod } from './creatures.js';
 import { CROPS, CROP_FORM, FISH, RODS, ANIMALS } from './data.js';
 import { makeValley, defaultState, DB } from './valley.js';
@@ -358,7 +361,7 @@ const BIN={x:8.5,z:-7.5}, CABIN={x:0,z:-16};
 const tileGroup=new THREE.Group(); world.add(tileGroup);
 const cropGroup=new THREE.Group(); world.add(cropGroup);
 const soilMat=paintedSoil(false), wetMat=paintedSoil(true);
-const tileGeo=new THREE.BoxGeometry(0.92,0.12,0.92);
+const tileGeo=soilGeometry();
 function tkey(x,z){ return x+','+z; }
 function getTile(x,z){ return S.tiles.get(tkey(x,z)); }
 function tileMeshes(){ return tileGroup.children; }
@@ -378,50 +381,6 @@ function refreshTileMesh(x,z){
 }
 
 /* crop stage mesh */
-function _lmat(col){ return new THREE.MeshStandardMaterial({color:col,roughness:0.55,metalness:0,side:THREE.DoubleSide}); }
-function _leaf(mat,len,wid){ const geo=new THREE.SphereGeometry(1,8,5); geo.scale(wid,len,0.04); geo.translate(0,len,0); return new THREE.Mesh(geo,mat); }
-// detailed, distinct per-crop plant model (used in-field AND rendered to the shop/inventory icons)
-function cropMesh(id,stage,days){
-  const c=CROPS[id], form=CROP_FORM[id]||'fruiting', g=new THREE.Group();
-  const frac=clamp(stage/days,0,1), ripe=stage>=days;
-  const lm=_lmat(c.col), lm2=_lmat(new THREE.Color(c.col).multiplyScalar(0.78).getHex());
-  const fm=new THREE.MeshStandardMaterial({color:c.fruit,roughness:0.4,metalness:0.03});
-  if(stage<=1){ const st=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.03,0.1,5),lm); st.position.y=0.05; g.add(st);
-    const a=_leaf(lm,0.1,0.05); a.position.y=0.08; a.rotation.z=0.6; g.add(a); const b=_leaf(lm,0.1,0.05); b.position.y=0.08; b.rotation.z=-0.6; g.add(b);
-    g.scale.setScalar(0.6+frac*0.5); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g; }
-  const sc=0.55+frac*0.6;
-  if(form==='root'||form==='tuber'){
-    const n=5+Math.floor(frac*4);
-    for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(form==='root'?lm:lm2,0.3+frac*0.22,0.045+frac*0.03);
-      l.position.set(Math.cos(a)*0.05,0.12,Math.sin(a)*0.05); l.rotation.y=a; l.rotation.z=0.95-frac*0.35; g.add(l); }
-    if(ripe){ const root=new THREE.Mesh(new THREE.SphereGeometry(0.12,12,10),fm); root.scale.set(1,form==='root'?1.6:1.1,1); root.position.y=0.04; g.add(root);
-      if(form==='tuber'){ for(let i=0;i<3;i++){ const tbr=new THREE.Mesh(new THREE.SphereGeometry(0.09,10,8),fm); tbr.position.set((Math.random()-.5)*0.22,0.04,(Math.random()-.5)*0.22); tbr.scale.y=0.85; g.add(tbr);} } }
-  } else if(form==='head'){
-    const n=8; for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(lm2,0.26+frac*0.18,0.14+frac*0.06); l.position.set(Math.cos(a)*0.12,0.06,Math.sin(a)*0.12); l.rotation.y=a; l.rotation.z=0.75; g.add(l);}
-    const ball=new THREE.Mesh(new THREE.IcosahedronGeometry(0.1+frac*0.11,1), id==='kale'?lm:fm); ball.position.y=0.16+frac*0.08; if(id==='kale')ball.scale.y=0.7; g.add(ball);
-  } else if(form==='fruiting'){
-    const h=0.3+frac*0.7; const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.04,h,6),lm2); stem.position.y=h/2; g.add(stem);
-    const nl=3+Math.floor(frac*4); for(let i=0;i<nl;i++){ const l=_leaf(lm,0.15,0.09); l.position.y=0.14+i*(h/nl); l.rotation.y=i*1.35; l.rotation.z=0.35; g.add(l);}
-    if(frac>0.6){ const nf=1+Math.floor(frac*3); for(let i=0;i<nf;i++){ let fr;
-      if(id==='pepper'){ fr=new THREE.Mesh(new THREE.ConeGeometry(0.055,0.2,8),fm); fr.rotation.x=Math.PI; }
-      else if(id==='eggplant'){ fr=new THREE.Mesh(new THREE.SphereGeometry(0.08,12,10),fm); fr.scale.set(0.8,1.6,0.8); }
-      else { fr=new THREE.Mesh(new THREE.SphereGeometry(0.095,14,12),fm); }
-      const a=i/nf*6.28; fr.position.set(Math.cos(a)*0.1,0.2+Math.random()*h*0.5,Math.sin(a)*0.1); g.add(fr);} }
-  } else if(form==='berry'){
-    const n=5+Math.floor(frac*3); for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(lm,0.14,0.08); l.position.set(Math.cos(a)*0.1,0.05,Math.sin(a)*0.1); l.rotation.y=a; l.rotation.z=1.0; g.add(l);}
-    if(frac>0.55){ const nb=3+Math.floor(frac*4); for(let i=0;i<nb;i++){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.045,10,8),fm); b.position.set((Math.random()-.5)*0.24,0.07+Math.random()*0.07,(Math.random()-.5)*0.24); g.add(b);} }
-  } else if(form==='vine'){
-    const n=6; for(let i=0;i<n;i++){ const a=i/n*6.28, l=_leaf(lm2,0.2,0.16); l.position.set(Math.cos(a)*0.18,0.03,Math.sin(a)*0.18); l.rotation.y=a; l.rotation.z=1.3; g.add(l);}
-    if(ripe){ let fr; if(id==='grape'){ fr=new THREE.Group(); for(let i=0;i<12;i++){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),fm); b.position.set((Math.random()-.5)*0.14,-Math.random()*0.14,(Math.random()-.5)*0.14); fr.add(b);} fr.position.y=0.2; }
-      else { fr=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),fm); if(id==='pumpkin'){ fr.scale.set(1,0.78,1);} fr.position.y=0.15; } g.add(fr); }
-  } else if(form==='grain'){
-    const stalks=3+Math.floor(frac*3), sm=_lmat(ripe?0xd8c25a:c.col);
-    for(let i=0;i<stalks;i++){ const h=0.5+frac*0.8, a=i/stalks*6.28; const st=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.025,h,5),sm); st.position.set(Math.cos(a)*0.08,h/2,Math.sin(a)*0.08); st.rotation.z=(Math.random()-.5)*0.2; g.add(st);
-      if(id==='corn'&&ripe){ const cob=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.045,0.2,8),fm); cob.position.set(st.position.x,h*0.65,st.position.z); g.add(cob); }
-      if(id==='wheat'&&frac>0.6){ const hd=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.18,6),fm); hd.position.set(st.position.x,h+0.04,st.position.z); g.add(hd); } }
-  }
-  g.scale.setScalar(sc); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); return g;
-}
 function rebuildCrop(x,z){
   const tl=getTile(x,z); const old=cropGroup.children.find(m=>m.userData.cell&&m.userData.cell.x===x&&m.userData.cell.z===z);
   if(old) cropGroup.remove(old);
@@ -665,7 +624,7 @@ function updateBoat(dt,now){ if(!boat) return;
   if(S.boating){ boat.position.x=player.pos.x; boat.position.z=player.pos.z; if(player.moving) boatYaw=lerpAngle(boatYaw,player.yaw,.06); boat.rotation.y=boatYaw; avatar.rotation.y=boatYaw; }
   boat.position.y=WATER_Y+.14+Math.sin(now*.0016)*.05; boat.rotation.z=Math.sin(now*.0011)*.022; boat.rotation.x=Math.sin(now*.0014+1)*.012;
 }
-function toggleBoat(){
+function toggleBoat(){ snd('splash');
   if(S.boating){ // step out onto the nearest solid ground within reach
     for(let r=2;r<8;r+=.5) for(let a=0;a<6.3;a+=.4){ const x=player.pos.x+Math.sin(a)*r, z=player.pos.z+Math.cos(a)*r;
       if(onDock(x,z)||lakeField(x,z)<-.012){ S.boating=false; player.pos.x=x; player.pos.z=z; toast(L('上岸了','Stepped ashore')); return true; } }
@@ -709,7 +668,7 @@ function updateRain(dt){
   if(S.inMine||S.inHouse){ if(rainPts) rainPts.visible=false; if(snowPts) snowPts.visible=false; return; }
   if(rainPts&&(S.weather==='rain'||S.weather==='storm')){ rainPts.visible=true; const p=rainPts.geometry.attributes.position; for(let i=0;i<p.count;i+=2){ let y=p.getY(i)-dt*26, x=p.getX(i)+dt*2; if(y<0){ y=30; } p.setY(i,y); p.setY(i+1,y-.7); } p.needsUpdate=true; rainPts.position.set(player.pos.x,0,player.pos.z); }
   if(snowPts&&snowPts.visible){ const p=snowPts.geometry.attributes.position, t=performance.now()*.001; for(let i=0;i<p.count;i++){ let y=p.getY(i)-dt*1.5; if(y<0) y=24; p.setY(i,y); p.setX(i,p.getX(i)+Math.sin(t+i)*dt*.5); } p.needsUpdate=true; snowPts.position.set(player.pos.x,0,player.pos.z); }
-  if(S.weather==='storm'){ flashT-=dt; if(flashT<0){ flash=1; flashT=4+Math.random()*12; } }
+  if(S.weather==='storm'){ flashT-=dt; if(flashT<0){ flash=1; flashT=4+Math.random()*12; snd('thunder',{},.1+Math.random()*.85); } }
   flash=Math.max(0,flash-dt*3.5);
 }
 function applyWeather(){
@@ -720,7 +679,7 @@ function applyWeather(){
 
 /* ============================ TIME / DAY ============================ */
 function fadeMsg(msg,hold=1800){ $('#fadet').textContent=msg; $('#fade').classList.add('on'); setTimeout(()=>$('#fade').classList.remove('on'),hold); }
-function sleep(passedOut){
+function sleep(passedOut){ snd('sleep');
   if(S.sleeping) return; S.sleeping=true; G.cancelFish();
   $('#fadet').textContent=passedOut===true?L('你累倒了…','You passed out…'):t('sleep'); $('#fade').classList.add('on');
   setTimeout(()=>{
@@ -796,6 +755,9 @@ function applyLang(){
 }
 $('#langbtn').onclick=()=>{ LANG=LANG==='zh'?'en':'zh'; localStorage.setItem('sv_lang',LANG); applyLang(); };
 $('#qualbtn').onclick=()=>{ const o=['low','med','high']; setQuality(o[(o.indexOf(QUAL)+1)%3]); };
+$('#sndbtn').onclick=()=>modal(L('🔊 声音','🔊 Sound'),b=>{ const v=volumes(); for(const [k,zh,en] of [['master','总音量','Master'],['music','配乐','Music'],['amb','环境声','Ambience'],['sfx','音效','Effects']]){ const r=document.createElement('label'); r.style.cssText='display:flex;align-items:center;gap:12px;margin:10px 0'; r.innerHTML='<span style="width:76px">'+L(zh,en)+'</span><input type="range" min="0" max="1" step="0.01" value="'+v[k]+'" style="flex:1">'; r.querySelector('input').oninput=e=>{ setVolumes({[k]:+e.target.value}); snd('tick'); }; b.appendChild(r); } const m=document.createElement('label'); m.style.cssText='display:flex;align-items:center;gap:10px;margin-top:12px'; m.innerHTML='<input type="checkbox" '+(v.mute?'checked':'')+'><span>'+L('静音','Mute')+'</span>'; m.querySelector('input').onchange=e=>{ setVolumes({mute:e.target.checked}); $('#sndbtn').textContent=e.target.checked?'🔇':'🔊'; }; b.appendChild(m); });
+for(const ev of ['pointerdown','keydown','touchstart']) addEventListener(ev,()=>startAudio(),{passive:true});
+addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.buy,.pill,button,.slot,.tab')) snd('click'); });
 $('#journalbtn').onclick=()=>G.openJournal();
 $('#resetbtn').onclick=()=>{ if(confirm(LANG==='zh'?'开始新游戏？当前存档会被清除。':'Start a new game? Your save will be erased.')) resetSave(); };
 
@@ -875,7 +837,7 @@ class HourGrade extends Effect {
 let QUAL = localStorage.getItem('sv_qual')||'med';
 const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false},
             med:{dpr:1.25,shadow:1536,bloom:true,msaa:0,smaa:true},
-            high:{dpr:1.6,shadow:2048,bloom:true,msaa:4,smaa:false} };
+            high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false} };
 function setupPost(){
   const q=QSET[QUAL]||QSET.med;
   renderer.setPixelRatio(Math.min(devicePixelRatio,q.dpr));
@@ -890,7 +852,7 @@ function setupPost(){
   gradeFx=new HourGrade(); fx.push(gradeFx);
   if(q.smaa) fx.push(new SMAAEffect());
   composer.addPass(new EffectPass(camera, ...fx));
-  composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(QUAL==='high'?1:2);
+  composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(2);
 }
 function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual',q); setupPost(); updateQualBtn(); }
 function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:'流畅',med:'均衡',high:'极致'}[QUAL]||QUAL); }
@@ -903,7 +865,7 @@ function governor(raw){ if(DBG&&!DBG.gov) return;
   govT+=raw; govN++; if(govT<2.5) return;
   const fps=govN/govT; govT=0; govN=0;
   if(fps<42&&govStep<3&&!document.hidden){ govStep++; govScale=[1,.82,.68,.56][govStep];
-    setMirrorEvery(Math.min(3,(QUAL==='high'?1:2)+govStep));
+    setMirrorEvery(Math.min(3,2+govStep));
     renderer.setPixelRatio(Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr)*govScale); composer.setSize(innerWidth,innerHeight); syncRes(); }
 }
 function syncRes(){ renderer.getDrawingBufferSize(paintU.uRes.value); }
@@ -978,6 +940,7 @@ function frame(now){
   hintProximity();
 
   updateFlora(camera.position);
+  soundTick(dt,now*0.001);
   statusT+=dt; if(statusT>.3){ renderStatus(); statusT=0; }
   miniT+=dt; if(miniT>0.25){ drawMini(); miniT=0; }
   governor(raw);
@@ -988,6 +951,19 @@ function frame(now){
   if(DBG){ DBG.frames=(DBG.frames||0)+1; if(DBG.frames===8) document.body.dataset.ready='1'; }
 }
 function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI; if(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
+/* what the player's feet are on, and everything the sound engine needs to know about this moment */
+function footSurface(){ const p=player.pos; if(S.inHouse) return Math.abs(p.x-.84)<2.6&&Math.abs(p.z-.6)<1.8?'rug':'wood'; if(S.inMine) return 'stone'; if(onDock(p.x,p.z)) return 'wood'; if(S.season===3) return 'snow'; if(getTile(Math.round(p.x),Math.round(p.z))) return 'dirt'; const s=splatAt(p.x,p.z); return s[2]>.5?'pebble':s[1]>.42?'dirt':'grass'; }
+let stepN=0, rowT=0, voiceT=8, goldWas=null, hourWas=0; const sndF=new THREE.Vector3(), sndS={};
+function soundTick(dt,t){
+  const n=Math.floor(player.walkT/Math.PI); if(n!==stepN){ stepN=n; if(player.moving&&!S.boating&&!S.sleeping) snd('step',{run:player.speed>5,wet:S.weather==='rain'||S.weather==='storm'},footSurface()); }
+  if(S.boating&&player.moving){ rowT-=dt; if(rowT<0){ rowT=1.5; snd('boatRow'); } }
+  if(goldWas!==null&&S.gold!==goldWas) snd('coin'); goldWas=S.gold;
+  if(hourWas<360&&S.time>=360&&S.time<420) sndAt('rooster',COOP.x,2,COOP.z); hourWas=S.time;
+  voiceT-=dt; if(voiceT<0){ voiceT=7+Math.random()*16; const near=[]; if(!S.inMine&&!S.inHouse){ for(const a of animals) if(Math.hypot(a.A.x-player.pos.x,a.A.z-player.pos.z)<46) near.push([{chicken:'cluck',duck:'quack',cow:'moo',goat:'baa',sheep:'baa',pig:'oink'}[a.type],a.A]); if(dog&&Math.random()<.35) near.push(['bark',dog.A]); const w=near[Math.floor(Math.random()*near.length)]; if(w) sndAt(w[0],w[1].x,1,w[1].z); } }
+  camera.getWorldDirection(sndF); const p=player.pos, f=S.inMine||S.inHouse?-1:lakeField(p.x,p.z), rv=S.inMine||S.inHouse?null:riverAt(p.x,p.z), sp=S.inMine||S.inHouse?[0,0,0]:splatAt(p.x,p.z);
+  Object.assign(sndS,{cam:camera.position,fwd:sndF,pos:p,t:S.time,season:S.season,weather:S.weather,inMine:!!S.inMine,inHouse:!!S.inHouse,under:!!cut.on,wind:paintU.uWindAmp.value,gust:.5+.5*Math.sin(t*.31)*Math.sin(t*.17+1),trees:sp[0],lake:clamp(1+f/.16,0,1),creek:rv?clamp(1-(rv.d-rv.w)/70,0,1):0,falls:clamp(1-Math.hypot(p.x+212,p.z-33)/150,0,1),deep:S.inMine?G.mine.theme:0});
+  updateAudio(sndS); duckMusic(paused()?.55:1);
+}
 function animateWalk(dt){
   if(!avatar) return;
   const v=player.speed, g=Math.min(1,v/4.2), run=Math.max(0,(v-4.4)/2.8), P=player.walkT;
@@ -1036,7 +1012,7 @@ G.prompt=()=>{};
 T.zh.place='放置'; T.en.place='Place';
 const L=(zh,en)=>LANG==='zh'?zh:en;
 const COOP={x:-19,z:-1}, BARN={x:25,z:6}, MINE_ENT={x:-40,z:-40}, PLAZA={x:34,z:-24}, GREENHOUSE={x:-38.5,z:-14};
-function modal(title, fill){
+function modal(title, fill){ snd('panelOpen');
   if(document.pointerLockElement) document.exitPointerLock();
   closeAll();
   let el=document.getElementById('dynmodal');
@@ -1097,8 +1073,8 @@ const built={};
 G.buildGreenhouse=()=>onBuilt('greenhouse');
 /* the cabin inside */
 let house=null;
-function enterHouse(q){ S.inHouse=true; world.visible=false; house.visible=true; if(!q){ player.pos.set(0,0,1.6); cam.yaw=Math.PI; } cam.dist=5; cam.height=1.9; cam.look=.8; cam.pitch=.3; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
-function leaveHouse(){ S.inHouse=false; world.visible=true; house.visible=false; player.pos.set(0,0,-9.6); cam.yaw=0; cam.dist=8.5; cam.height=2.3; cam.look=2.7; cam.pitch=.08; onMine(false); }
+function enterHouse(q){ if(!q) snd('door'); S.inHouse=true; world.visible=false; house.visible=true; house.userData.setDay(clamp(1-Math.abs(S.time-780)/420,0,1)*(S.weather==='clear'?1:.45)); if(!q){ player.pos.set(0,0,1.6); cam.yaw=Math.PI; } cam.dist=5; cam.height=1.9; cam.look=.8; cam.pitch=.3; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
+function leaveHouse(){ snd('door'); S.inHouse=false; world.visible=true; house.visible=false; player.pos.set(0,0,-9.6); cam.yaw=0; cam.dist=8.5; cam.height=2.3; cam.look=2.7; cam.pitch=.08; onMine(false); }
 function openTV(){ modal('📺 '+L('电视','Television'),b=>{ b.innerHTML='<div style="font-size:15px;line-height:1.8">'+G.forecastText()+'</div>'; }); }
 function onMine(on){ if(on){ scene.fog.density=.012; scene.fog.color.setHex(0x05070a); mineBg=scene.background; scene.background=new THREE.Color(0x05070a); sun.intensity=0; hemi.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=0; } else { scene.background=mineBg||null; applyWeather(); renderStatus(); } }
 let mineBg=null;
@@ -1141,7 +1117,7 @@ function updateJellies(t){ const p=jellies.geometry.attributes.position; for(let
 const jellyBase=[]; G.jellies=()=>{ if(!jellies){ const n=240, g=new THREE.BufferGeometry(), a=new Float32Array(n*3); for(let i=0;i<n;i++){ jellyBase.push(Math.random()*160,50+Math.random()*90); a[i*3+1]=WATER_Y+.05; } g.setAttribute('position',new THREE.BufferAttribute(a,3)); jellies=new THREE.Points(g,new THREE.PointsMaterial({color:0x8ae8ff,size:1.1,map:dotTex(),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false})); jellies.frustumCulled=false; world.add(jellies); } jellies.visible=true; jellyOn=true; };
 function resetSave(){ try{ localStorage.removeItem('sv_save'); }catch(e){} location.reload(); }
 function setupValley(){
-  Object.assign(G,{L,$,toast,modal,camera,scene,renderer,world,player,itemIcon,renderHotbar,renderStatus,renderEnergy,getTile,tkey,refreshTileMesh,rebuildCrop,aoe,spawnPlacement,spawnAnimal,rebuildDebris,rebuildForage,rebuildDigs,onMine,fadeMsg,floatText,
+  Object.assign(G,{snd,sndAt,L,$,toast,modal,camera,scene,renderer,world,player,itemIcon,renderHotbar,renderStatus,renderEnergy,getTile,tkey,refreshTileMesh,rebuildCrop,aoe,spawnPlacement,spawnAnimal,rebuildDebris,rebuildForage,rebuildDigs,onMine,fadeMsg,floatText,
     spend:spendEnergy, target:()=>targetCell, toolNames:()=>t('tools'), toolEm:()=>[0,1,2,3,4,5].map(i=>toolIcon(i,34)), seasonName:i=>t('season')[i], MINE_ENT, ANIMALS:null,
     chips:(x,z)=>burst(x,1,z,0xc8a878), dust:(x,z)=>burst(x,.2,z,0x6a4a30,6), splash:(x,z)=>burst(x,.3,z,0x9ad0f0,8), fall:it=>{ refreshFlora(); burst(it.x,3,it.z,0x9a7a4a,14); }, shake:v=>{ shakeT=v; } });
   makeValley(G); G.ANIMALS=ANIMALS;
@@ -1181,7 +1157,7 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={auditSounds,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
 boot();

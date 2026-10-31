@@ -347,7 +347,7 @@ export function makeSprites(root,sheet,items,opts={}){
         vec3 right=vec3(tc.z,0.,-tc.x);
         float h=position.y*position.y*iMisc.z;
         float sw=(sin(uTime*1.05+iPos.x*.31+iPos.z*.23)+.5*sin(uTime*2.3+iPos.x*.9))*.02*(.5+uWindAmp)*iSize.y*h;
-        float lm=abs(iMisc.w), lodR=lm<1.5?uLodT:(lm>2.5?uLodP:1e7); vLodF=cameraPosition.y<-1.15?1.:smoothstep(lodR-10.,lodR-1.,d);
+        float lm=abs(iMisc.w), lodR=lm<1.5?uLodT:(lm>2.5?uLodP:1e7); vLodF=cameraPosition.y<-1.15?1.:smoothstep(lodR-5.,lodR-1.,d);
         vec3 wp=iPos+right*(position.x*iSize.x+sw)+vec3(0.,position.y*iSize.y,0.);
         float u=iMisc.w<0.?1.-uv.x:uv.x;
         vUv=vec2(mix(iRect.x,iRect.z,u),mix(iRect.y,iRect.w,uv.y));
@@ -405,12 +405,12 @@ function groundMaterial(){
       sh.fragmentShader.replace('#include <fog_fragment>',`#ifdef USE_FOG
         { float ff=1.-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth); gl_FragColor.rgb=mix(gl_FragColor.rgb,fogColor+uFogSun*pow(max(dot(normalize(vWP-cameraPosition),uSunDirW),0.),6.),ff); }
         #endif`).replace('#include <normal_fragment_maps>',`
-        { float dn=length(vWP-cameraPosition), nk=1.-smoothstep(26.,64.,dn); if(nk>.01){ float e=.05; vec2 q=vWP.xz/9.; float h0=texture2D(uTile,q).g, hx=texture2D(uTile,q+vec2(e/9.,0.)).g, hz=texture2D(uTile,q+vec2(0.,e/9.)).g; vec3 wn=normalize(vWN+vec3(h0-hx,0.,h0-hz)*3.2*nk); normal=normalize(mat3(viewMatrix)*wn); } }`).replace('#include <map_fragment>',`
+        { float dn=length(vWP-cameraPosition), nk=1.-smoothstep(26.,64.,dn); if(nk>.01){ float e=.05; vec2 q=vWP.xz/9.; float h0=texture2D(uTile,q).g, hx=texture2D(uTile,q+vec2(e/9.,0.)).g, hz=texture2D(uTile,q+vec2(0.,e/9.)).g; vec3 wn=normalize(vWN+vec3(h0-hx,0.,h0-hz)*3.2*nk*(1.-uSnow*.9)); normal=normalize(mat3(viewMatrix)*wn); } }`).replace('#include <map_fragment>',`
         vec2 suv=vWP.xz/840.+.5; vec4 sp=texture2D(uSplat,suv);
         vec3 t1=texture2D(uTile,vWP.xz/9.).rgb, t2=texture2D(uTile,vWP.xz/31.).rgb, t3=texture2D(uTile,vWP.xz/157.).rgb;
         float g=(t1.r*.72+t2.r*.34+t3.r*.22-.14)*1.2+.0;
         vec3 grass=ramp(g,uGroundRow);
-        vec3 earth=ramp(t1.g*.6+t2.g*.3+.05,uEarthRow);
+        vec3 earth=ramp(mix(t1.g,.5,.42)*.6+t2.g*.3+.05,uEarthRow);
         vec3 rock=ramp(t1.b*.42+t2.b*.42+t3.b*.2,uRockRow);
         vec3 c=mix(grass,earth,smoothstep(.25,.7,sp.g));
         float wet=smoothstep(.1,-.55,vWP.y+1.15);
@@ -418,15 +418,15 @@ function groundMaterial(){
         c=mix(c,rock,clamp(max(sp.b,steep)+t2.b*.3-.15,0.,1.));
         c*=1.34-sp.r*.3;
         float gd=length(vWP-cameraPosition), bk=1.-smoothstep(34.,84.,gd);
-        if(bk>.01){ vec3 b=texture2D(uBits,vWP.xz/4.3).rgb, b2=texture2D(uBits,vWP.xz/7.7+.37).rgb;
+        if(bk>.01&&uSnow<.5){ vec3 b=texture2D(uBits,vWP.xz/4.3).rgb, b2=texture2D(uBits,vWP.xz/7.7+.37).rgb;
           float pz=clamp(sp.b*1.5+t2.r*.5-.42,0.,1.), pe=clamp(sp.g*1.1-.25,0.,1.), pr=b.g>.5?b.r:b2.r, pm=max(b.g*step(.52,t3.g+t2.g*.3+.22),b2.g*step(.5,t2.b+.12));
           c=mix(c,ramp(pr*1.05+.05,uRockRow)*1.12,pm*pz*bk);                                    // cobbles at the water, small stones in the earth of the paths
-          c=mix(c,ramp(pr*.62+.34,uEarthRow),pm*pe*bk*.62);
+          c=mix(c,ramp(pr*.5+.38,uEarthRow),pm*pe*bk*.42);
           float lk=abs(uSeasonG-2.)<.5?1.:.3, lz=sp.r*(1.-smoothstep(.2,.6,sp.g))*smoothstep(.42,.64,t2.g+t3.r*.4)*lk, lf=max(smoothstep(.6,.64,b.b)*b.b,smoothstep(.74,.78,b2.b)*b2.b);
           c=mix(c,ramp(.3+lf*.6,uLeafRow),step(.1,lf)*lz*bk*.85); }
         c*=mix(1.,.55,wet);
         c*=cloudShade(vWP.xz);
-        if(uSnow>.01){ c=mix(c,ramp(.62+g*.42,uIceRow),uSnow*smoothstep(.15,.4,g+.3-sp.g*.4)); }
+        if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.3)); }
         diffuseColor.rgb*=c;`);
   };
   return m;
@@ -798,9 +798,9 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
 /* tilled soil, painted to sit in the same ground */
 export function paintedSoil(wet){
   const m=toonOf({color:0xffffff});
-  m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uEarthRow:{value:rowV('earth')},uWet:{value:wet?1:0}});
+  m.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uDetail:{value:TEX.mt_detail},uEarthRow:{value:rowV('earth')},uWet:{value:wet?1:0},uCloud:U.uCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt,uCloudTint:U.uCloudTint});
     sh.vertexShader='varying vec3 vWP;\n'+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz;');
-    sh.fragmentShader=`varying vec3 vWP; uniform sampler2D uRamps,uTile; uniform float uEarthRow,uWet; ${ramp}\n`+sh.fragmentShader.replace('#include <map_fragment>',`
-      vec3 t=texture2D(uTile,vWP.xz/3.).rgb; float v=t.g*.62+.04; vec3 c=ramp(v,uEarthRow); if(uWet>.5) c*=vec3(.5,.46,.46); else c*=.82; diffuseColor.rgb*=c;`); };
+    sh.fragmentShader=`varying vec3 vWP; uniform sampler2D uRamps,uTile,uDetail; uniform float uEarthRow,uWet; ${ramp} ${CLOUD_GLSL}\n`+sh.fragmentShader.replace('#include <map_fragment>',`
+      vec3 t=texture2D(uTile,vWP.xz/3.).rgb, sd=texture2D(uDetail,vWP.xz*.34).rgb, sd2=texture2D(uDetail,vWP.xz*1.1).rgb; float v=t.g*.5+.12+(sd.b-.5)*.5+(sd2.b-.5)*.4; vec3 c=ramp(v,uEarthRow); if(uWet>.5) c*=vec3(.5,.46,.46); else c*=.88; c*=cloudShade(vWP.xz); diffuseColor.rgb*=c;`).replace('#include <normal_fragment_maps>',`normal=normalize(normal+mat3(viewMatrix)*vec3(sd.r-.5,0.,sd.g-.5)*.9+mat3(viewMatrix)*vec3(sd2.r-.5,0.,sd2.g-.5)*.6);`); };
   return m;
 }
