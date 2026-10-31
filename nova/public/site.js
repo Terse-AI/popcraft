@@ -13,7 +13,8 @@ function ask(title,text,yes,no){ return new Promise(ok=>{ const d=document.creat
 const clerk={ready:false};
 const token=async()=>{ try{ return window.Clerk&&Clerk.session?await Clerk.session.getToken():null; }catch(e){ return null; } };
 function paintAuth(){ const a=$('#auth'); if(!a||!clerk.ready) return; a.innerHTML=''; if(Clerk.user){ const b=document.createElement('div'); a.appendChild(b); Clerk.mountUserButton(b,{afterSignOutUrl:location.pathname}); } else { const b=document.createElement('button'); b.textContent=T('登录','Sign in'); b.onclick=()=>signIn(); a.appendChild(b); } }
-function signIn(){ return new Promise(ok=>{ if(!clerk.ready) return ok(false); if(Clerk.user) return ok(true); const stop=Clerk.addListener(({user})=>{ if(user){ stop&&stop(); ok(true); } }); Clerk.openSignIn({}); }); }
+/* one dialog for signing in and signing up, kept on this page so a running game is never left behind. Closing it counts as a no */
+function signIn(){ return new Promise(ok=>{ if(!clerk.ready) return ok(false); if(Clerk.user) return ok(true); let seen=false, done=false; const end=v=>{ if(done) return; done=true; clearInterval(t); stop&&stop(); ok(v); }, stop=Clerk.addListener(({user})=>{ if(user) end(true); }), t=setInterval(()=>{ const open=document.querySelector('.cl-modalBackdrop,.cl-modalContent,.cl-signIn-root,.cl-signUp-root'); if(open) seen=true; else if(seen&&!window.Clerk.user) end(false); },300); Clerk.openSignIn({withSignUp:true}); }); }
 addEventListener('load',async()=>{ if(!boot.clerk||!window.Clerk){ waitClerk(); return; } start(); });
 let authReady; const authP=new Promise(r=>authReady=r);
 window.NovaSite={T,toast,ask,token,signIn,applyLang,authed:authP,get lang(){ return lang; }};
@@ -35,7 +36,7 @@ if($('#mainplay')) $('#mainplay').onclick=onMain; if($('#altplay')) $('#altplay'
 
 /* play: one click, and the game fills the screen */
 const box=$('#player'); let frame=null;
-const full=()=>{ if(box.requestFullscreen) box.requestFullscreen().catch(()=>{}); else if(box.webkitRequestFullscreen) box.webkitRequestFullscreen(); };
+const root=document.documentElement, full=()=>{ if(root.requestFullscreen) root.requestFullscreen().catch(()=>{}); else if(root.webkitRequestFullscreen) root.webkitRequestFullscreen(); };   // the whole page goes fullscreen, so the sign-in dialog can open over the game
 function play(g,mode='new'){ if(frame) return; box.hidden=false; document.body.style.overflow='hidden'; full(); frame=document.createElement('iframe'); frame.allow='autoplay; fullscreen; gamepad; clipboard-write'; const lo=document.createElement('div'); lo.id='ploading'; const lt=document.createElement('b'), lb=document.createElement('i'); lt.textContent=g.title; lo.append(lt,lb); box.appendChild(lo); const ready=()=>{ lo.classList.add('off'); setTimeout(()=>lo.remove(),600); }; box.__ready=ready; setTimeout(ready,g.saves?45000:6000); if(g.saves) frame.src=g.url+'/?nova=1&mode='+mode+'&lang='+lang; else if(g.url) frame.src=g.url; else { frame.src='/raw/'+g.id+(g.site?'/':''); frame.setAttribute('sandbox','allow-scripts allow-pointer-lock allow-forms allow-popups'); } box.appendChild(frame); frame.onload=()=>{ if(!frame) return; frame.focus(); if(!g.saves) ready(); }; fetch('/api/play/'+g.id,{method:'POST'}).then(r=>r.json()).then(d=>{ const p=$('#plays'); if(p&&d.plays) p.textContent=d.plays; }).catch(()=>{}); }
 function stop(){ if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); if(frame){ frame.remove(); frame=null; } box.hidden=true; document.body.style.overflow=''; refreshSave(); }
 $('#pexit').onclick=stop; $('#pfull').onclick=full;
@@ -46,7 +47,9 @@ addEventListener('message',async e=>{ const d=e.data; if(!d||!d.novaCall||!frame
   else if(d.type==='save'){ const t=await token(); if(!t) return reply({needAuth:true}); try{ const r=await fetch('/api/saves/'+game.slug+'?'+q,{method:'PUT',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify(d.data)}); reply({ok:r.ok}); }catch(x){ reply({ok:false}); } }
   else if(d.type==='user'){ const u=window.Clerk&&Clerk.user; reply(u?{signedIn:true,id:u.id,name:u.firstName||u.username||''}:{signedIn:false}); }
   else if(d.type==='config'){ reply(game.sdk||{auth:{mode:'nova'},db:{mode:'nova'}}); }
-  else if(d.type==='signin'){ if(document.fullscreenElement) await document.exitFullscreen().catch(()=>{}); const ok=await signIn(); reply({ok}); } });
+  else if(d.type==='signin'){ const ok=await signIn(); frame&&frame.focus(); reply({ok}); }
+  else if(d.type==='saveinfo'){ const t=await token(), u=window.Clerk&&Clerk.user; if(!t||!u) return reply({signedIn:false}); try{ const r=await fetch('/api/saves/'+game.slug,{headers:{Authorization:'Bearer '+t}}); const j=await r.json(); reply({signedIn:true,name:u.firstName||u.username||(u.primaryEmailAddress&&u.primaryEmailAddress.emailAddress)||'',save:j.save||null}); }catch(x){ reply({signedIn:true,save:null,error:true}); } }
+  else if(d.type==='reload'){ const m=d.data&&d.data.mode==='continue'?'continue':'new'; const lo=document.createElement('div'); lo.id='ploading'; const lt=document.createElement('b'), lb=document.createElement('i'); lt.textContent=game.title; lo.append(lt,lb); box.appendChild(lo); box.__ready=()=>{ lo.classList.add('off'); setTimeout(()=>lo.remove(),600); }; frame.src=game.url+'/?nova=1&mode='+m+'&lang='+lang; reply({ok:true}); } });
 
 /* game page */
 if(game&&$('#like')){ $('#like').onclick=async()=>{ const r=await fetch('/api/like/'+game.id,{method:'POST'}); const j=await r.json(); $('#likes').textContent=j.likes; }; }

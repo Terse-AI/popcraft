@@ -64,6 +64,7 @@ export function makeValley(G){
   const greet=(body,shop)=>{ const id=keeperOf[shop]; if(id) body.insertAdjacentHTML('afterbegin',portrait(id,64)); };
   const el=(t,c,h)=>{ const e=document.createElement(t); if(c) e.className=c; if(h!==undefined) e.innerHTML=h; return e; };
   const closeModal=()=>{ const m=$('#dynmodal'); if(m){ if(!m.classList.contains('hidden')) G.snd('panelClose'); m.classList.add('hidden'); } };
+  G.closeModal=closeModal;
 
   /* ---------- quality ---------- */
   function cropQuality(fert){ const l=level('farm'), f=fert==='q2'?2:fert==='q1'?1:0, gold=.01+.2*(l/10)+.2*f*((l+2)/12), r=Math.random(); return r<gold?2:r<Math.min(.75,gold*2)?1:0; }
