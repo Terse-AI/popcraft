@@ -120,7 +120,7 @@
 </style>
 </head>
 <body>
-<script>if(window.parent===window&&!/[?&]shot/.test(location.search)) location.replace('https://nova-games.up.railway.app/starvale');</script>
+<script>if(window.parent===window&&!/[?&]shot/.test(location.search)){ const co=(location.search.match(/[?&]co=([A-Za-z0-9]{6})/)||[])[1]; location.replace('https://nova-games.up.railway.app/starvale'+(co?'?co='+co:'')); }</script>
 <canvas id="c"></canvas>
 
 <div id="load">
@@ -779,6 +779,7 @@ G.coSleepNow=()=>sleep('co');
 /* a guest's morning comes from the host */
 G.coMorning=(snap,clock)=>{ $('#fade').classList.add('on'); setTimeout(()=>{ if(S.inMine) G.mine.leave(true); G.coop.dayIn(snap); Object.assign(S,{time:clock.time,day:clock.day,season:clock.season,year:clock.year,absDay:clock.absDay,weather:clock.weather,tomorrow:clock.tomorrow,luck:clock.luck,energy:S.maxEnergy,hp:S.maxHp,can:G.canCapacity(),buffs:[],festDone:false}); G.festivalsToday(); if(!S.inHouse) enterHouse(true); player.pos.set(-4.3,0,.6); G.onNewDay&&G.onNewDay(); $('#fade').classList.remove('on'); retintGround(); applyWeather(); renderStatus(); renderEnergy(); },900); };
 G.coWeather=()=>{ applyWeather(); renderStatus(); };
+G.coBack=()=>{ if(inNova) nova('reload',{mode:'continue'}); else location.assign(location.pathname+'?shot=1'); };
 /* a friend's star figure: the same model, walking on its own, a scarf of its own colour and a name overhead */
 const peerCols=[0x3a7ac8,0xc83a6a,0x3aa86a,0xe8a03a];
 function nameTag(text){ const c=document.createElement('canvas'); c.width=256; c.height=64; const x=c.getContext('2d'); x.font='600 34px system-ui,sans-serif'; const w=Math.min(240,x.measureText(text).width+28); x.fillStyle='rgba(20,14,8,.62)'; x.beginPath(); x.roundRect(128-w/2,8,w,48,22); x.fill(); x.fillStyle='#f4ead2'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(text,128,33); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,fog:false,toneMapped:false})); s.scale.set(1.5,.375,1); return s; }
@@ -1320,7 +1321,7 @@ async function boot(){
   const bootQ=new URLSearchParams(location.search), bootMode=DBG?'':bootQ.get('mode'); let cloud=null; if(bootMode==='continue'||bootMode==='parked'){ const r=await nova(bootMode==='parked'?'parked':'load'); cloud=r&&r.data; }
   G.storeSave=async d=>{ if(!inNova||(G.coop.on&&!G.coop.host)){ return null; } const meta={day:S.day,season:S.season,year:S.year||1,gold:S.gold,time:Math.round(S.time)}, r=await nova('save',{data:d,meta},30000); if(r&&r.ok){ toast('💾 '+L('已保存到你的账号','Saved to your account')); return true; } if(r&&r.needAuth) savePrompt(); else toast('⚠️ '+L('这次没有存上,稍后再试','Could not save just now')); return false; };
   const coCode=(bootQ.get('co')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6), fresh=coCode?false:!(!DBG||DBG.load)||!G.loadGame(cloud);
-  if(coCode&&!(await G.coop.autoJoin(coCode))) return location.assign(location.pathname);
+  if(coCode&&!(await G.coop.autoJoin(coCode))) return G.coBack();
   if(fresh){ G.invAdd('seed','parsnip',15); G.seedDebris(60); G.spawnForage(); G.spawnDigs(); G.rollTomorrow(); G.festivalsToday(); S.mail.push({zh:'亲爱的,这座小农场和湖畔小屋从今天起是你的了。去犁地、去钓鱼、去认识镇上的人吧。——爷爷','en':'My dear, this little farm and lakeside cabin are yours now. Till the soil, fish the lake, and meet the town. — Grandpa'}); }
   else if(!coCode) toast(L('存档已读取','Save loaded'));
   if(DBG) applyDebugShot();
