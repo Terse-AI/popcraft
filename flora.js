@@ -48,7 +48,7 @@ function clumps(m,r,pts,sizeFn,center){ const rects=CLUMPS.map(n=>ATLAS[n]);
 function blob(m,r,c,rx,ry,rz){ const LAT=5, LON=8, b=m.p.length/3;       // dark mass inside a billow of leaves, so the light has something to fall into
   for(let j=0;j<=LAT;j++) for(let i=0;i<LON;i++){ const t=j/LAT*Math.PI, a=i/LON*tau+j, q=.86+r()*.24, x=Math.sin(t)*Math.cos(a), y=Math.cos(t), z=Math.sin(t)*Math.sin(a); m.v(c[0]+x*rx*q,c[1]+y*ry*q,c[2]+z*rz*q,0,0,x,y,z,2,0,0,.55); }
   for(let j=0;j<LAT;j++) for(let i=0;i<LON;i++){ const i2=(i+1)%LON; m.q(b+j*LON+i,b+(j+1)*LON+i,b+(j+1)*LON+i2,b+j*LON+i2); } }
-function broadleaf(seed,n=520){
+function broadleaf(seed,n=520,big=1){
   const r=rng(seed), m=new Mesh3(), C=[0,.6,0], RX=.36, RY=.33, lobes=[];
   // the crown is a heap of billows on forked limbs, each lit on its own, not one ball
   for(let i=0;i<13;i++){ const a=i*2.399+r()*.6, up=i<3?.8+r()*.2:r()*.75-.12, q=Math.sqrt(Math.max(0,1-up*up)), rad=i<3?.11+r()*.05:.1+r()*.075; lobes.push([Math.cos(a)*q*RX*.76,C[1]+up*RY*.76,Math.sin(a)*q*RX*.76,rad]); }
@@ -59,11 +59,11 @@ function broadleaf(seed,n=520){
   const prim=[0,1,2,3].map(i=>{ const a=i/4*tau+seed+r()*.5, p=[Math.cos(a)*.13,.45+r()*.08,Math.sin(a)*.13]; bent(top,p,.018,.011,6,.05); return p; });
   lobes.forEach(l=>{ let best=prim[0], bd=9; for(const p of prim){ const d=Math.hypot(p[0]-l[0],p[1]-l[1],p[2]-l[2]); if(d<bd){ bd=d; best=p; } } bent(best,[l[0],l[1],l[2]],.0085,.0028,4,.06); blob(m,r,l,l[3]*.46,l[3]*.4,l[3]*.46); });
   const pts=[];
-  lobes.forEach(l=>{ for(let i=0;i<15;i++){ const a=r()*tau, u=r()*1.6-.8, q=Math.sqrt(Math.max(0,1-u*u)), R=l[3]*.55; pts.push([l[0]+Math.cos(a)*q*R,l[1]+u*R,l[2]+Math.sin(a)*q*R,.3,Math.cos(a)*q,u,Math.sin(a)*q,.15]); } });   // deep leaves, in shade, so gaps show foliage and not sky
+  lobes.forEach(l=>{ for(let i=0;i<(big>1?6:15);i++){ const a=r()*tau, u=r()*1.6-.8, q=Math.sqrt(Math.max(0,1-u*u)), R=l[3]*.55; pts.push([l[0]+Math.cos(a)*q*R,l[1]+u*R,l[2]+Math.sin(a)*q*R,.3,Math.cos(a)*q,u,Math.sin(a)*q,.15]); } });   // deep leaves, in shade, so gaps show foliage and not sky
   for(let i=0;i<n;i++){ const l=lobes[i%lobes.length], u=r()*2-1, a=r()*tau, q=Math.sqrt(1-u*u), rad=l[3]*(.74+.34*Math.cbrt(r())), nx=Math.cos(a)*q, ny=u, nz=Math.sin(a)*q; if(ny<-.7&&r()<.7) continue;
     const gn=new THREE.Vector3(l[0],(l[1]-C[1])*1.2,l[2]).normalize(), N=new THREE.Vector3(nx*.7+gn.x*.3,ny*.7+gn.y*.3,nz*.7+gn.z*.3).normalize();
     pts.push([l[0]+nx*rad,l[1]+ny*rad*.86,l[2]+nz*rad,.4+.6*(ny*.5+.5),N.x,N.y,N.z,.72+.28*(ny*.5+.5)]); }
-  clumps(m,r,pts,()=>.042+r()*.034,C);
+  clumps(m,r,pts,()=>(.042+r()*.034)*big,C);
   return m.geo();
 }
 function shrub(seed){ const r=rng(seed), m=new Mesh3(), pts=[]; const lobes=[[0,.34,0,.3],[.3,.26,.14,.24],[-.28,.26,.12,.24],[.1,.26,-.3,.24],[-.14,.42,-.1,.2]];
@@ -284,29 +284,31 @@ const pickVar=it=>{ const n=it.name, h=Math.abs(Math.floor(it.x*3+it.z*7));
   if(n.startsWith('spruce')) return 'con'+(h%3); if(n.startsWith('larch')) return 'lar'+(h%2); if(n.startsWith('broad')) return 'bro'+(h%2); if(n.startsWith('shrub')) return 'shr';
   if(n.startsWith('fern')) return 'fer'; if(n.startsWith('reed')) return 'ree'; if(n.startsWith('tuft')) return 'tuf'+(h%2); return null; };
 const RAD={ low:[30,20,2], med:[46,28,3.2], high:[62,36,4.2] };
-let radT=46, radP=28, lastX=1e9, lastZ=1e9;
+let radT=46, radP=28, lastX=1e9, lastZ=1e9, lastYaw=9;
 export function setupFlora(root,trees,plants,qual){
   const [rt,rp,dens]=RAD[qual]||RAD.med; radT=rt; radP=rp; U.uLodT.value=rt; U.uLodP.value=rp; bladeSpan=rp*2; chunkDens=dens; chunkRoot=root; readTile();
   const mat=floraMaterial(false), dep=floraMaterial(true);
-  [[0,.16,36,.42],[1,.15,32,.5],[2,.18,38,.36]].forEach(([i,w,n,d])=>variant(root,'con'+i,conifer(11+i,{width:w,whorls:n,droop:d}),170,mat,dep));
-  [[0,.125,32,.56],[1,.135,30,.5]].forEach(([i,w,n,d])=>variant(root,'lar'+i,conifer(31+i,{width:w,whorls:n,droop:d,fill:.9}),110,mat,dep));
-  const lm=floraMaterial(false,false,true); [0,1].forEach(i=>variant(root,'bro'+i,broadleaf(51+i),110,lm,dep));
+  // each tree and tuft has a lighter twin for the middle distance
+  [[0,.16,36,.42],[1,.15,32,.5],[2,.18,38,.36]].forEach(([i,w,n,d])=>{ variant(root,'con'+i,conifer(11+i,{width:w,whorls:n,droop:d}),90,mat,dep); variant(root,'con'+i+'L',conifer(11+i,{width:w,whorls:Math.round(n*.42),droop:d,fill:1.5}),170,mat,dep); });
+  [[0,.125,32,.56],[1,.135,30,.5]].forEach(([i,w,n,d])=>{ variant(root,'lar'+i,conifer(31+i,{width:w,whorls:n,droop:d,fill:.9}),60,mat,dep); variant(root,'lar'+i+'L',conifer(31+i,{width:w,whorls:Math.round(n*.42),droop:d,fill:1.35}),110,mat,dep); });
+  const lm=floraMaterial(false,false,true); [0,1].forEach(i=>{ variant(root,'bro'+i,broadleaf(51+i),60,lm,dep); variant(root,'bro'+i+'L',broadleaf(51+i,210,1.5),110,lm,dep); });
   const pm=floraMaterial(false,true,true); variant(root,'shr',shrub(3),260,pm); variant(root,'fer',fern(4),320,pm);
   const tm=bladeMaterial('TUFT');
-  bladeVariant(root,'tuf0',bladeClump(5,48,.2,.55,false,.7),1400,tm); bladeVariant(root,'tuf1',bladeClump(6,42,.25,1,false,.7),1400,tm); bladeVariant(root,'ree',bladeClump(7,18,.14,.14,true,.8),520,tm);
+  bladeVariant(root,'tuf0',bladeClump(5,48,.2,.55,false,.7),600,tm); bladeVariant(root,'tuf1',bladeClump(6,42,.25,1,false,.7),600,tm); bladeVariant(root,'tuf0L',bladeClump(5,15,.2,.55,false,1.7),1200,tm); bladeVariant(root,'tuf1L',bladeClump(6,13,.25,1,false,1.7),1200,tm); bladeVariant(root,'ree',bladeClump(7,18,.14,.14,true,.8),520,tm);
   // the carpet: short grass baked chunk by chunk around the camera, plus the small things that grow in it
   carpetBase=bladeClump(8,12,.85,.8,false,1.7); carpetMat=bladeMaterial('CARPET'); decoMat=bladeMaterial('DECO');
   blockHook.fn=(x,z,hx,hz)=>{ for(let i=Math.floor((x-hx)/CH);i<=Math.floor((x+hx)/CH);i++) for(let j=Math.floor((z-hz)/CH);j<=Math.floor((z+hz)/CH);j++){ const k=ckey(i,j); if(chunks.has(k)) dirty.add(k); } };
   for(const list of [trees,plants]) for(const it of list){ it.v=pickVar(it); if(!it.v) continue; if(it.trueH===undefined) it.trueH=it.h; const k=key(it.x,it.z); if(!cells.has(k)) cells.set(k,[]); cells.get(k).push(it); }
 }
 export const refreshFlora=()=>{ lastX=1e9; };
-export function updateFlora(cam){
+export function updateFlora(cam,fwd){
   if(chunkFrame++%6===0||dirty.size) updateChunks(cam,chunkFrame<3?999:2);
-  const cx=cam.x, cz=cam.z; if(Math.hypot(cx-lastX,cz-lastZ)<2.6) return; lastX=cx; lastZ=cz;
+  const cx=cam.x, cz=cam.z, yaw=Math.atan2(fwd.x,fwd.z), dy=Math.abs(((yaw-lastYaw+Math.PI)%tau+tau)%tau-Math.PI); if(Math.hypot(cx-lastX,cz-lastZ)<2.6&&dy<.3) return; lastX=cx; lastZ=cz; lastYaw=yaw;
   for(const k in VAR) VAR[k].n=0;
   const Rc=Math.ceil(radT/CELL), mx=Math.floor(cx/CELL), mz=Math.floor(cz/CELL);
   for(let i=mx-Rc;i<=mx+Rc;i++) for(let j=mz-Rc;j<=mz+Rc;j++){ const l=cells.get(i*8192+j); if(!l) continue;
-    for(const it of l){ if(it.gone) continue; const V=VAR[it.v], lim=V.kind==='blade'||it.v==='shr'||it.v==='fer'?radP:radT, dx=it.x-cx, dz=it.z-cz; if(dx*dx+dz*dz>lim*lim||V.n>=V.cap) continue; const n=V.n++;
+    for(const it of l){ if(it.gone) continue; let V=VAR[it.v]; const lim=V.kind==='blade'||it.v==='shr'||it.v==='fer'?radP:radT, dx=it.x-cx, dz=it.z-cz, d2=dx*dx+dz*dz; if(d2>lim*lim) continue; if(d2>400&&(dx*fwd.x+dz*fwd.z)<.22*Math.sqrt(d2)) continue;   // past 20 units, skip what is outside the view; nearer ones stay for their shadows
+      const far=VAR[it.v+'L']; if(far&&d2>(V.kind==='blade'?144:400)) V=far; if(V.n>=V.cap) continue; const n=V.n++;
       if(V.kind==='flora'){ V.a.setXYZ(n,it.x,it.y,it.z); V.b.setXYZW(n,it.v==='shr'?it.trueH*1.1:it.v==='fer'?it.trueH*1.5:it.trueH,rowV(it.row),it.tone||0,(it.x*7.3+it.z*3.1)%6.28); }
       else { V.a.setXYZW(n,it.x,it.y,it.z,it.trueH*1.05); V.b.setXYZW(n,(it.x*7.3+it.z*3.1)%6.28,it.tone||0,0,0); } } }
   for(const k in VAR){ const V=VAR[k]; V.g.instanceCount=V.n; V.a.needsUpdate=true; V.b.needsUpdate=true; }

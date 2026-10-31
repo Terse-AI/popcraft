@@ -567,7 +567,7 @@ const toonGrad=(()=>{ const d=new Uint8Array([70,130,195,255]); const t=new THRE
 export const softGrad=(()=>{ const d=new Uint8Array([86,112,140,170,198,222,240,255]); const t=new THREE.DataTexture(d,8,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.LinearFilter; t.needsUpdate=true; return t; })();    // a soft ramp for the hero, so a face never breaks into hard bands
 export function toonOf(params){ return new THREE.MeshToonMaterial({gradientMap:toonGrad,...params}); }
 function buildRocks(root,obst){
-  const r=rng(77), geos=[rockGeo(1,.72,5),rockGeo(2,.6,5),rockGeo(3,.84,5),rockGeo(4,.5,5),rockGeo(5,.7,2),rockGeo(6,.56,2),rockGeo(7,.8,2),rockGeo(8,.5,2)];
+  const r=rng(77), geos=[rockGeo(1,.72,4),rockGeo(2,.6,4),rockGeo(3,.84,4),rockGeo(4,.5,4),rockGeo(5,.7,2),rockGeo(6,.56,2),rockGeo(7,.8,2),rockGeo(8,.5,2)];
   const mat=toonOf({color:0xffffff});
   mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,{uRamps:U.uRamps,uTile:{value:TEX.ground_tile},uDetail:{value:TEX.mt_detail},uRockRow:{value:rowV('rock')},uMossRow:{value:rowV('ground')},uIceRow:{value:rowV('ice')},uSnow:U.uSnow,uCloud:U.uCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt,uCloudTint:U.uCloudTint});
     sh.vertexShader='varying vec3 vWN; varying vec3 vWP;\n'+sh.vertexShader.replace('#include <defaultnormal_vertex>',

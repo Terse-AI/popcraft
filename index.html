@@ -965,7 +965,7 @@ function frame(now){
   // proximity hints
   hintProximity();
 
-  updateFlora(camera.position);
+  updateFlora(camera.position,cForward);
   soundTick(dt,now*0.001);
   statusT+=dt; if(statusT>.3){ renderStatus(); statusT=0; }
   miniT+=dt; if(miniT>0.25){ drawMini(); miniT=0; }
