@@ -13,13 +13,20 @@ function ask(title,text,yes,no){ return new Promise(ok=>{ const d=document.creat
 const clerk={ready:false};
 const token=async()=>{ try{ return window.Clerk&&Clerk.session?await Clerk.session.getToken():null; }catch(e){ return null; } };
 function paintAuth(){ const a=$('#auth'); if(!a||!clerk.ready) return; a.innerHTML=''; if(Clerk.user){ const b=document.createElement('div'); a.appendChild(b); Clerk.mountUserButton(b,{afterSignOutUrl:location.pathname}); } else { const b=document.createElement('button'); b.textContent=T('登录','Sign in'); b.onclick=()=>signIn(); a.appendChild(b); } }
-/* one dialog for signing in and signing up, kept on this page so a running game is never left behind. Closing it counts as a no */
-function signIn(){ return new Promise(ok=>{ if(!clerk.ready) return ok(false); if(Clerk.user) return ok(true); let seen=false, done=false; const end=v=>{ if(done) return; done=true; clearInterval(t); stop&&stop(); ok(v); }, stop=Clerk.addListener(({user})=>{ if(user) end(true); }), t=setInterval(()=>{ const open=document.querySelector('.cl-modalBackdrop,.cl-modalContent,.cl-signIn-root,.cl-signUp-root'); if(open) seen=true; else if(seen&&!window.Clerk.user) end(false); },300); Clerk.openSignIn({withSignUp:true}); }); }
+/* the sign-in dialog has its own Sign up link and stays on this page, so a running game is never left behind. Closing it counts as a no */
+function signIn(){ return new Promise(ok=>{ if(!clerk.ready) return ok(false); if(Clerk.user) return ok(true); let seen=false, done=false; const end=v=>{ if(done) return; done=true; clearInterval(t); stop&&stop(); ok(v); }, stop=Clerk.addListener(({user})=>{ if(user) end(true); }), t=setInterval(()=>{ const open=document.querySelector('.cl-modalBackdrop,.cl-modalContent,.cl-signIn-root,.cl-signUp-root'); if(open) seen=true; else if(seen&&!window.Clerk.user) end(false); },300); Clerk.openSignIn({}); }); }
 addEventListener('load',async()=>{ if(!boot.clerk||!window.Clerk){ waitClerk(); return; } start(); });
 let authReady; const authP=new Promise(r=>authReady=r);
 window.NovaSite={T,toast,ask,token,signIn,applyLang,authed:authP,get lang(){ return lang; }};
 function waitClerk(){ let n=0; const t=setInterval(()=>{ if(window.Clerk){ clearInterval(t); start(); } else if(++n>40){ clearInterval(t); refreshSave(); } },250); }
-async function start(){ try{ await Clerk.load(); clerk.ready=true; paintAuth(); Clerk.addListener(()=>{ paintAuth(); refreshSave(); }); refreshSave(); }catch(e){ console.warn('clerk',e); } authReady&&authReady(); }
+const stay=to=>{ if(!game) location.assign(to); };   // on a game page Clerk must not reload: that would throw away the running game
+async function start(){ try{ await Clerk.load({routerPush:stay,routerReplace:stay}); clerk.ready=true; paintAuth(); Clerk.addListener(()=>{ paintAuth(); refreshSave(); }); refreshSave(); resumePending(); }catch(e){ console.warn('clerk',e); } authReady&&authReady(); }
+
+/* Google sign-in leaves the page, so the game parks its progress here first and picks it up on the way back */
+const parkKey=()=>'nova_parked_'+game.slug, parkedFor=30*60*1000;
+const park=data=>{ try{ localStorage.setItem(parkKey(),JSON.stringify({at:Date.now(),data})); }catch(e){} }, unpark=()=>{ try{ localStorage.removeItem(parkKey()); }catch(e){} };
+const parked=()=>{ try{ const p=JSON.parse(localStorage.getItem(parkKey())); return p&&Date.now()-p.at<parkedFor?p.data:null; }catch(e){ return null; } };
+function resumePending(){ if(!game||!game.saves||!parked()) return; if(Clerk.user) play(game,'parked'); else unpark(); }
 
 /* the launcher: continue if a save exists, otherwise a new game */
 let save=null;
@@ -47,7 +54,8 @@ addEventListener('message',async e=>{ const d=e.data; if(!d||!d.novaCall||!frame
   else if(d.type==='save'){ const t=await token(); if(!t) return reply({needAuth:true}); try{ const r=await fetch('/api/saves/'+game.slug+'?'+q,{method:'PUT',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify(d.data)}); reply({ok:r.ok}); }catch(x){ reply({ok:false}); } }
   else if(d.type==='user'){ const u=window.Clerk&&Clerk.user; reply(u?{signedIn:true,id:u.id,name:u.firstName||u.username||''}:{signedIn:false}); }
   else if(d.type==='config'){ reply(game.sdk||{auth:{mode:'nova'},db:{mode:'nova'}}); }
-  else if(d.type==='signin'){ const ok=await signIn(); frame&&frame.focus(); reply({ok}); }
+  else if(d.type==='signin'){ if(d.data&&d.data.park) park(d.data.park); const ok=await signIn(); unpark(); frame&&frame.focus(); reply({ok}); }
+  else if(d.type==='parked'){ const data=parked(); unpark(); reply({data}); }
   else if(d.type==='saveinfo'){ const t=await token(), u=window.Clerk&&Clerk.user; if(!t||!u) return reply({signedIn:false}); try{ const r=await fetch('/api/saves/'+game.slug,{headers:{Authorization:'Bearer '+t}}); const j=await r.json(); reply({signedIn:true,name:u.firstName||u.username||(u.primaryEmailAddress&&u.primaryEmailAddress.emailAddress)||'',save:j.save||null}); }catch(x){ reply({signedIn:true,save:null,error:true}); } }
   else if(d.type==='reload'){ const m=d.data&&d.data.mode==='continue'?'continue':'new'; const lo=document.createElement('div'); lo.id='ploading'; const lt=document.createElement('b'), lb=document.createElement('i'); lt.textContent=game.title; lo.append(lt,lb); box.appendChild(lo); box.__ready=()=>{ lo.classList.add('off'); setTimeout(()=>lo.remove(),600); }; frame.src=game.url+'/?nova=1&mode='+m+'&lang='+lang; reply({ok:true}); } });
 
