@@ -154,6 +154,11 @@ const html = (res,body) => send(res,200,'text/html; charset=utf-8',body,{'Cache-
 function readRaw(req,limit){ return new Promise(ok => { let n = 0; const c = []; req.on('data',d => { n += d.length; if (n > limit){ ok(null); req.destroy(); return; } c.push(d); }); req.on('end',()=>ok(Buffer.concat(c))); req.on('error',()=>ok(null)); }); }
 const readJson = async (req,limit=MAX_HTML+1048576) => { const b = await readRaw(req,limit); if (!b) return null; try { return JSON.parse(b.toString('utf8')); } catch(e){ return undefined; } };
 
+/* static files stream, and honour Range: Safari will not play a video without it */
+function sendFile(req,res,f){ const size = fs.statSync(f).size, h = { 'Content-Type':TYPES[path.extname(f)]||'application/octet-stream', 'Accept-Ranges':'bytes', 'Cache-Control':'public, max-age=3600' }, r = (req.headers.range||'').match(/^bytes=(\d*)-(\d*)$/);
+  if (r && (r[1]||r[2])) { let a = r[1]===''?Math.max(0,size-(+r[2])):+r[1], b = r[1]!==''&&r[2]!==''?Math.min(+r[2],size-1):size-1; if (a>b||a>=size) { res.writeHead(416,{'Content-Range':'bytes */'+size}); return res.end(); } res.writeHead(206,{ ...h, 'Content-Range':`bytes ${a}-${b}/${size}`, 'Content-Length':b-a+1 }); if (req.method==='HEAD') return res.end(); return fs.createReadStream(f,{start:a,end:b}).pipe(res); }
+  res.writeHead(200,{ ...h, 'Content-Length':size }); if (req.method==='HEAD') return res.end(); fs.createReadStream(f).pipe(res); }
+
 // ---------------------------------------------------------------- pages
 const COPY = { desc:'Play and share web games. No downloads.' };
 function page({ title, body, game, cls='', script='' }){
@@ -230,7 +235,7 @@ http.createServer(async (req, res) => {
     if (req.method==='GET' && (m=p.match(/^\/covers\/([a-f0-9]{10})\.jpg$/))) { const f = path.join(COVERS,m[1]+'.jpg'); if (!fs.existsSync(f)) return send(res,404,'text/plain','Not found'); return send(res,200,'image/jpeg',fs.readFileSync(f),{'Cache-Control':'public, max-age=86400'}); }
     if (req.method==='GET' && p==='/popcraft') { res.writeHead(301,{Location:'/starvale'}); return res.end(); }
     if (req.method==='GET' && p==='/health') return json(res,200,{ok:true,clerk:CLERK_ON});
-    if (req.method==='GET' && (m=p.match(/^\/public\/([a-zA-Z0-9._-]+)$/))) { const f = path.join(PUBLIC,m[1]); if (!fs.existsSync(f)) return send(res,404,'text/plain','Not found'); return send(res,200,TYPES[path.extname(f)]||'application/octet-stream',fs.readFileSync(f),{'Cache-Control':'public, max-age=3600'}); }
+    if ((req.method==='GET'||req.method==='HEAD') && (m=p.match(/^\/public\/([a-zA-Z0-9._-]+)$/))) { const f = path.join(PUBLIC,m[1]); if (!fs.existsSync(f)) return send(res,404,'text/plain','Not found'); return sendFile(req,res,f); }
     if (req.method==='GET' && p==='/api/games') return json(res,200,{ games:listGames().map(publicMeta) });
 
     // saves: one per player per game, reachable only with that player's session
