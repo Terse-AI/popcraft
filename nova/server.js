@@ -226,6 +226,29 @@ function countSaves(slug){ let n = 0; try { for (const d of fs.readdirSync(SAVES
 /* every update keeps the last five versions, so a bad release is one click from undone */
 function archive(g,note){ const v = g.version||1, to = path.join(VERSIONS,g.id,String(v)); fs.mkdirSync(to,{recursive:true}); const site = path.join(SITES,g.id); let size = 0; if (fs.existsSync(site)) { fs.cpSync(site,to,{recursive:true}); } else if (fs.existsSync(htmlPath(g.id))) { fs.copyFileSync(htmlPath(g.id),path.join(to,'single.html')); size = fs.statSync(htmlPath(g.id)).size; } g.versions = [{ v, at:Date.now(), note, size },...(g.versions||[])].slice(0,5); for (const d of fs.readdirSync(path.join(VERSIONS,g.id))) if (!g.versions.some(x=>String(x.v)===d)) fs.rmSync(path.join(VERSIONS,g.id,d),{recursive:true,force:true}); }
 
+// ---------------------------------------------------------------- co-op relay
+/* rooms live in memory and are gone when the last player leaves. Nothing passes through here but what the players send one another */
+const CO = new Map(), CO_ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', CO_MAX = 4, CO_LIMIT = 2*1048576;
+const coName = s => String(s||'').replace(/[<>&"']/g,'').trim().slice(0,16) || 'Farmer';
+const coCode = () => { for (;;) { let c = ''; for (const b of crypto.randomBytes(6)) c += CO_ALPHA[b%CO_ALPHA.length]; if (!CO.has(c)) return c; } };
+const coId = () => crypto.randomBytes(12).toString('hex');
+function coPush(pl, msg){ const line = 'data: '+JSON.stringify(msg)+'\n\n'; if (pl.res) pl.res.write(line); else { (pl.q = pl.q||[]).push(line); if (pl.q.length>64) pl.q.shift(); } }
+function coDrop(room, id){ const pl = room.players.get(id); if (!pl) return; room.players.delete(id); if (pl.res) { try { pl.res.end(); } catch(e){} } if (id===room.host||!room.players.size) { for (const o of room.players.values()) { coPush(o,{sys:'closed'}); try { o.res&&o.res.end(); } catch(e){} } CO.delete(room.code); } else for (const o of room.players.values()) coPush(o,{sys:'leave',id}); }
+setInterval(()=>{ const now = Date.now(); for (const room of CO.values()) { room.used = 0; for (const pl of room.players.values()) { if (pl.res) pl.res.write(': ping\n\n'); if (!pl.res&&now-pl.at>40000) coDrop(room,pl.id); } } },20000).unref();
+async function coRoute(req,res,p,u){
+  if (req.method==='GET' && p==='/api/co/stream') { const room = CO.get(u.searchParams.get('code')), pl = room&&room.players.get(u.searchParams.get('id')); if (!pl) return json(res,404,{error:'no such room'}); res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'}); res.write(': hello\n\n'); pl.res = res; for (const line of pl.q||[]) res.write(line); pl.q = []; req.on('close',()=>{ if (pl.res===res) { pl.res = null; pl.at = Date.now(); } }); return true; }
+  if (req.method!=='POST') return json(res,405,{error:'method not allowed'});
+  const d = await readJson(req,CO_LIMIT); if (!d) return json(res,400,{error:'bad request'});
+  if (p==='/api/co/new') { if (CO.size>=200) return json(res,503,{error:'too many rooms'}); const code = coCode(), id = coId(), room = {code,host:id,players:new Map(),used:0}; room.players.set(id,{id,name:coName(d.name),res:null,at:Date.now()}); CO.set(code,room); return json(res,200,{code,id}); }
+  const room = CO.get(String(d.code||'').toUpperCase());
+  if (!room) return json(res,404,{error:'no such room'});
+  if (p==='/api/co/join') { if (room.players.size>=CO_MAX) return json(res,409,{error:'room is full'}); const id = coId(), name = coName(d.name); room.players.set(id,{id,name,res:null,at:Date.now()}); for (const o of room.players.values()) if (o.id!==id) coPush(o,{sys:'join',id,name}); return json(res,200,{code:room.code,id}); }
+  const pl = room.players.get(d.id); if (!pl) return json(res,403,{error:'not in this room'});
+  if (p==='/api/co/leave') { coDrop(room,d.id); return json(res,200,{ok:true}); }
+  if (p==='/api/co/send') { const n = JSON.stringify(d.data||null).length; room.used += n; if (room.used>120*1048576) return json(res,429,{error:'slow down'}); const msg = {from:d.id,data:d.data}; if (d.to) { const o = room.players.get(d.to); if (o) coPush(o,msg); } else for (const o of room.players.values()) if (o.id!==d.id) coPush(o,msg); return json(res,200,{ok:true}); }
+  return json(res,404,{error:'not found'});
+}
+
 // ---------------------------------------------------------------- routing
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname; let m;
@@ -240,6 +263,7 @@ http.createServer(async (req, res) => {
     if (req.method==='GET' && p==='/popcraft') { res.writeHead(301,{Location:'/starvale'}); return res.end(); }
     if (req.method==='GET' && p==='/health') return json(res,200,{ok:true,clerk:CLERK_ON});
     if ((req.method==='GET'||req.method==='HEAD') && (m=p.match(/^\/public\/([a-zA-Z0-9._-]+)$/))) { const f = path.join(PUBLIC,m[1]); if (!fs.existsSync(f)) return send(res,404,'text/plain','Not found'); return sendFile(req,res,f); }
+    if (p.startsWith('/api/co/')) return coRoute(req,res,p,u);
     if (req.method==='GET' && p==='/api/games') return json(res,200,{ games:listGames().map(publicMeta) });
 
     // saves: one per player per game, reachable only with that player's session

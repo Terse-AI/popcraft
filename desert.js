@@ -6,7 +6,7 @@ import { Kit, buildMats, BM } from './buildings.js';
 import { TEX, toonOf, vnoise } from './scenery.js';
 
 const R=46, rand=(a,b)=>a+Math.random()*(b-a), tau=Math.PI*2, ss=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
-export const DESERT={ solid:[], keepOut:[], R, shop:{x:-20,z:-10}, door:{x:0,z:-36}, bus:{x:22,z:30}, pool:{x:20,z:-8,r:9} };
+export const DESERT={ solid:[], keepOut:[], R, shop:{x:-20,z:-10}, door:{x:0,z:-36}, bus:{x:22,z:30}, pool:{x:20,z:-8,r:9}, pillars:{x:-30,z:18} };
 const lerpC=(a,b,t,o)=>o.copy(a).lerp(b,t);
 
 /* close grain from the shared rock tile, and ripples that follow the wind; both bend the light as well as the colour */
@@ -49,7 +49,7 @@ export function buildDesert(){ buildMats(); const G=new THREE.Group(); G.visible
   const K=new Kit(); for(let i=0;i<40;i++){ const a=rand(0,tau), r=rand(10,R*1.15), x=Math.cos(a)*r, z=Math.sin(a)*r; if(DESERT.keepOut.some(o=>Math.hypot(x-o[0],z-o[1])<o[2])||Math.hypot(x-DESERT.pool.x,z-DESERT.pool.z)<DESERT.pool.r+2||Math.hypot(x-DESERT.shop.x,z-DESERT.shop.z)<9||Math.hypot(x,z-(DESERT.door.z+6))<7||Math.hypot(x-DESERT.bus.x,z-DESERT.bus.z)<6) continue; cactus(K,x,z,rand(.8,1.5)); DESERT.solid.push({x,z,r:.5}); }
   for(let i=0;i<11;i++){ const a=i*.6+rand(-.1,.1), r=rand(DESERT.pool.r+.5,DESERT.pool.r+3.4); palm(K,DESERT.pool.x+Math.cos(a)*r,DESERT.pool.z+Math.sin(a)*r,rand(4.4,7)); }
   DESERT.solid.push({x:DESERT.shop.x-2.4,z:DESERT.shop.z,r:3.4},{x:DESERT.shop.x+2.4,z:DESERT.shop.z,r:3.4},{x:DESERT.door.x-5.2,z:DESERT.door.z,r:3.2},{x:DESERT.door.x+5.2,z:DESERT.door.z,r:3.2},{x:DESERT.bus.x-1.4,z:DESERT.bus.z,r:1.2},{x:DESERT.bus.x+1.4,z:DESERT.bus.z,r:1.2},{x:DESERT.pool.x,z:DESERT.pool.z,r:DESERT.pool.r-.8});
-  oasis(K,DESERT.shop); door(K,DESERT.door); bus(K,DESERT.bus); K.bake(G);
+  oasis(K,DESERT.shop); door(K,DESERT.door); bus(K,DESERT.bus); { const P=DESERT.pillars; for(let i=0;i<3;i++){ const a=i*2.094+.5, x=P.x+Math.cos(a)*3, z=P.z+Math.sin(a)*3, g=new THREE.CylinderGeometry(.5,.72,6.4,9,4), p=g.attributes.position; for(let j=0;j<p.count;j++){ const y=p.getY(j), w=1+Math.sin(y*2.2+i)*.05; p.setX(j,p.getX(j)*w); p.setZ(j,p.getZ(j)*w); } g.computeVertexNormals(); K.add('stone',g,x,3.2,z); K.box('stone',1.5,.4,1.5,x,.2,z,{s:1.6,ry:a}); K.box('stone',1.3,.3,1.3,x,6.5,z,{s:1.6,ry:a}); DESERT.solid.push({x,z,r:1}); } } K.bake(G);
   const P=DESERT.pool, w=new THREE.Mesh(new THREE.CircleGeometry(P.r,64),new THREE.MeshLambertMaterial({color:0x2a8a9a})); w.rotation.x=-Math.PI/2; w.position.set(P.x,.06,P.z); G.add(w); const sheen=new THREE.Mesh(new THREE.CircleGeometry(P.r,64),new THREE.MeshBasicMaterial({color:0xffc890,transparent:true,opacity:.14,toneMapped:false})); sheen.rotation.x=-Math.PI/2; sheen.position.set(P.x,.07,P.z); G.add(sheen);
   const rim=new THREE.Mesh(new THREE.RingGeometry(P.r-.3,P.r+1.6,64),grained(new THREE.MeshLambertMaterial({color:0x8a7040}),true)); rim.rotation.x=-Math.PI/2; rim.position.set(P.x,.05,P.z); G.add(rim);
   const sun=new THREE.DirectionalLight(0xffcf9a,2.6); sun.position.set(44,66,26); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); Object.assign(sun.shadow.camera,{left:-70,right:70,top:70,bottom:-70,near:1,far:220}); sun.shadow.bias=-.0006; G.add(sun,sun.target); G.add(new THREE.HemisphereLight(0xc8a4c0,0xb06a3c,1.25)); return G; }

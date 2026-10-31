@@ -129,6 +129,16 @@ export const makeBear=()=>quadruped({fur:.055,furD:46,len:1.5,girth:.46,legLen:.
 export const makeDeer=()=>quadruped({fur:.014,furD:90,under:0xf0e8d8,len:1.1,girth:.2,legLen:.92,legR:.042,back:0x9a7448,belly:0xc8a878,foot:0x2a1e16,legCol:0xa88258,neckLen:.56,neckUp:1.0,headR:.13,muzzle:.15,muzzleR:.055,muzzleCol:0xdcc8a4,ear:'long',earSize:.2,earCol:0xa88258,tail:'stub',tailLen:.16,tailTip:0xf0e8d8,antlers:true,stride:1.6});
 export const makeCow=()=>quadruped({fur:.012,furD:80,len:1.3,girth:.34,legLen:.7,legR:.08,back:0xf2efe8,belly:0xe6e0d4,foot:0x2a2622,neckLen:.3,neckUp:.34,headR:.2,muzzle:.15,muzzleR:.1,muzzleCol:0xe8b8a8,ear:'long',earSize:.16,earCol:0x3a322c,tail:'thin',tailLen:.6,tailTip:0x2a2622,horns:true,stride:1.3,tailLift:-1.2,patches:true});
 
+export function makeHorse(){ const A=quadruped({len:1.78,girth:.44,legLen:1.02,legR:.1,fatLeg:1,back:0x6a3f22,belly:0x7a4e2c,foot:0x14100c,legCol:0x3e2616,neckLen:.74,neckUp:.86,headR:.19,muzzle:.44,muzzleR:.1,muzzleCol:0x2e1e14,ear:'long',earSize:.11,earCol:0x3e2616,tail:'plume',tailLen:1.05,tailTip:0x14100c,stride:2.1,tailLift:-1.25});
+  const toon=c=>new THREE.MeshToonMaterial({color:c}), dark=toon(0x241610), add=(p,g,m,x,y,z)=>{ const o=new THREE.Mesh(g,m); o.position.set(x,y,z); o.castShadow=true; p.add(o); return o; };
+  /* saddle cloth, seat, girth and stirrups */
+  const cloth=add(A.body,new THREE.CylinderGeometry(.455,.455,.78,18,1,true,-1.15,2.3),new THREE.MeshToonMaterial({color:0x9a2e2a,side:THREE.DoubleSide}),0,.0,-.04); cloth.rotation.x=Math.PI/2; cloth.scale.y=1;
+  const seat=add(A.body,new THREE.SphereGeometry(.3,16,10,0,6.3,0,1.45),toon(0x4a2a18),0,.3,-.04); seat.scale.set(.86,.62,1.32);
+  add(A.body,new THREE.TorusGeometry(.445,.02,6,22),toon(0x2e1c12),0,0,-.04).rotation.y=0;
+  for(const s of [-1,1]){ add(A.body,new THREE.BoxGeometry(.018,.36,.03),toon(0x2e1c12),s*.46,-.28,-.04); const st=add(A.body,new THREE.TorusGeometry(.05,.012,6,12),toon(0xc8a050),s*.46,-.5,-.04); st.rotation.y=Math.PI/2; }
+  /* the mane runs down the crest of the neck, and a forelock falls between the ears */
+  for(let i=0;i<11;i++){ const q=i/10, m=add(A.neck,new THREE.SphereGeometry(.082-.02*q,8,6),dark,0,.1+q*.56,-.09+q*.1); m.scale.set(.42,1,1.5); }
+  return A; }
 export const makeSheep=()=>quadruped({fur:.075,furD:30,len:.9,girth:.36,legLen:.4,legR:.05,back:0xeee6d8,belly:0xe4dac8,foot:0x2a2622,legCol:0x4a4038,neckLen:.2,neckUp:.7,headR:.15,muzzle:.12,muzzleR:.07,muzzleCol:0x4a4038,ear:'flop',earSize:.13,earCol:0x4a4038,tail:'stub',tailLen:.14,stride:.9});
 export const makeGoat=()=>quadruped({fur:.022,furD:60,len:.9,girth:.22,legLen:.56,legR:.05,back:0xd8cdb8,belly:0xeae0cc,foot:0x3a3028,neckLen:.3,neckUp:.86,headR:.13,muzzle:.14,muzzleR:.06,ear:'long',earSize:.15,tail:'stub',tailLen:.14,horns:true,stride:1});
 export const makePig=()=>quadruped({len:1,girth:.32,legLen:.36,legR:.07,back:0xeaaea0,belly:0xf0bcae,foot:0x8a5a50,neckLen:.14,neckUp:.3,headR:.2,muzzle:.1,muzzleR:.1,muzzleCol:0xe09a8c,ear:'long',earSize:.12,tail:'thin',tailLen:.16,stride:.8,tailLift:1.1});

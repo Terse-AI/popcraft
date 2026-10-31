@@ -134,6 +134,7 @@
     <span class="pill" id="qualbtn">⚙ 均衡</span>
     <span class="pill" id="sndbtn">🔊</span>
     <span class="pill" id="langbtn">🌐 中文</span>
+    <span class="pill" id="cobtn" title="co-op">👥</span>
     <span class="pill" id="savebtn" title="save">💾</span>
     <span class="pill" id="helpbtn" title="help">❓</span>
     <span class="pill" id="mapbtn" title="map">🗺 地图</span>
@@ -223,13 +224,15 @@ import { buildIsland, ISLAND } from './island.js';
 import { buildLife, updateLife } from './life.js';
 import { cropMesh, soilGeometry } from './crops.js';
 import { debrisMesh, forageMesh, placedModel } from './props.js';
+import { furnitureMesh, hatMesh, cribMesh, babyMesh, pondMesh, resortMesh } from './home.js';
 import { nova, inNova, NOVA_URL } from './nova.js';
 import { showCards, startChecklist } from './guide.js';
 import { startAudio, updateAudio, play as snd, playAt as sndAt, setVolumes, volumes, duckMusic, auditSounds, audioLevel } from './audio.js';
-import { makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, makeSheep, makeGoat, makePig, makeWalkDuck, makeFish, poseQuadruped, poseBird, damp, angDamp, furLod } from './creatures.js';
-import { CROPS, CROP_FORM, FISH, RODS, ANIMALS } from './data.js';
+import { makeHorse, makeDog, makeBear, makeDeer, makeCow, makeHeron, makeDuck, makeChicken, makeSheep, makeGoat, makePig, makeWalkDuck, makeFish, poseQuadruped, poseBird, damp, angDamp, furLod } from './creatures.js';
+import { CROPS, CROP_FORM, FISH, RODS, ANIMALS, FURNITURE, HATS, WALLS, FLOORS, NPCS } from './data.js';
 import { makeValley, defaultState, DB } from './valley.js';
-import { logHouse, marketStall, shippingBin, anvilBlock, hearth, fenceRun, mineMouth, buildDock, makeVillager, buildSmoke, addSmoke, updateBuildings, dressValley, buildLighthouse, signBoard, mailbox, greenhouse, cabinRoom } from './buildings.js';
+import { makeCoop } from './coop.js';
+import { logHouse, marketStall, shippingBin, anvilBlock, hearth, fenceRun, mineMouth, buildDock, makeVillager, buildSmoke, addSmoke, updateBuildings, dressValley, buildLighthouse, signBoard, mailbox, greenhouse, cabinRoom, BM } from './buildings.js';
 
 /* ======================================================================
    StarVale · 星星人露谷 — a Stardew-Valley-style farming life sim.
@@ -471,7 +474,7 @@ function itemIcon(kind,id,px){ px=px||28; const base=id.split('~')[0], k=(kind==
 const player={ pos:new THREE.Vector3(0,0,4), yaw:0, vel:new THREE.Vector3(), moving:false, walkT:0, speed:0 };
 let avatar, legL, legR, armL, armR, headG;
 let charIsGLB=false, charHolder=null, charYaw=0;
-const walkU={ uBox:{value:new THREE.Vector3(0,1,.3)}, uPhase:{value:0}, uAmp:{value:0}, uRow:{value:0}, uSwing:{value:0} };
+const walkU={ uBox:{value:new THREE.Vector3(0,1,.3)}, uPhase:{value:0}, uAmp:{value:0}, uRow:{value:0}, uSwing:{value:0}, uSash:{value:new THREE.Vector4(0,0,0,0)} };
 function buildAvatar(){
   avatar=new THREE.Group();
   const skin=new THREE.MeshStandardMaterial({color:0xffe0bd,roughness:0.6});
@@ -494,6 +497,18 @@ function buildAvatar(){
   avatar.traverse(o=>{o.castShadow=true;});
   avatar.position.copy(player.pos); scene.add(avatar);
 }
+const walkPatch=U=>sh=>{ Object.assign(sh.uniforms,U);
+        sh.fragmentShader='uniform vec4 uSash; varying float vSashH;\n'+sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n if(uSash.w>.5){ float bd=smoothstep(.405,.412,vSashH)*(1.-smoothstep(.468,.475,vSashH)); float st=smoothstep(.432,.436,vSashH)*(1.-smoothstep(.442,.446,vSashH)); diffuseColor.rgb=mix(diffuseColor.rgb,uSash.rgb*(1.-st*.3),bd*.94); }');
+        sh.vertexShader='uniform vec3 uBox; uniform float uPhase,uAmp,uRow,uSwing; varying float vSashH;\n'+sh.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+          vSashH=(position.y-uBox.x)/(uBox.y-uBox.x);
+          { float h=(transformed.y-uBox.x)/(uBox.y-uBox.x), xn=transformed.x/uBox.z, sd=xn<0.?-1.:1., scale=uBox.y-uBox.x;
+            float legW=(1.-smoothstep(.12,.25,h))*smoothstep(.015,.1,abs(xn));
+            float a=sin(uPhase)*sd*.72*uAmp*legW, py=uBox.x+.24*scale, y0=transformed.y-py, z0=transformed.z;
+            transformed.y=py+y0*cos(a)-z0*sin(a); transformed.z=z0*cos(a)+y0*sin(a);
+            float armW=smoothstep(.62,.8,abs(xn))*(1.-smoothstep(.5,.6,h))*smoothstep(.18,.26,h);
+            float b=(-sin(uPhase)*sd*.62*uAmp+uRow*(sin(uPhase*1.3)*.7-.5)-uSwing*1.5*step(0.,sd))*armW, sy=uBox.x+.52*scale, y1=transformed.y-sy, z1=transformed.z;
+            transformed.y=sy+y1*cos(b)-z1*sin(b); transformed.z=z1*cos(b)+y1*sin(b); }`); };
+let twinkleSrc=null;
 async function loadTwinkle(){
   try{
     const g=await gltfLoader.loadAsync('twinkle_sv.glb');
@@ -505,17 +520,9 @@ async function loadTwinkle(){
       const src=o.material, mat=toonOf({ gradientMap:softGrad, map:src.map||null, color:src.color||0xffffff, transparent:src.transparent, opacity:src.opacity, side:src.side });
       o.geometry.computeBoundingBox(); const bb=o.geometry.boundingBox; walkU.uBox.value.set(bb.min.y,bb.max.y,Math.max(-bb.min.x,bb.max.x));
       // the model is one solid mesh, so legs and arms swing in the vertex shader around hip and shoulder heights
-      mat.onBeforeCompile=sh=>{ Object.assign(sh.uniforms,walkU);
-        sh.vertexShader='uniform vec3 uBox; uniform float uPhase,uAmp,uRow,uSwing;\n'+sh.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-          { float h=(transformed.y-uBox.x)/(uBox.y-uBox.x), xn=transformed.x/uBox.z, sd=xn<0.?-1.:1., scale=uBox.y-uBox.x;
-            float legW=(1.-smoothstep(.12,.25,h))*smoothstep(.015,.1,abs(xn));
-            float a=sin(uPhase)*sd*.72*uAmp*legW, py=uBox.x+.24*scale, y0=transformed.y-py, z0=transformed.z;
-            transformed.y=py+y0*cos(a)-z0*sin(a); transformed.z=z0*cos(a)+y0*sin(a);
-            float armW=smoothstep(.62,.8,abs(xn))*(1.-smoothstep(.5,.6,h))*smoothstep(.18,.26,h);
-            float b=(-sin(uPhase)*sd*.62*uAmp+uRow*(sin(uPhase*1.3)*.7-.5)-uSwing*1.5*step(0.,sd))*armW, sy=uBox.x+.52*scale, y1=transformed.y-sy, z1=transformed.z;
-            transformed.y=sy+y1*cos(b)-z1*sin(b); transformed.z=z1*cos(b)+y1*sin(b); }`); };
+      mat.onBeforeCompile=walkPatch(walkU);
       o.material=mat; } });
-    const holder=new THREE.Group(); holder.rotation.y=charYaw; holder.add(m);
+    twinkleSrc=m; const holder=new THREE.Group(); holder.rotation.y=charYaw; holder.add(m);
     while(avatar.children.length) avatar.remove(avatar.children[0]);
     avatar.add(holder); charIsGLB=true; charHolder=holder;
   }catch(e){ /* keep the procedural mascot */ }
@@ -531,6 +538,8 @@ addEventListener('keydown',e=>{
   if(k>='1'&&k<='6'){ S.tool=+k-1; S.heldSeed=null; S.heldPlace=null; S.heldFert=null; renderHotbar(); }
   else if(k==='e'){ interact(); }
   else if(k==='c'){ G.openCraft(); }
+  else if(k==='r'&&S.heldFur){ G.turnFur(); }
+  else if(k==='p'){ G.openCoop(); }
   else if(k==='j'){ G.openJournal(); }
   else if(k==='m'){ openMap(); }
   else if(k==='h'){ hudOff.all=!hudOff.all; paintHud(); }
@@ -574,7 +583,7 @@ const touchMove=new THREE.Vector2();
 const ray=new THREE.Raycaster();
 let targetCell=null;
 function updateTarget(){
-  if(S.inMine||S.inHouse||S.boating){ selector.visible=false; targetCell=null; return; }
+  if(S.inMine||S.inHouse||S.boating){ const c=G.mine.mode==='island'&&G.ifCell(); targetCell=null; if(c){ selector.position.set(c.x,.1,c.z); selector.visible=true; } else selector.visible=false; return; }
   ray.setFromCamera({x:0,y:0}, camera);
   const ro=ray.ray.origin, rd=ray.ray.direction; let hit=null;
   for(let d=2;d<14;d+=.2){ const px=ro.x+rd.x*d, py=ro.y+rd.y*d, pz=ro.z+rd.z*d; if(py<=terrainH(px,pz)){ hit={x:px,z:pz}; break; } }
@@ -673,7 +682,7 @@ function interact(){
   if(S.inHouse){ const sp=house.userData.spots, p=player.pos, n=q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9;
     if(n(sp.door)){ leaveHouse(); return; } if(n(sp.bed)){ sleep(); return; } if(n(sp.tv)){ openTV(); return; }
     if(n(sp.stove)){ if(S.built.kitchen) G.openCook(); else toast(L('要先扩建厨房才能做饭','Upgrade the house to get a kitchen')); return; }
-    if(n(sp.fridge)){ S.chests.fridge=S.chests.fridge||{}; G.openChest('fridge'); return; } return; }
+    if(n(sp.fridge)){ S.chests.fridge=S.chests.fridge||{}; G.openChest('fridge'); return; } const kid=nearKid(); if(kid){ G.talkKid(kid.k); return; } if(spouseM&&spouseM.visible&&Math.hypot(p.x-spouseM.position.x,p.z-spouseM.position.z)<2){ G.talkTo(NPCS.find(x=>x.id===S.spouse)); return; } const fu=G.nearDecor(); if(fu){ G.openDecor(fu); return; } return; }
   if(S.inMine){ const M=G.mine, p=player.pos; if(M.mode==='desert'){ desertAct(); return; } if(M.mode==='island'){ islandAct(); return; } if(M.mode==='volcano'&&S.mineLevel===5&&Math.hypot(p.x-3,p.z-3)<2.2){ G.openForge(); return; } if(M.mode==='quarry'&&Math.hypot(p.x,p.z)<2.2){ modal(L('采石场','The Quarry'),b=>{ const a=document.createElement('div'); a.className='buy'; a.textContent='🚪 '+L('回到地面','Back to the surface'); a.onclick=()=>{ $('#dynmodal').classList.add('hidden'); M.leave(); }; b.appendChild(a); const c=document.createElement('div'); c.className='buy'; c.textContent='⛏️ '+L('矮人的摊子','The Dwarf\'s stall'); c.onclick=()=>G.dwarfShop(); b.appendChild(c); }); return; } if(M.chest&&Math.hypot(M.chest.x-p.x,M.chest.z-p.z)<1.9){ M.openChest(); return; } if(M.ladder&&Math.hypot(M.ladder.x-p.x,M.ladder.z-p.z)<1.8){ M.descend(); return; } if(Math.hypot(p.x,p.z)<2.2){ modal(L('矿洞','The Mine'),b=>{ const a=document.createElement('div'); a.className='buy'; a.textContent='🚪 '+L('回到地面','Back to the surface'); a.onclick=()=>{ $('#dynmodal').classList.add('hidden'); M.leave(); }; b.appendChild(a); const c=document.createElement('div'); c.className='buy'; c.textContent='🛗 '+L('电梯','Lift'); c.onclick=()=>M.openLift(); b.appendChild(c); }); } return; }
   if(G.pickForage()) return; if(G.pullCrab()) return;
   if(G.harvestHere()) return;
@@ -683,8 +692,12 @@ function interact(){
   for(const k in S.chests){ if(k==='fridge') continue; const [x,z]=k.split(',').map(Number); if(Math.hypot(player.pos.x-x,player.pos.z-z)<1.8){ G.openChest(k); return; } }
   const per=G.nearPerson(); if(per){ G.talkTo(per.n); return; }
   if(G.petAnimal()) return;
+  if(G.useMystic()) return;
+  for(const pl of S.placements){ const c=DB.craft[pl.id]; if(c&&(c.tent||c.cook)&&near(pl,2.4)){ if(c.tent) sleep(); else G.openCook(); return; } }
+  if(horse&&!S.onHorse&&near(horse,2.6)){ S.onHorse=true; hop.y=0; snd('step',{run:true},'grass'); toast('🐎 '+L('E 下马','E to dismount')); return; }
   for(const sp of SPOTS) if(near(sp,sp.r)){ sp.fn(); return; }
   if(S.festival&&near(PLAZA,12)){ G.openFestival(); return; }
+  if(S.onHorse){ S.onHorse=false; toast(L('下了马','Back on foot')); }
 }
 
 /* ============================ WEATHER ============================ */
@@ -714,11 +727,11 @@ function applyWeather(){
 
 /* ============================ TIME / DAY ============================ */
 function fadeMsg(msg,hold=1800){ $('#fadet').textContent=msg; $('#fade').classList.add('on'); setTimeout(()=>$('#fade').classList.remove('on'),hold); }
-function sleep(passedOut){ snd('sleep');
+function sleep(passedOut){ const go=passedOut==='co'; if(go) passedOut=false; if(G.coop.on&&!G.coop.host){ if(!G.coop.waiting()) G.coop.toBed(); return; } if(G.coop.on&&!go&&passedOut!==true&&G.coop.toBed()) return; snd('sleep');
   if(S.sleeping) return; S.sleeping=true; G.cancelFish();
   $('#fadet').textContent=passedOut===true?L('你累倒了…','You passed out…'):t('sleep'); $('#fade').classList.add('on');
   setTimeout(()=>{
-    if(!S.inHouse&&passedOut!==true){} const r=G.endDay(passedOut===true);
+    const onIsland=G.mine.mode==='island'&&passedOut!==true; const r=G.endDay(passedOut===true); G.coop.morning(); if(onIsland){ G.enterIsland(); player.pos.set(ISLAND.hut.x+2,0,ISLAND.hut.z+3); }
     if(S.inHouse||passedOut===true){ if(!S.inHouse) enterHouse(true); player.pos.set(-4.3,0,.6); }
     $('#fade').classList.remove('on'); S.sleeping=false; dayReport(r); retintGround(); applyWeather(); renderStatus(); renderEnergy();
   },900);
@@ -761,6 +774,20 @@ function toggle(id){ $('#'+id).classList.toggle('hidden'); }
 function closeAll(){ document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden')); }
 document.querySelectorAll('.xbtn').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).classList.add('hidden'));
 
+G.sleepNow=()=>sleep();
+G.coSleepNow=()=>sleep('co');
+/* a guest's morning comes from the host */
+G.coMorning=(snap,clock)=>{ $('#fade').classList.add('on'); setTimeout(()=>{ if(S.inMine) G.mine.leave(true); G.coop.dayIn(snap); Object.assign(S,{time:clock.time,day:clock.day,season:clock.season,year:clock.year,absDay:clock.absDay,weather:clock.weather,tomorrow:clock.tomorrow,luck:clock.luck,energy:S.maxEnergy,hp:S.maxHp,can:G.canCapacity(),buffs:[],festDone:false}); G.festivalsToday(); if(!S.inHouse) enterHouse(true); player.pos.set(-4.3,0,.6); G.onNewDay&&G.onNewDay(); $('#fade').classList.remove('on'); retintGround(); applyWeather(); renderStatus(); renderEnergy(); },900); };
+G.coWeather=()=>{ applyWeather(); renderStatus(); };
+/* a friend's star figure: the same model, walking on its own, a scarf of its own colour and a name overhead */
+const peerCols=[0x3a7ac8,0xc83a6a,0x3aa86a,0xe8a03a];
+function nameTag(text){ const c=document.createElement('canvas'); c.width=256; c.height=64; const x=c.getContext('2d'); x.font='600 34px system-ui,sans-serif'; const w=Math.min(240,x.measureText(text).width+28); x.fillStyle='rgba(20,14,8,.62)'; x.beginPath(); x.roundRect(128-w/2,8,w,48,22); x.fill(); x.fillStyle='#f4ead2'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(text,128,33); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,fog:false,toneMapped:false})); s.scale.set(1.5,.375,1); return s; }
+let peerN=0;
+function peerBody(p){ if(!twinkleSrc) return; const g=new THREE.Group(), U={uBox:walkU.uBox,uPhase:{value:0},uAmp:{value:0},uRow:{value:0},uSwing:{value:0},uSash:{value:new THREE.Vector4(0,0,0,1)}}, c=new THREE.Color(peerCols[peerN++%4]); U.uSash.value.set(c.r,c.g,c.b,1); const m=twinkleSrc.clone(true); m.traverse(o=>{ if(o.isMesh){ const mat=o.material.clone(); mat.onBeforeCompile=walkPatch(U); o.material=mat; o.castShadow=true; o.frustumCulled=false; } }); g.add(m); const tag=nameTag(p.name); tag.position.y=2.1; g.add(tag); scene.add(g); Object.assign(p,{g,U,tag,ph:0,sp:0,x:p.tx,z:p.tz}); }
+G.peerMove=(p,d)=>{ if(!p.g) peerBody(p); p.tx=d.x; p.tz=d.z; p.ty=d.yaw; p.spT=d.sp; p.where=d.where; p.horse=d.horse; if(p.hatId!==d.hat){ p.hatId=d.hat; if(p.hatM&&p.g) p.g.remove(p.hatM); p.hatM=null; if(d.hat&&HATS[d.hat]&&p.g){ p.hatM=hatMesh(HATS[d.hat]); p.hatM.position.set(0,HAT_Y,HAT_Z); p.hatM.rotation.x=-.08; p.hatM.scale.setScalar(HAT_S); p.g.add(p.hatM); } } };
+G.peerGone=p=>{ if(p.g) scene.remove(p.g); };
+G.peerSay=(p,text)=>{ if(!p.g) return; if(p.bub) p.g.remove(p.bub); p.bub=nameTag(text.slice(0,18)); p.bub.position.y=2.55; p.g.add(p.bub); const b=p.bub; setTimeout(()=>{ if(p.bub===b){ p.g.remove(b); p.bub=null; } },5000); };
+G.peersTick=dt=>{ const here=S.inHouse?'house':S.inMine?(G.mine.mode||'mine')+S.mineLevel:'world'; for(const p of G.coop.peers.values()){ if(!p.g) continue; p.g.visible=p.where===here; if(!p.g.visible) continue; const k=1-Math.exp(-dt*9); p.x+=(p.tx-p.x)*k; p.z+=(p.tz-p.z)*k; p.sp=damp(p.sp,p.spT||0,10,dt); p.ph+=p.sp*dt*2.7; const y=S.inMine||S.inHouse?0:walkH(p.x,p.z); p.g.position.set(p.x,y+(p.horse?1.02:0)+Math.abs(Math.sin(p.ph))*.05*Math.min(1,p.sp/4),p.z); p.g.rotation.y=angDamp(p.g.rotation.y,p.ty||0,12,dt); p.U.uAmp.value=damp(p.U.uAmp.value,p.horse?0:Math.min(1,p.sp/4.2),12,dt); p.U.uPhase.value=p.ph; } };
 function openInv(){
   if(document.pointerLockElement) document.exitPointerLock();
   closeAll(); const g=$('#invg'); g.innerHTML=''; $('#invt').textContent=t('invt')+'  '+Object.keys(S.inv).length+'/'+S.bag;
@@ -771,8 +798,9 @@ function openInv(){
     if(kind==='seed') b.onclick=()=>{ S.heldSeed=id; S.heldPlace=null; S.heldFert=null; renderHotbar(); closeAll(); toast(t('hold')+cropName(id)); };
     else if(craft) b.onclick=()=>{ if(G.useItem('craft',id)){ openInv(); return; } const c=DB.craft[id]; if(c.tackle||c.warp) return; S.heldPlace=c.fert?null:id; S.heldFert=c.fert?id:null; S.heldSeed=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); };
     else if(food) b.onclick=()=>{ G.eat(id); openInv(); };
-    else if(kind==='ring'||kind==='boot'||(kind==='mat'&&/^(stardrop|rain_totem)$/.test(id))) b.onclick=()=>{ G.useItem(kind,id); openInv(); };
-    else if(kind==='mat'&&/^(acorn|maple_seed|pine_cone)$/.test(id)) b.onclick=()=>{ S.heldPlace='wild_tree'; S.treeSeed=id; S.heldSeed=null; S.heldFert=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); };
+    else if(kind==='fur') b.onclick=()=>{ G.useItem(kind,id); closeAll(); };
+    else if(kind==='ring'||kind==='boot'||kind==='hat'||kind==='trinket'||(kind==='mat'&&/^(stardrop|rain_totem|mixed_seeds)$/.test(id))) b.onclick=()=>{ G.useItem(kind,id); openInv(); };
+    else if(kind==='mat'&&/^(acorn|maple_seed|pine_cone|mystic_seed)$/.test(id)) b.onclick=()=>{ S.heldPlace='wild_tree'; S.treeSeed=id; S.heldSeed=null; S.heldFert=null; renderHotbar(); closeAll(); toast(t('hold')+mt.name); };
     g.appendChild(b); }
   if(!any) g.innerHTML='<div class="hint" style="grid-column:1/-1">—</div>';
   $('#inv').classList.remove('hidden');
@@ -808,6 +836,8 @@ addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.buy,.pill,
 $('#journalbtn').onclick=()=>G.openJournal();
 $('#savebtn').onclick=()=>pressSave();
 $('#helpbtn').onclick=()=>showCards(L);
+$('#cobtn').onclick=()=>G.openCoop();
+G.coopHud=()=>{ const b=$('#cobtn'); b.textContent=G.coop.on?'👥 '+(G.coop.peers.size+1):'👥'; };
 $('#mapbtn').onclick=()=>openMap(); $('#mini').onclick=()=>openMap();
 
 /* ============================ MINIMAP ============================ */
@@ -932,7 +962,7 @@ function frame(now){
   fCnt++; fAcc+=raw; if(fAcc>=0.5){ const fe=$('#fps'), v=Math.round(fCnt/fAcc); if(fe) fe.textContent=v+' fps'; window.__fps=v; fCnt=0; fAcc=0; }
 
   // time of day
-  if(!S.sleeping&&!DBG&&!paused()){ G.tickBuffs(dt); S.time+=dt*1.43;     // ten game minutes every seven seconds, as in Stardew
+  if(!S.sleeping&&!DBG&&(!paused()||G.coop.on)){ G.tickBuffs(dt); S.time+=dt*1.43;     // ten game minutes every seven seconds, as in Stardew
     if(S.time>=1560) sleep(true); }                       // 2 AM: you collapse wherever you stand
   dayNight(now*0.001,dt);
 
@@ -943,7 +973,7 @@ function frame(now){
   if(keys['KeyW']) moveV.add(cForward); if(keys['KeyS']) moveV.sub(cForward);
   if(keys['KeyA']) moveV.sub(cRight);   if(keys['KeyD']) moveV.add(cRight);
   if(touchMove.lengthSq()>0.01){ moveV.add(cForward.clone().multiplyScalar(-touchMove.y)); moveV.add(cRight.clone().multiplyScalar(touchMove.x)); }
-  const wantMove=moveV.lengthSq()>0.001, wantSp=(S.running&&S.energy>0?7.2:4.2)*(S.energy>0?1:0.45)*(S.boating?.72:1)*(1+G.buffOf('speed')*.14+(S.onHorse?.45:0));
+  const wantMove=moveV.lengthSq()>0.001, wantSp=(S.running&&S.energy>0?7.2:4.2)*(S.energy>0?1:0.45)*(S.boating?.72:1)*(1+G.buffOf('speed')*.14+(S.onHorse?.6:0));
   if(wantMove) moveV.normalize().multiplyScalar(wantSp);
   // weight: you ease into a run and take a step or two to stop
   const accel=1-Math.exp(-dt*(wantMove?(S.boating?2.6:10):(S.boating?1.3:13)));
@@ -968,11 +998,12 @@ function frame(now){
   player.pos.y=(S.inMine||S.inHouse)?0:S.boating?WATER_Y+.08+Math.sin(now*.0016)*.05:walkH(player.pos.x,player.pos.z);
   updateBoat(dt,now); updateBeasts(dt,now);
   if(S.inMine){ const mo=G.mine.mode, area=mo==='desert'?DESERT:mo==='island'?ISLAND:null, lim=area?area.R:17, r=Math.hypot(player.pos.x,player.pos.z); if(r>lim){ player.pos.x*=lim/r; player.pos.z*=lim/r; } if(area) for(const o of area.solid){ const dx=player.pos.x-o.x, dz=player.pos.z-o.z, d=Math.hypot(dx,dz), q=o.r+.4; if(d<q&&d>.01){ player.pos.x=o.x+dx/d*q; player.pos.z=o.z+dz/d*q; } } player.pos.y=0; }
-  if(S.inHouse){ player.pos.x=clamp(player.pos.x,-5.6,5.6); player.pos.z=clamp(player.pos.z,-4,4); player.pos.y=0; }
+  if(S.inHouse){ player.pos.x=clamp(player.pos.x,-5.6,5.6); player.pos.z=clamp(player.pos.z,-4,4); player.pos.y=0; houseTick(dt); }
+  if(!S.inHouse&&furGhost) furGhost.visible=false; G.mine.wildTick(dt); if(!S.inMine) G.mine.update(dt); G.coopTick(dt); if(G.coop.waiting()&&player.moving) G.coop.upAgain();
   stepJump(dt);
   if(G.film) G.film.pose(dt);
   if(G.film) player.pos.y=(S.inMine||S.inHouse)?0:S.boating?WATER_Y+.08:walkH(player.pos.x,player.pos.z);
-  avatar.position.copy(player.pos); avatar.position.y+=hop.y;
+  if(S.onHorse&&(S.inMine||S.inHouse||S.boating)) S.onHorse=false; stepHorse(dt); avatar.position.copy(player.pos); avatar.position.y+=hop.y+(S.onHorse?1.02:0);
   avatar.rotation.y=angDamp(avatar.rotation.y,player.yaw,S.boating?4:13,dt);
   animateWalk(dt); hopPose();
 
@@ -980,7 +1011,7 @@ function frame(now){
   const cs=Math.cos(cam.pitch);
   const camPos=new THREE.Vector3(
     player.pos.x - Math.sin(cam.yaw)*cam.dist*cs,
-    player.pos.y + cam.height + Math.sin(cam.pitch)*cam.dist,
+    player.pos.y + cam.height + Math.sin(cam.pitch)*cam.dist + (S.onHorse?.8:0),
     player.pos.z - Math.cos(cam.yaw)*cam.dist*cs);
   if(!S.inMine&&!S.inHouse){ const gy=terrainH(camPos.x,camPos.z)+.7; if(camPos.y<gy) camPos.y=gy; }   // never dip under a slope
   if(S.inHouse){ camPos.x=clamp(camPos.x,-5.4,5.4); camPos.z=clamp(camPos.z,-4,4.2); camPos.y=Math.min(camPos.y,3.3); }
@@ -1028,7 +1059,7 @@ let promptOpen=false;
 const SEAS=()=>[L('春','Spring'),L('夏','Summer'),L('秋','Fall'),L('冬','Winter')];
 const saveLine=m=>L(SEAS()[m.season||0]+' 第 '+(m.day||1)+' 天,第 '+(m.year||1)+' 年',SEAS()[m.season||0]+' day '+(m.day||1)+', year '+(m.year||1))+' · '+(m.gold||0)+'g';
 async function afterAuth(){ const info=await nova('saveinfo'); if(info&&info.signedIn&&info.save) return saveManager(info); await G.saveGame(); }
-async function pressSave(){ if(!inNova) return toast(L('请从 NOVA 打开游戏后再保存','Open the game from NOVA to save')); const info=await nova('saveinfo'); if(!info) return toast('⚠️ '+L('暂时连不上账号服务,稍后再试','Could not reach your account just now')); if(info.signedIn) return info.save?saveManager(info):G.saveGame(); const r=await askSignIn(); if(r&&r.ok) afterAuth(); }
+async function pressSave(){ if(G.coop.on&&!G.coop.host) return toast(L('你的进度跟着房主的存档走','Your progress is kept in the host\'s save')); if(!inNova) return toast(L('请从 NOVA 打开游戏后再保存','Open the game from NOVA to save')); const info=await nova('saveinfo'); if(!info) return toast('⚠️ '+L('暂时连不上账号服务,稍后再试','Could not reach your account just now')); if(info.signedIn) return info.save?saveManager(info):G.saveGame(); const r=await askSignIn(); if(r&&r.ok) afterAuth(); }
 const askSignIn=()=>nova('signin',{park:G.snapshot()},900000);
 function saveManager(info){ modal(L('💾 存档','💾 Saves'),b=>{ const row=(t,sub,lab,fn,solid)=>{ const w=document.createElement('div'); w.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid rgba(241,228,200,.14)'; const l=document.createElement('div'); l.innerHTML='<b></b><div class="hint" style="margin:3px 0 0"></div>'; l.querySelector('b').textContent=t; l.querySelector('.hint').textContent=sub; const c=document.createElement('button'); c.textContent=lab; c.style.cssText='font:inherit;font-weight:600;border:0;border-radius:9px;padding:9px 15px;cursor:pointer;white-space:nowrap;'+(solid?'background:#f0c674;color:#2a1e10':'background:rgba(241,228,200,.12);color:#f1e4c8'); c.onclick=fn; w.append(l,c); b.appendChild(w); }; if(info.name){ const a=document.createElement('div'); a.className='hint'; a.textContent=L('账号:','Account: ')+info.name; b.appendChild(a); }
     row(L('当前进度','This game'),saveLine({day:S.day,season:S.season,year:S.year,gold:S.gold}),L('保存到账号','Save'),async()=>{ G.closeModal&&G.closeModal(); await G.saveGame(); },true);
@@ -1048,13 +1079,13 @@ function openMap(){ if(document.getElementById('bigmap')){ document.getElementBy
   w.onclick=()=>w.remove(); document.body.appendChild(w); snd('panelOpen'); }
 /* a hop: the arc is real, the camera stays level so the view doesn't bounce, and the landing has weight */
 const hop={y:0,v:0,land:0};
-function jump(){ if(hop.y>0||S.sleeping||S.boating||paused()||G.fishing.state) return; hop.v=6.4; snd('step',{run:true},'grass'); }
+function jump(){ if(hop.y>0||S.sleeping||S.boating||S.onHorse||paused()||G.fishing.state) return; hop.v=6.4; snd('step',{run:true},'grass'); }
 function stepJump(dt){ if(hop.y>0||hop.v>0){ hop.v-=19*dt; hop.y+=hop.v*dt; if(hop.y<=0){ hop.y=0; hop.v=0; hop.land=1; snd('step',{run:true},footSurface()); if(!S.inHouse&&!S.inMine) G.dust&&G.dust(player.pos.x,player.pos.z); } } hop.land=Math.max(0,hop.land-dt*6); }
 function hopPose(){ if(charHolder&&(hop.y>0||hop.land>0)){ const air=Math.min(1,hop.y*1.2), sq=hop.land*.16-air*.06; charHolder.scale.y*=1-sq; charHolder.scale.x*=1+sq*.6; charHolder.scale.z*=1+sq*.6; } }
 function animateWalk(dt){
   if(!avatar) return;
   const v=player.speed, g=Math.min(1,v/4.2), run=Math.max(0,(v-4.4)/2.8), P=player.walkT;
-  walkU.uAmp.value=damp(walkU.uAmp.value,S.boating?0:g,12,dt); walkU.uPhase.value=P; walkU.uRow.value=damp(walkU.uRow.value,S.boating&&player.moving?1:0,6,dt);
+  walkU.uAmp.value=damp(walkU.uAmp.value,S.boating||S.onHorse?0:g,12,dt); walkU.uPhase.value=P; walkU.uRow.value=damp(walkU.uRow.value,S.boating&&player.moving?1:0,6,dt);
   if(charIsGLB&&charHolder){ const breath=Math.sin(performance.now()*.0021), step=Math.abs(Math.sin(P));
     charHolder.position.y=S.boating?-.22:step*.075*g+breath*.006*(1-g);
     charHolder.rotation.x=g*.1+run*.1;                                         // lean into the walk, harder at a run
@@ -1088,8 +1119,8 @@ function dayNight(t,dt){
     u.get('uShaft').value=R.shaft*clamp(facing*2.6,0,1)*clamp(1.25-R.sunDir.y*1.1,.3,1); }
 }
 let promptEl=null, promptTxt='';
-function hintProximity(){ let txt=''; if(S.inHouse){ const sp=house.userData.spots, p=player.pos, n=q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9; txt=n(sp.door)?L('E 出门','E go outside'):n(sp.bed)?L('E 睡觉','E sleep'):n(sp.tv)?L('E 看电视','E watch TV'):n(sp.stove)?L('E 烹饪','E cook'):n(sp.fridge)?L('E 冰箱','E icebox'):''; }
-  else if(S.inMine){ const M=G.mine, p=player.pos, d=q=>Math.hypot(p.x-q.x,p.z-q.z); txt=M.mode==='island'?(d({x:ISLAND.trader.x,z:ISLAND.trader.z+3})<3.6?L('E 岛上商人','E the trader'):d(ISLAND.parrot)<3?L('E 金鹦鹉','E the parrot'):d({x:ISLAND.dock.x,z:ISLAND.dock.z+2})<5?L('E 坐船回去','E sail home'):d({x:ISLAND.volcano.x,z:ISLAND.volcano.z+2})<3.6?L('E 进入火山','E enter the volcano'):G.islandWater()?L('F 钓鱼','F fish'):''):M.mode==='desert'?(d({x:DESERT.shop.x,z:DESERT.shop.z+3.6})<3.2?L('E 绿洲商店','E the Oasis'):d({x:DESERT.door.x,z:DESERT.door.z+2})<3.4?L('E 骷髅洞穴','E Skull Cavern'):d(DESERT.bus)<4.4?L('E 坐车回家','E ride home'):G.desertWater()?L('F 钓鱼','F fish'):''):M.chest&&d(M.chest)<1.9?L('E 打开宝箱','E open the chest'):M.ladder&&d(M.ladder)<1.8?L('E 下一层','E descend'):Math.hypot(p.x,p.z)<2.2?L('E 出口 / 电梯','E exit / lift'):''; }
+function hintProximity(){ let txt=''; if(S.inHouse){ const sp=house.userData.spots, p=player.pos, n=q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9; txt=n(sp.door)?L('E 出门','E go outside'):n(sp.bed)?L('E 睡觉','E sleep'):n(sp.tv)?L('E 看电视','E watch TV'):n(sp.stove)?L('E 烹饪','E cook'):n(sp.fridge)?L('E 冰箱','E icebox'):nearKid()?'E '+nearKid().k.nm:S.heldFur?L('左键摆放 · R 旋转','Click to place · R to turn'):G.nearDecor()?L('E 整理家具','E move this'):''; }
+  else if(S.inMine){ const M=G.mine, p=player.pos, d=q=>Math.hypot(p.x-q.x,p.z-q.z); txt=M.mode==='island'?(d({x:ISLAND.trader.x,z:ISLAND.trader.z+3})<3.6?L('E 岛上商人','E the trader'):d({x:ISLAND.qi.x,z:ISLAND.qi.z+1.6})<3?L('E 核桃屋的门','E the walnut door'):d({x:ISLAND.office.x,z:ISLAND.office.z+2})<3?L('E 考察站','E the field office'):d({x:ISLAND.frog.x,z:ISLAND.frog.z+1.8})<2.8?L('E 美食蛙','E the frog'):d(ISLAND.resort)<7&&S.parrots&&S.parrots.resort?L('E 度假村吧台','E the resort bar'):d({x:ISLAND.hut.x,z:ISLAND.hut.z+2.6})<3&&S.parrots&&S.parrots.farmhouse?L('E 小屋:睡觉 · 做饭','E the hut'):nearSpot()>=0?L('E 挖开沙子','E dig here'):G.ifCell()?(S.heldSeed?L('左键播种','Click to plant'):S.tool===1?L('左键浇水','Click to water'):L('E 收获','E harvest')):d(ISLAND.parrot)<3?L('E 金鹦鹉','E the parrot'):d({x:ISLAND.dock.x,z:ISLAND.dock.z+2})<5?L('E 坐船回去','E sail home'):d({x:ISLAND.volcano.x,z:ISLAND.volcano.z+2})<3.6?L('E 进入火山','E enter the volcano'):G.islandWater()?L('F 钓鱼','F fish'):''):M.mode==='desert'?(d(DESERT.pillars)<4.6?L('E 三根石柱','E the three pillars'):d({x:DESERT.shop.x,z:DESERT.shop.z+3.6})<3.2?L('E 绿洲商店','E the Oasis'):d({x:DESERT.door.x,z:DESERT.door.z+2})<3.4?L('E 骷髅洞穴','E Skull Cavern'):d(DESERT.bus)<4.4?L('E 坐车回家','E ride home'):G.desertWater()?L('F 钓鱼','F fish'):''):M.chest&&d(M.chest)<1.9?L('E 打开宝箱','E open the chest'):M.ladder&&d(M.ladder)<1.8?L('E 下一层','E descend'):Math.hypot(p.x,p.z)<2.2?L('E 出口 / 电梯','E exit / lift'):''; }
   else { if(S.forage.some(f=>Math.hypot(f.x-player.pos.x,f.z-player.pos.z)<2)) txt=L('E 采集','E gather'); else if(!S.boating&&nearBoat()) txt=L('E 上船','E board'); else if(S.boating) txt=L('E 上岸 · F 钓鱼','E land · F fish'); else { const per=G.nearPerson(); if(per) txt='E '+(per.n.nm[LANG]||per.n.nm.en); else { const m=G.nearestMachine(); if(m) txt='E '+metaOf('craft',m.id).name; else for(const sp of SPOTS) if(near(sp,sp.r)){ txt='E '+sp.label(); break; } } if(!txt&&G.nearAnyWater()) txt=L('F 钓鱼 · 水壶可灌水','F fish · refill your can'); } }
   if(txt!==promptTxt){ promptTxt=txt; if(!promptEl){ promptEl=document.createElement('div'); promptEl.className='card'; promptEl.style.cssText='position:absolute;bottom:92px;left:50%;transform:translateX(-50%);padding:6px 14px;font-size:13px;pointer-events:none'; $('#hud').appendChild(promptEl); } promptEl.style.display=txt?'block':'none'; promptEl.textContent=txt; }
 }
@@ -1115,7 +1146,9 @@ const pm=(hex,rough)=>toonOf({color:hex});
 function box(g,w,h,d,c,x=0,y=0,z=0){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),pm(c)); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; }
 function cyl(g,r0,r1,h,c,x=0,y=0,z=0,seg=10){ const m=new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,h,seg),pm(c)); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; }
 function placedMesh(id){ return placedModel(id); }
-function spawnPlacement(id,x,z,ry){ const m=placedMesh(id); m.position.set(x,walkH(x,z),z); m.rotation.y=ry||0; placedGroup.add(m); if(id!=='torch'&&!/sprinkler/.test(id)) addObstacle(x,z,.55); if(id==='torch'){ const l=new THREE.PointLight(0xffa040,0,8); l.position.set(x,walkH(x,z)+1,z); placedGroup.add(l); torches.push(l); } }
+const flatGeo=new THREE.PlaneGeometry(.98,.98); flatGeo.rotateX(-Math.PI/2); const placedAt=new Map();
+function spawnPlacement(id,x,z,ry){ const c=DB.craft[id]||{}, m=c.flat?new THREE.Mesh(flatGeo,toonOf({color:c.flat})):placedMesh(id); if(c.flat){ m.receiveShadow=true; m.position.set(x,walkH(x,z)+.035,z); placedGroup.add(m); placedAt.set(id+'@'+x+','+z,m); return; } m.position.set(x,walkH(x,z),z); m.rotation.y=ry||0; placedGroup.add(m); placedAt.set(id+'@'+x+','+z,m); if(id!=='torch'&&!/sprinkler/.test(id)&&!c.pot) addObstacle(x,z,c.tent?1.2:.55); if((id==='torch'||c.light)&&torches.length<8){ const l=new THREE.PointLight(0xffa040,0,8); l.position.set(x,walkH(x,z)+1,z); placedGroup.add(l); torches.push(l); } }
+G.dropPlacement=p=>{ const k=p.id+'@'+p.x+','+p.z, m=placedAt.get(k); if(m){ placedGroup.remove(m); placedAt.delete(k); } const i=S.placements.indexOf(p); if(i>=0) S.placements.splice(i,1); };
 const torches=[];
 /* farm animals: the 3D bodies live here, their records in S.animals */
 const MAKERS={chicken:makeChicken,duck:makeWalkDuck,cow:makeCow,goat:makeGoat,sheep:makeSheep,pig:makePig};
@@ -1130,15 +1163,16 @@ function updateAnimals(dt){ if(S.inMine||S.inHouse) return;
 const TOWN=[{id:'store',x:22,z:-37,w:8,d:6,zh:'杂货铺',en:'General Store',icon:'🏪',fn:()=>G.openStore()},{id:'smith',x:36,z:-42,w:7,d:5.4,zh:'铁匠铺',en:'Blacksmith',icon:'🔨',fn:()=>G.openSmith()},{id:'saloon',x:50,z:-38,w:9,d:6,zh:'星光酒馆',en:'Starlight Saloon',icon:'🍺',fn:()=>G.openSaloon()},{id:'cc',x:65,z:-37,w:10,d:7,zh:'社区中心',en:'Community Centre',icon:'🏛️',fn:()=>G.openCC()},{id:'museum',x:68,z:-13,w:8,d:6,zh:'博物馆',en:'Museum',icon:'🏺',fn:()=>G.openMuseum()},{id:'clinic',x:53,z:-6,w:6.6,d:5,zh:'诊所',en:'Clinic',icon:'🏥',fn:()=>G.openClinic()},{id:'carpenter',x:20,z:-11,w:6.6,d:5,zh:'木匠铺',en:'Carpenter',icon:'🪚',fn:()=>G.openCarpenter()},{id:'ranch',x:88,z:-32,w:7,d:5.4,zh:'牧场',en:'Ranch',icon:'🐄',fn:()=>G.openRanch()},{id:'fishshop',x:28,z:20,w:6.4,d:5,zh:'渔具店',en:'Fish Shop',icon:'🎣',fn:()=>G.openFishshop()}];
 /* farther doors than the town's streets */
 const OUTER=[{id:'theater',x:46,z:4,w:9,d:6,zh:'星光影院',en:'Starlight Theater',icon:'🎬',fn:()=>G.openTheater()},{id:'joja',x:76,z:2,w:8,d:6,zh:'快捷超市',en:'QuickMart',icon:'🏬',fn:()=>G.openMart()},{id:'guild',x:-57,z:-31,w:6.6,d:5,zh:'冒险家公会',en:"Adventurer's Guild",icon:'⚔️',fn:()=>G.openGuild()}];
-const SITES={ cave:{x:-16,z:-34}, can1:{x:28,z:-30}, can2:{x:46,z:-30}, can3:{x:60,z:-30}, tower:{x:-108,z:-14}, board:{x:30,z:-30}, cart:{x:-30,z:24}, bus:{x:6,z:-40}, grate:{x:60,z:-20}, cartStop:{x:-34,z:-30}, quarry:{x:-26,z:-52}, well:{x:-8,z:-12}, shed:{x:-24,z:-19}, stable:{x:38,z:-8}, mill:{x:-24,z:20}, pond:{x:-8,z:22}, hutch:{x:44,z:8} };
+const SITES={ cave:{x:-16,z:-34}, can1:{x:28,z:-30}, can2:{x:46,z:-30}, can3:{x:60,z:-30}, tower:{x:-108,z:-14}, board:{x:30,z:-30}, cart:{x:-30,z:24}, bus:{x:6,z:-40}, grate:{x:60,z:-20}, cartStop:{x:-34,z:-30}, quarry:{x:-26,z:-52}, well:{x:-8,z:-12}, shed:{x:-24,z:-19}, stable:{x:38,z:-8}, mill:{x:-24,z:20}, pond:{x:-8,z:22}, hutch:{x:44,z:8}, tailor:{x:38,z:-20}, hatmouse:{x:-78,z:6}, mastery:{x:-88,z:-34}, cannoli:{x:-150,z:22} };
 G.BUS=[SITES.bus.x,SITES.bus.z];
 function outerPlaces(){ const put=(id,s,ry=0,r=1.6)=>{ const m=placedModel(id); m.position.set(s.x,walkH(s.x,s.z),s.z); m.rotation.y=ry; world.add(m); if(r) addObstacle(s.x,s.z,r); return m; };
   for(const b of OUTER){ addSmoke(logHouse({world,x:b.x,z:b.z,w:b.w,d:b.d,h:2.9,rh:2.2,porch:false,chimney:false}).userData.smoke); signs.push([signBoard(world,b.x,3.5,b.z+b.d/2+.26,L(b.zh,b.en)),b]); addSpot(b.x,b.z+b.d/2+1.4,2.9,b.fn,()=>L(b.zh,b.en)); }
   const T=SITES; put('tower',T.tower,0,3.4); addSpot(T.tower.x,T.tower.z+4.6,3,()=>G.openWizard(),()=>L('法师塔','wizard\'s tower')); put('notice',T.board,0,.8); addSpot(T.board.x,T.board.z+1,2.4,()=>G.openBoard(),()=>L('告示板','notice board')); const wag=put('wagon',T.cart,.4,1.8); addSpot(T.cart.x,T.cart.z+2,3.4,()=>G.openCart(),()=>L('旅行货车','travelling cart')); G.cartMesh=wag;
   put('bus',T.bus,0,2.4); addSpot(T.bus.x,T.bus.z+2.6,3.2,()=>G.takeBus(),()=>L('巴士站','bus stop')); put('grate',T.grate,0,0); addSpot(T.grate.x,T.grate.z,2.4,()=>G.openSewer(),()=>L('下水道格栅','sewer grate')); put('minecart',T.cartStop,0,1); addSpot(T.cartStop.x,T.cartStop.z+1.6,2.6,()=>G.rideCart(),()=>L('矿车','minecart')); addSpot(T.quarry.x,T.quarry.z,3.2,()=>G.openQuarry(),()=>L('去采石场','to the quarry'));
   addSpot(DOCK.x+4,DOCK.z0+3,3,()=>G.openBoat(),()=>L('老汤的船','Tom\'s boat')); addSpot(T.cave.x,T.cave.z+1.4,2.6,()=>G.openCave(),()=>L('农场山洞','farm cave')); put('cavemouth',T.cave,0,1.6); [T.can1,T.can2,T.can3].forEach((c,i)=>{ put('trashcan',c,0,.4); addSpot(c.x,c.z+.6,1.7,()=>G.searchCan(i),()=>L('翻垃圾桶','search the bin')); });
+  put('sewing',T.tailor,0,1.9); addSpot(T.tailor.x,T.tailor.z+1.8,2.8,()=>G.openTailor(),()=>L('缝纫机','sewing machine')); put('hatstall',T.hatmouse,.3,1); addSpot(T.hatmouse.x,T.hatmouse.z+1.4,2.6,()=>G.openHatMouse(),()=>L('帽子老鼠','the hat mouse')); put('cavemouth',T.mastery,0,1.6); addSpot(T.mastery.x,T.mastery.z+1.4,2.8,()=>G.openMastery(),()=>L('精通洞穴','the mastery cave')); put('cannoli',T.cannoli,.6,1.2); addSpot(T.cannoli.x,T.cannoli.z+1.6,2.8,()=>G.openCannoli(),()=>L('古老的雕像','the old statue'));
   const water=[]; for(let z=20;z<70;z+=1){ if(lakeField(-8,z)>0){ water.push(-8,z); break; } } G.PAN=water.length?water:[0,34]; }
-G.localWater=()=>{ const p=player.pos; if(Math.hypot(p.x-SITES.grate.x,p.z-SITES.grate.z)<3&&G.sewerOpen()) return 'sewer'; if(Math.hypot(p.x+212,p.z-33)<16) return 'swamp'; if(S.built.fish_pond&&Math.hypot(p.x-SITES.pond.x,p.z-SITES.pond.z)<4) return null; return null; };
+G.localWater=()=>{ const p=player.pos; if(G.farmPonds().some(q=>Math.hypot(p.x-q.x,p.z-q.z)<q.r+2.4)) return 'farm'; if(Math.hypot(p.x-SITES.grate.x,p.z-SITES.grate.z)<3&&G.sewerOpen()) return 'sewer'; if(Math.hypot(p.x+212,p.z-33)<16) return 'swamp'; if(S.built.fish_pond&&Math.hypot(p.x-SITES.pond.x,p.z-SITES.pond.z)<4) return null; return null; };
 const panM=new THREE.Mesh(new THREE.CircleGeometry(.9,16),new THREE.MeshBasicMaterial({color:0xfff0b0,transparent:true,opacity:.5,toneMapped:false})); panM.rotation.x=-Math.PI/2; panM.visible=false; scene.add(panM);
 G.panMark=()=>{ panM.visible=!!S.pan; if(S.pan) panM.position.set(S.pan.x,WATER_Y+.05,S.pan.z); };
 const giants=new Map(); G.spawnGiant=g=>{ const m=cropMesh(g.id,CROPS[g.id].days,CROPS[g.id].days); m.scale.setScalar(3); m.position.set(g.x,walkH(g.x,g.z),g.z); world.add(m); giants.set(g,m); addObstacle(g.x,g.z,1.4); }; G.removeGiant=g=>{ const m=giants.get(g); if(m) world.remove(m); giants.delete(g); };
@@ -1153,11 +1187,21 @@ G.desertWater=()=>Math.hypot(player.pos.x-DESERT.pool.x,player.pos.z-DESERT.pool
 /* the island: same bones as the desert */
 let island=null;
 function islandSky(){ if(skyWas===undefined) skyWas=scene.background; scene.background=new THREE.Color(0x58b8d8); scene.fog.color.setHex(0xa8dce8); scene.fog.density=.0012; sun.intensity=0; hemi.intensity=0; }
-G.enterIsland=()=>{ if(!island){ island=buildIsland(); scene.add(island); } const M=G.mine; M.empty(); S.inMine=true; M.mode='island'; M.cavern=false; S.mineLevel=0; world.visible=false; M.group.visible=false; island.visible=true; player.pos.set(ISLAND.dock.x,0,ISLAND.dock.z-6); islandSky(); toast('🏝️ '+L('到岛上了','The island')); renderStatus(); };
+G.enterIsland=()=>{ if(!island){ island=buildIsland(); scene.add(island); } G.islandSync(); const M=G.mine; M.empty(); S.inMine=true; M.mode='island'; M.cavern=false; S.mineLevel=0; world.visible=false; M.group.visible=false; island.visible=true; player.pos.set(ISLAND.dock.x,0,ISLAND.dock.z-6); islandSky(); toast('🏝️ '+L('到岛上了','The island')); renderStatus(); };
 G.leaveIsland=()=>{ S.inMine=false; world.visible=true; if(island) island.visible=false; G.desertReset(); player.pos.set(DOCK.x,0,DOCK.z1-2); };
 G.islandWater=()=>{ const p=player.pos; return Math.hypot(p.x*.92,p.z)>ISLAND.R-8; };
-function islandAct(){ const p=player.pos, near=q=>Math.hypot(p.x-q.x,p.z-q.z); if(near({x:ISLAND.trader.x,z:ISLAND.trader.z+3})<3.6) return G.openTrader(); if(near(ISLAND.parrot)<3) return G.openParrot(); if(near({x:ISLAND.dock.x,z:ISLAND.dock.z+2})<5) return G.leaveIsland(); if(near({x:ISLAND.volcano.x,z:ISLAND.volcano.z+2})<3.6){ if(!(S.parrots&&S.parrots.volcano)){ toast('🌋 '+L('桥断了。金鹦鹉能修。','The bridge is out. The gold parrot can mend it.')); return; } island.visible=false; G.mine.enter(1,false,'volcano'); G.mine.back=()=>{ const M=G.mine; M.empty(); M.group.visible=false; M.mode='island'; S.mineLevel=0; island.visible=true; player.pos.set(ISLAND.volcano.x,0,ISLAND.volcano.z+5); islandSky(); }; return; } for(let i=0;i<ISLAND.spots.length;i++){ const [x,z]=ISLAND.spots[i]; if(Math.hypot(p.x-x,p.z-z)<3){ if(G.walnut('dig'+i,1)) return; G.give('forage','ginger',1); return; } } }
-function desertAct(){ const p=player.pos, near=q=>Math.hypot(p.x-q.x,p.z-q.z); if(near({x:DESERT.shop.x,z:DESERT.shop.z+3.6})<3.2) return G.openOasis(); if(near({x:DESERT.door.x,z:DESERT.door.z+2})<3.4){ if(!G.invCount('mat','skull_key')){ toast('🗝️ '+L('门锁着,要骷髅钥匙。矿洞 120 层有。','The door needs the Skull Key, from floor 120 of the mine.')); return; } desert.visible=false; G.mine.enter(1,true); G.mine.back=()=>{ const M=G.mine; M.empty(); M.group.visible=false; M.cavern=false; M.mode='desert'; S.mineLevel=0; desert.visible=true; player.pos.set(DESERT.door.x,0,DESERT.door.z+4); desertSky(); }; return; } if(near({x:DESERT.shop.x+5.6,z:DESERT.shop.z+3.6})<2.2) return G.openCasino(); if(near(DESERT.bus)<4.4) return G.leaveDesert(); if(Math.random()<.3&&near(DESERT.pool)>12){ G.give('crop','cactus',1); return; } }
+function nearSpot(){ const p=player.pos, dug=S.walnutSpots||{}; for(let i=0;i<ISLAND.spots.length;i++){ const [x,z]=ISLAND.spots[i]; if(!dug['dig'+i]&&Math.hypot(p.x-x,p.z-z)<2.6) return i; } return -1; }
+/* what changes on the island: the field, the dig marks, what the parrots have built, who is on holiday */
+let ifG=null, spotsM=null, turtleM=null, hutM=null, resortM=null; const guestsM=[]; 
+G.ifSync=()=>{ if(!ifG) return; ifG.clear(); const F=ISLAND.field; for(let i=0;i<F.w;i++) for(let j=0;j<F.d;j++){ const x=F.x0+i, z=F.z0+j, t=(S.ifarm||{})[x+','+z], m=new THREE.Mesh(tileGeo,t&&t.watered?wetMat:soilMat); m.position.set(x,.055,z); m.receiveShadow=true; ifG.add(m); if(t&&t.crop){ const c=cropMesh(t.crop.id,t.crop.stage,CROPS[t.crop.id].days); c.position.set(x,.08,z); ifG.add(c); } } };
+G.islandSync=()=>{ if(!island) return; if(!ifG){ ifG=new THREE.Group(); island.add(ifG); const g=new THREE.SphereGeometry(.42,10,6); g.scale(1,.2,1); spotsM=new THREE.InstancedMesh(g,new THREE.MeshLambertMaterial({color:0xd8bc88}),ISLAND.spots.length); spotsM.receiveShadow=true; island.add(spotsM); } G.ifSync(); const o=new THREE.Object3D(), dug=S.walnutSpots||{}; ISLAND.spots.forEach(([x,z],i)=>{ o.position.set(x,.02,z); o.rotation.y=i; o.scale.setScalar(dug['dig'+i]?0:.8+(i%3)*.15); o.updateMatrix(); spotsM.setMatrixAt(i,o.matrix); }); spotsM.instanceMatrix.needsUpdate=true;
+  const P=S.parrots||{}; if(!turtleM){ turtleM=new THREE.Group(); const sh=new THREE.Mesh(new THREE.SphereGeometry(1.5,18,12),toonOf({color:0x4a6a4a})); sh.scale.set(1.2,.62,1.5); sh.position.y=.74; sh.castShadow=true; turtleM.add(sh); const h=new THREE.Mesh(new THREE.SphereGeometry(.42,14,10),toonOf({color:0x7a9a6a})); h.scale.set(1,.8,1.2); h.position.set(0,.56,2.1); turtleM.add(h); for(const [x,z] of [[-1.4,1],[1.4,1],[-1.4,-1.1],[1.4,-1.1]]){ const f=new THREE.Mesh(new THREE.SphereGeometry(.3,10,8),toonOf({color:0x7a9a6a})); f.scale.set(1.3,.4,.8); f.position.set(x,.14,z); turtleM.add(f); } turtleM.position.set(ISLAND.turtle.x,0,ISLAND.turtle.z); turtleM.rotation.y=-1.3; island.add(turtleM); } turtleM.visible=!P.turtle;
+  if(P.farmhouse&&!hutM){ hutM=logHouse({world:island,x:ISLAND.hut.x,z:ISLAND.hut.z,w:5,d:4,h:2.3,rh:1.6,porch:false,chimney:true,wins:1}); ISLAND.solid.push({x:ISLAND.hut.x,z:ISLAND.hut.z,r:3}); }
+  if(P.resort&&!resortM){ resortM=resortMesh(); resortM.position.set(ISLAND.resort.x,0,ISLAND.resort.z); island.add(resortM); ISLAND.solid.push({x:ISLAND.resort.x,z:ISLAND.resort.z-1.8,r:3.4}); }
+  guestsM.forEach(g=>island.remove(g.m)); guestsM.length=0; if(P.resort){ G.guestList().forEach((n,i)=>{ const m=makeVillager(n.col,n.style,NPCS.indexOf(n)), x=ISLAND.resort.x-9+i*5.4, z=ISLAND.resort.z+7+(i%2)*1.6; m.position.set(x,0,z); m.rotation.y=i%2?2.6:-2.6; island.add(m); guestsM.push({m,n,x,z}); }); } };
+G.resortGuests=()=>guestsM.map(g=>g.n);
+function islandAct(){ const p=player.pos, near=q=>Math.hypot(p.x-q.x,p.z-q.z), P=S.parrots||{}; for(const g of guestsM) if(near(g)<2.4) return G.talkTo(g.n); if(near({x:ISLAND.qi.x,z:ISLAND.qi.z+1.6})<3) return G.openQiDoor(); if(near({x:ISLAND.office.x,z:ISLAND.office.z+2})<3) return G.openOffice(); if(near({x:ISLAND.frog.x,z:ISLAND.frog.z+1.8})<2.8) return G.openFrog(); if(P.resort&&near(ISLAND.resort)<7) return G.openResort(); if(P.farmhouse&&near({x:ISLAND.hut.x,z:ISLAND.hut.z+2.6})<3){ modal(L('🏡 岛上小屋','🏡 The Island Hut'),b=>{ const a=document.createElement('div'); a.className='buy'; a.textContent='🛏 '+L('睡觉','Sleep'); a.onclick=()=>{ G.closeModal(); sleep(); }; b.appendChild(a); const c=document.createElement('div'); c.className='buy'; c.textContent='🍳 '+L('做饭','Cook'); c.onclick=()=>G.openCook(); b.appendChild(c); }); return; } const c=G.ifCell(); if(c&&G.ifHarvest(c)) return; const s=nearSpot(); if(s>=0){ G.walnut('dig'+s,1); G.snd('hoe'); G.islandSync(); return; } if(near({x:ISLAND.trader.x,z:ISLAND.trader.z+3})<3.6) return G.openTrader(); if(near(ISLAND.parrot)<3) return G.openParrot(); if(near({x:ISLAND.dock.x,z:ISLAND.dock.z+2})<5) return G.leaveIsland(); if(near({x:ISLAND.volcano.x,z:ISLAND.volcano.z+2})<3.6){ if(!(S.parrots&&S.parrots.volcano)){ toast('🌋 '+L('桥断了。金鹦鹉能修。','The bridge is out. The gold parrot can mend it.')); return; } island.visible=false; G.mine.enter(1,false,'volcano'); G.mine.back=()=>{ const M=G.mine; M.empty(); M.group.visible=false; M.mode='island'; S.mineLevel=0; island.visible=true; player.pos.set(ISLAND.volcano.x,0,ISLAND.volcano.z+5); islandSky(); }; return; } if(Math.random()<.02) G.give('forage','ginger',1); }
+function desertAct(){ const p=player.pos, near=q=>Math.hypot(p.x-q.x,p.z-q.z); if(near(DESERT.pillars)<4.6) return G.pillars(); if(near({x:DESERT.shop.x,z:DESERT.shop.z+3.6})<3.2) return G.openOasis(); if(near({x:DESERT.door.x,z:DESERT.door.z+2})<3.4){ if(!G.invCount('mat','skull_key')){ toast('🗝️ '+L('门锁着,要骷髅钥匙。矿洞 120 层有。','The door needs the Skull Key, from floor 120 of the mine.')); return; } desert.visible=false; G.mine.enter(1,true); G.mine.back=()=>{ const M=G.mine; M.empty(); M.group.visible=false; M.cavern=false; M.mode='desert'; S.mineLevel=0; desert.visible=true; player.pos.set(DESERT.door.x,0,DESERT.door.z+4); desertSky(); }; return; } if(near({x:DESERT.shop.x+5.6,z:DESERT.shop.z+3.6})<2.2) return G.openCasino(); if(near(DESERT.bus)<4.4) return G.leaveDesert(); if(Math.random()<.3&&near(DESERT.pool)>12){ G.give('crop','cactus',1); return; } }
 function buildFarmstead(){
   addSmoke(logHouse({world,x:CABIN.x,z:CABIN.z,w:9,d:6,h:3.1,rh:2.7}).userData.smoke);
   shippingBin(world,BIN.x,BIN.z); mailbox(world,4.6,-8.6);
@@ -1178,7 +1222,7 @@ const onBuilt=G.onBuilt=(id,silent)=>{ if(id==='coop'&&!built.coop){ built.coop=
   if(id==='mill'&&!built.mill){ built.mill=1; put('mill',T.mill,2.2); addSpot(T.mill.x,T.mill.z+2.8,2.8,()=>G.openMill(),()=>L('磨坊','mill')); }
   if(id==='fish_pond'&&(built.pond||0)<(S.built.fish_pond||1)){ built.pond=(built.pond||0)+1; const s={x:T.pond.x+(built.pond-1)*7,z:T.pond.z}, i=built.pond-1; put('fish_pond',s,2.7); addSpot(s.x,s.z,4,()=>G.openPond(i),()=>L('鱼塘','fish pond')); }
   if(id==='shed'&&!built.shed){ built.shed=1; logHouse({world,x:T.shed.x,z:T.shed.z,w:6,d:4.4,h:2.3,rh:1.6,porch:false,chimney:false,wins:1}); S.chests.shed=S.chests.shed||{}; addSpot(T.shed.x,T.shed.z+3.2,2.8,()=>G.openChest('shed'),()=>L('棚屋','shed')); }
-  if(id==='stable'&&!built.stable){ built.stable=1; logHouse({world,x:T.stable.x,z:T.stable.z,w:5,d:3.6,h:2.2,rh:1.4,porch:false,chimney:false,wins:1}); addSpot(T.stable.x,T.stable.z+2.8,2.6,()=>{ S.onHorse=!S.onHorse; toast(S.onHorse?'🐎 '+L('骑上了马','On horseback'):L('下了马','Back on foot')); },()=>L('马厩','stable')); }
+  if(id==='stable'&&!built.stable){ built.stable=1; logHouse({world,x:T.stable.x,z:T.stable.z,w:5,d:3.6,h:2.2,rh:1.4,porch:false,chimney:false,wins:1}); G.spawnHorse(); }
   if(id==='slime_hutch'&&!built.hutch){ built.hutch=1; logHouse({world,x:T.hutch.x,z:T.hutch.z,w:6,d:4.4,h:2.3,rh:1.6,porch:false,chimney:false,wins:1}); addSpot(T.hutch.x,T.hutch.z+3.2,2.8,()=>G.openHutch(),()=>L('史莱姆屋','slime hutch')); } };
 const built={};
 G.buildGreenhouse=()=>onBuilt('greenhouse');
@@ -1189,8 +1233,28 @@ const tapMarks={};
 G.tapperMark=(i,on,x,z)=>{ if(tapMarks[i]){ world.remove(tapMarks[i]); delete tapMarks[i]; } if(on){ const g=placedModel('tapper'); g.position.set(x+.42,walkH(x,z)+1.1,z+.2); g.scale.setScalar(.5); world.add(g); tapMarks[i]=g; } };
 /* the cabin inside */
 let house=null;
-function enterHouse(q){ if(!q) snd('door'); S.inHouse=true; world.visible=false; house.visible=true; house.userData.setDay(clamp(1-Math.abs(S.time-780)/420,0,1)*(S.weather==='clear'?1:.45)); if(!q){ player.pos.set(0,0,1.6); cam.yaw=Math.PI; } cam.dist=5; cam.height=1.9; cam.look=.8; cam.pitch=.3; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
-function leaveHouse(){ snd('door'); S.inHouse=false; world.visible=true; house.visible=false; player.pos.set(0,0,-9.6); cam.yaw=0; cam.dist=8.5; cam.height=2.3; cam.look=2.7; cam.pitch=.08; onMine(false); }
+/* what you have put in the cabin, and who lives there */
+const decorG=new THREE.Group(), kidG=new THREE.Group(); decorG.visible=false; decorG.add(kidG); scene.add(decorG); let spouseM=null, spouseFor=null, furGhost=null, furGhostId=null; const kidsM=[];
+G.rebuildDecor=()=>{ for(const c of [...decorG.children]) if(c!==kidG) decorG.remove(c); for(const o of S.decor||[]){ const f=FURNITURE[o.id]; if(!f) continue; const m=furnitureMesh(f); m.position.set(o.x,0,o.z); m.rotation.y=o.ry||0; decorG.add(m); } };
+G.applyDecor=()=>{ if(!house) return; const w=WALLS[S.wall]||WALLS.log, f=FLOORS[S.floor]||FLOORS.oak; if(BM.iwall){ BM.iwall.color.setHex(w[1]); if(S.wall&&S.wall!=='log') BM.iwall.color.multiplyScalar(2.6); } if(BM.ideck){ BM.ideck.color.setHex(f[1]).multiplyScalar(S.floor==='ash'?1.7:.8); } };
+function rebuildKids(){ kidG.clear(); kidsM.length=0; const kids=S.kids||[]; if(S.built.nursery||kids.length){ const c=cribMesh(); c.position.set(-4.4,0,3); c.rotation.y=Math.PI/2; c.scale.setScalar(1.2); kidG.add(c); } kids.forEach((k,i)=>{ const st=G.kidStage(k); if(st===0){ const b=babyMesh(k.col); b.position.set(-4.4,.68,3-.2+i*.4); kidG.add(b); kidsM.push({k,m:b,x:-4.4,z:3,st}); return; } const m=makeVillager(k.col,0,i); m.scale.setScalar(st===1?.34:.5); const x=-2+i*1.2, z=2; m.position.set(x,0,z); kidG.add(m); kidsM.push({k,m,x,z,tx:x,tz:z,wait:0,ph:0,st}); }); }
+function nearKid(){ const p=player.pos; for(const q of kidsM) if(Math.hypot(q.x-p.x,q.z-p.z)<1.7) return q; return null; }
+function kidsTick(dt){ for(const q of kidsM){ if(!q.st) continue; q.wait-=dt; if(q.wait<0){ q.wait=2+Math.random()*5; q.tx=clamp(-4+Math.random()*9,-5,5); q.tz=clamp(.5+Math.random()*3,-3,3.6); } const dx=q.tx-q.x, dz=q.tz-q.z, d=Math.hypot(dx,dz), sp=q.st===1?.28:.75; if(d>.1){ q.x+=dx/d*sp*dt; q.z+=dz/d*sp*dt; q.m.rotation.y=angDamp(q.m.rotation.y,Math.atan2(dx,dz),6,dt); q.ph+=dt*sp*9; } const s=Math.sin(q.ph), l=q.m.userData.limbs, a=d>.1?1:0; if(l){ l.legL.rotation.x=s*.6*a; l.legR.rotation.x=-s*.6*a; l.armL.rotation.x=-s*.5*a+(q.st===1?-1.4:0); l.armR.rotation.x=s*.5*a+(q.st===1?-1.4:0); } q.m.rotation.x=q.st===1?1.05:0; q.m.position.set(q.x,q.st===1?.14:Math.abs(s)*.03*a,q.z); } }
+function houseTick(dt){ const p=player.pos; for(const c of decorG.children){ const r=c.userData.r; if(!r) continue; const q=r*.9+.3, dx=p.x-c.position.x, dz=p.z-c.position.z, d=Math.hypot(dx,dz); if(d<q&&d>.01){ p.x=c.position.x+dx/d*q; p.z=c.position.z+dz/d*q; } } kidsTick(dt);
+  if(S.heldFur){ if(furGhostId!==S.heldFur){ if(furGhost) scene.remove(furGhost); furGhost=furnitureMesh(FURNITURE[S.heldFur]); furGhost.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.55; o.castShadow=false; } }); furGhostId=S.heldFur; scene.add(furGhost); } const s=G.furSpot(); furGhost.position.set(s.x,0,s.z); furGhost.rotation.y=S.furRy||0; furGhost.visible=true; } else if(furGhost) furGhost.visible=false;
+  if(S.spouse&&spouseFor!==S.spouse){ if(spouseM) decorG.remove(spouseM); const n=NPCS.find(x=>x.id===S.spouse); spouseM=makeVillager(n.col,n.style,NPCS.indexOf(n)); spouseM.position.set(3.6,0,-1.4); spouseM.rotation.y=-.6; decorG.add(spouseM); spouseFor=S.spouse; } if(spouseM) spouseM.visible=!!S.spouse&&(S.time<600||S.time>=1200); }
+/* the star figure's hat and sash */
+let hatM=null;
+G.dressUp=()=>{ if(hatM&&hatM.parent) hatM.parent.remove(hatM); hatM=null; if(S.hat&&HATS[S.hat]&&charHolder){ hatM=hatMesh(HATS[S.hat]); hatM.position.set(0,HAT_Y,HAT_Z); hatM.rotation.x=-.08; hatM.scale.setScalar(HAT_S); charHolder.add(hatM); } const c=new THREE.Color(S.sash||0); walkU.uSash.value.set(c.r,c.g,c.b,S.sash!=null?1:0); };
+const HAT_Y=1.5, HAT_Z=0, HAT_S=1.25;
+/* a real horse: it waits where you left it, and is back at the stable by morning */
+let horse=null; const horseHome=()=>({x:SITES.stable.x+3.8,z:SITES.stable.z+3.4});
+G.spawnHorse=()=>{ if(horse) return; const h=horseHome(); horse=place(makeHorse(),h.x,h.z); horse.yaw=2.4; };
+function stepHorse(dt){ if(!horse) return; if(S.onHorse){ horse.x=player.pos.x; horse.z=player.pos.z; horse.y=player.pos.y; horse.yaw=avatar.rotation.y; poseQuadruped(horse,dt,{speed:player.speed}); } else poseQuadruped(horse,dt,{speed:0,graze:Math.sin(performance.now()*.0003+1)>.2?1:0}); horse.root.position.set(horse.x,horse.y,horse.z); horse.root.rotation.y=horse.yaw; }
+const newDay0=G.onNewDay; G.onNewDay=()=>{ newDay0&&newDay0(); if(horse&&!S.onHorse){ const h=horseHome(); horse.x=h.x; horse.z=h.z; horse.y=walkH(h.x,h.z); } if(house) rebuildKids(); };
+G.farmWorld=id=>{ for(const p of G.farmPonds()){ const m=pondMesh(p.r,Math.abs(p.x|0)+1); m.position.set(p.x,walkH(p.x,p.z),p.z); world.add(m); addObstacle(p.x,p.z,p.r); } if(id==='beach'){ const g=new THREE.PlaneGeometry(36,28,36,28); g.rotateX(-Math.PI/2); const a=g.attributes.position, c=new Float32Array(a.count*4); for(let i=0;i<a.count;i++){ const x=a.getX(i), z=a.getZ(i)+4; a.setY(i,terrainH(x,z)+.02); a.setZ(i,z); const e=Math.min(1,Math.max(0,(1-Math.max(Math.abs(x)/18,Math.abs(z-4)/14))*4)); c.set([.93,.82,.6,e*.86],i*4); } g.setAttribute('color',new THREE.BufferAttribute(c,4)); g.computeVertexNormals(); const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true,transparent:true,depthWrite:false})); m.receiveShadow=true; m.renderOrder=-1; world.add(m); } };
+function enterHouse(q){ if(!q) snd('door'); S.inHouse=true; world.visible=false; house.visible=true; decorG.visible=true; G.rebuildDecor(); G.applyDecor(); rebuildKids(); house.userData.setDay(clamp(1-Math.abs(S.time-780)/420,0,1)*(S.weather==='clear'?1:.45)); if(!q){ player.pos.set(0,0,1.6); cam.yaw=Math.PI; } cam.dist=5; cam.height=1.9; cam.look=.8; cam.pitch=.3; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
+function leaveHouse(){ snd('door'); S.inHouse=false; world.visible=true; house.visible=false; decorG.visible=false; player.pos.set(0,0,-9.6); cam.yaw=0; cam.dist=8.5; cam.height=2.3; cam.look=2.7; cam.pitch=.08; onMine(false); }
 function openTV(){ modal('📺 '+L('电视','Television'),b=>{ b.innerHTML='<div style="font-size:15px;line-height:1.8">'+G.forecastText()+'<br>'+G.tvShow()+'</div>'; }); }
 function onMine(on){ if(on){ scene.fog.density=.012; scene.fog.color.setHex(0x05070a); mineBg=scene.background; scene.background=new THREE.Color(0x05070a); sun.intensity=0; hemi.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=0; } else { scene.background=mineBg||null; applyWeather(); renderStatus(); } }
 let mineBg=null;
@@ -1223,7 +1287,7 @@ G.swing=()=>{ swingT=1; const id=S.tool; if(toolMesh.userData.id!==id){ toolMesh
 function floatText(x,y,z,txt,col){ const e=document.createElement('div'); e.textContent=txt; const v=new THREE.Vector3(x,y,z).project(camera); e.style.cssText='position:fixed;z-index:60;pointer-events:none;font-weight:800;font-size:16px;color:'+(col||'#fff')+';text-shadow:0 1px 3px #000;left:'+((v.x*.5+.5)*innerWidth)+'px;top:'+((-v.y*.5+.5)*innerHeight)+'px;transition:all .7s;opacity:1'; document.body.appendChild(e); requestAnimationFrame(()=>{ e.style.transform='translateY(-34px)'; e.style.opacity=0; }); setTimeout(()=>e.remove(),750); }
 /* debris, forage and dig spots on the ground */
 const debrisG=new THREE.Group(), forageG=new THREE.Group(), digG=new THREE.Group(); world.add(debrisG,forageG,digG);
-function rebuildDebris(){ debrisG.clear(); let i=0; for(const d of S.debris.values()){ const g=debrisMesh(d.t,Math.abs(d.x*3+d.z*7)|0); g.position.set(d.x,terrainH(d.x,d.z),d.z); g.rotation.y=(d.x*2.4+d.z)%6.28; debrisG.add(g); i++; } }
+function rebuildDebris(){ debrisG.clear(); let i=0; for(const d of S.debris.values()){ const g=d.t==='node'?G.mine.nodeMesh(d.k,.72):debrisMesh(d.t,Math.abs(d.x*3+d.z*7)|0); g.position.set(d.x,terrainH(d.x,d.z),d.z); g.rotation.y=(d.x*2.4+d.z)%6.28; debrisG.add(g); i++; } }
 function rebuildForage(){ forageG.clear(); for(const f of S.forage){ const g=forageMesh(f.id); g.position.set(f.x,walkH(f.x,f.z),f.z); g.rotation.y=(f.x*1.7+f.z)%6.28; g.scale.setScalar(1.25); forageG.add(g); } }
 function rebuildDigs(){ digG.clear(); for(const d of S.digs){ const g=new THREE.Group(); for(let i=0;i<3;i++){ const m=new THREE.Mesh(new THREE.CylinderGeometry(.015,.02,.26,4),pm(0x3a2a1c)); m.position.set((i-1)*.09,.13,(i%2)*.08); m.rotation.z=(i-1)*.3; g.add(m); } g.position.set(d.x,terrainH(d.x,d.z),d.z); digG.add(g); } }
 /* moonlight jellies */
@@ -1234,7 +1298,7 @@ function setupValley(){
   Object.assign(G,{snd,sndAt,L,$,toast,modal,camera,scene,renderer,world,player,itemIcon,renderHotbar,renderStatus,renderEnergy,getTile,tkey,refreshTileMesh,rebuildCrop,aoe,spawnPlacement,spawnAnimal,rebuildDebris,rebuildForage,rebuildDigs,onMine,fadeMsg,floatText,
     spend:spendEnergy, target:()=>targetCell, toolNames:()=>t('tools'), toolEm:()=>[0,1,2,3,4,5].map(i=>toolIcon(i,34)), seasonName:i=>t('season')[i], MINE_ENT, ANIMALS:null,
     chips:(x,z)=>burst(x,1,z,0xc8a878), dust:(x,z)=>burst(x,.2,z,0x6a4a30,6), splash:(x,z)=>burst(x,.3,z,0x9ad0f0,8), fall:it=>{ refreshFlora(); burst(it.x,3,it.z,0x9a7a4a,14); }, shake:v=>{ shakeT=v; } });
-  makeValley(G); G.ANIMALS=ANIMALS;
+  makeValley(G); G.ANIMALS=ANIMALS; makeCoop(G);
 }
 
 /* ============================ BOOT ============================ */
@@ -1254,15 +1318,16 @@ async function boot(){
   // a new farmer: fifteen parsnip seeds, and a yard gone to weeds
   // saves belong to your NOVA account: the launcher says whether to continue, and signing in is what makes progress stick
   const bootQ=new URLSearchParams(location.search), bootMode=DBG?'':bootQ.get('mode'); let cloud=null; if(bootMode==='continue'||bootMode==='parked'){ const r=await nova(bootMode==='parked'?'parked':'load'); cloud=r&&r.data; }
-  G.storeSave=async d=>{ if(!inNova){ return null; } const meta={day:S.day,season:S.season,year:S.year||1,gold:S.gold,time:Math.round(S.time)}, r=await nova('save',{data:d,meta},30000); if(r&&r.ok){ toast('💾 '+L('已保存到你的账号','Saved to your account')); return true; } if(r&&r.needAuth) savePrompt(); else toast('⚠️ '+L('这次没有存上,稍后再试','Could not save just now')); return false; };
-  const fresh=!(!DBG||DBG.load)||!G.loadGame(cloud);
+  G.storeSave=async d=>{ if(!inNova||(G.coop.on&&!G.coop.host)){ return null; } const meta={day:S.day,season:S.season,year:S.year||1,gold:S.gold,time:Math.round(S.time)}, r=await nova('save',{data:d,meta},30000); if(r&&r.ok){ toast('💾 '+L('已保存到你的账号','Saved to your account')); return true; } if(r&&r.needAuth) savePrompt(); else toast('⚠️ '+L('这次没有存上,稍后再试','Could not save just now')); return false; };
+  const coCode=(bootQ.get('co')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6), fresh=coCode?false:!(!DBG||DBG.load)||!G.loadGame(cloud);
+  if(coCode&&!(await G.coop.autoJoin(coCode))) return location.assign(location.pathname);
   if(fresh){ G.invAdd('seed','parsnip',15); G.seedDebris(60); G.spawnForage(); G.spawnDigs(); G.rollTomorrow(); G.festivalsToday(); S.mail.push({zh:'亲爱的,这座小农场和湖畔小屋从今天起是你的了。去犁地、去钓鱼、去认识镇上的人吧。——爷爷','en':'My dear, this little farm and lakeside cabin are yours now. Till the soil, fish the lake, and meet the town. — Grandpa'}); }
-  else toast(L('存档已读取','Save loaded'));
+  else if(!coCode) toast(L('存档已读取','Save loaded'));
   if(DBG) applyDebugShot();
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn(); buildTouch(); document.body.classList.toggle('lowfx',QUAL==='low'); paintHud();
   await setProgress(100,L('马上就好…','Almost there…'));
-  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ showCards(L,()=>startChecklist(S,L,player,snd)); } if(bootMode==='parked') afterAuth(); } },250); // ensure render targets match the (now-visible) viewport
+  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ G.pickFarm(()=>showCards(L,()=>startChecklist(S,L,player,snd))); } if(bootMode==='parked') afterAuth(); } },250); // ensure render targets match the (now-visible) viewport
   requestAnimationFrame(frame);
 }
 /* touch: on-screen actions, the stick is the left half of the screen */
@@ -1274,7 +1339,7 @@ function applyDebugShot(){ const q=DBG;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
   if(q.q) QUAL=q.q, setupPost();
-  window.__sv={hop,SITES,OUTER,terrainH,lakeField,inWater,obstacles,composer,syncRes,cut,house,DOCK,DESERT,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
+  window.__sv={ISLAND,decorG,hop,SITES,OUTER,terrainH,lakeField,inWater,obstacles,composer,syncRes,cut,house,DOCK,DESERT,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
   if(DBG&&DBG.film) import('./film.js').then(m=>{ m.setup(window.__sv); window.__filmReady=true; });
 }
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });

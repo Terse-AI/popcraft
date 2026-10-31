@@ -20,7 +20,7 @@ function mats(){
   M.deck=toonOf({map:TEX.surf_boards,color:0xc8b8a0}); M.dark=toonOf({color:0x241b17}); M.trim=toonOf({color:0x3b2a20}); M.frame=toonOf({color:0xd8c8a4});
   M.door=toonOf({color:0x74702e}); M.rust=toonOf({color:0x8c4a2c}); M.moss=toonOf({color:0x5c6a34}); M.white=toonOf({map:TEX.surf_boards,color:0xf4efe2,side:THREE.DoubleSide}); M.green=toonOf({color:0x38584a});
   M.cream=toonOf({color:0xe8dcc0}); M.red=toonOf({color:0xa8402e}); M.iron=toonOf({color:0x3a3c42});
-  for(const k of ['log','boards','shingle','stone','deck','white']){ M['i'+k]=worn(M[k].clone(),false); worn(M[k]); }
+  for(const k of ['log','boards','shingle','stone','deck','white']){ M['i'+k]=worn(M[k].clone(),false); worn(M[k]); } M.iwall=worn(M.log.clone(),false);
   M.glass=new THREE.MeshBasicMaterial({color:0x334050,toneMapped:false,fog:false});
   M.lantern=new THREE.MeshBasicMaterial({color:0x4a3a28,toneMapped:false,fog:false}); M.hay=toonOf({color:0xc8a84c}); M.sack=toonOf({color:0xc0ac84}); M.pink=toonOf({color:0xd86a8c}); M.yellow=toonOf({color:0xe8c040}); M.blue=toonOf({color:0x6a7ac8}); M.leaf=toonOf({color:0x4e7038}); M.cloth=toonOf({color:0xd8ccb0,side:THREE.DoubleSide}); M.cloth2=toonOf({color:0x7c9aa8,side:THREE.DoubleSide});
   M.lamp=new THREE.MeshBasicMaterial({color:0xffc870,toneMapped:false,fog:false});
@@ -238,7 +238,7 @@ function lathe(pr,seg=12){ return new THREE.LatheGeometry(pr.map(p=>new THREE.Ve
 export function cabinRoom(scene){
   mats(); const G=new THREE.Group(), K=new Kit(), W=9, D=7, H=3.2;
   Object.assign(M,{ rug:painted(1024,720,rugArt), quilt:painted(512,768,quiltArt), books:painted(512,120,booksArt), pic1:painted(420,280,lakeArt), pic2:painted(280,280,cowArt), curtain:toonOf({color:0xb8a080,side:THREE.DoubleSide}), brass:toonOf({color:0xc8a050}), wax:toonOf({color:0xf0e6cc}), chrome:toonOf({color:0xc8ccd0}), crock:toonOf({color:0x8a5a3c}), crock2:toonOf({color:0x4e6e7c}), pillow:toonOf({color:0xefe6d4}), herb:toonOf({color:0x6e8a44}), herb2:toonOf({color:0xc8a84c}), ember:new THREE.MeshBasicMaterial({color:0xff7a2a,toneMapped:false}), hood:toonOf({color:0xe8e4d8}) });
-  K.box('ideck',W,.1,D,0,-.05,0,{s:2.4}); [-D/2,D/2].forEach(z=>{ for(let i=0;i<8;i++) K.log('ilog',W+.1,.22,0,.22+i*.42,z,0,{seg:10}); }); [-W/2,W/2].forEach(x=>{ for(let i=0;i<8;i++) K.log('ilog',D+.1,.22,x,.22+i*.42,0,Math.PI/2,{seg:10}); }); K.box('iboards',W+.2,.1,D+.2,0,H+.1,0,{s:2.4});
+  K.box('ideck',W,.1,D,0,-.05,0,{s:2.4}); [-D/2,D/2].forEach(z=>{ for(let i=0;i<8;i++) K.log('iwall',W+.1,.22,0,.22+i*.42,z,0,{seg:10}); }); [-W/2,W/2].forEach(x=>{ for(let i=0;i<8;i++) K.log('iwall',D+.1,.22,x,.22+i*.42,0,Math.PI/2,{seg:10}); }); K.box('iboards',W+.2,.1,D+.2,0,H+.1,0,{s:2.4});
   for(let i=-2;i<=2;i++) K.log('ilog',D,.11,i*1.7,H-.06,0,Math.PI/2,{seg:8}); K.log('ilog',W,.14,0,H-.26,0,0,{seg:8}); for(const x of [-4.2,4.2]) K.post('ilog',.14,H,x,0,-3.2);
   // rug with a knotted fringe
   { const g=new THREE.PlaneGeometry(3.6,2.5,1,1); g.rotateX(-Math.PI/2); g.translate(.6,.016,.5); K.add('rug',g); for(let i=0;i<46;i++){ for(const sx of [-1,1]){ const f=new THREE.BoxGeometry(.13,.008,.02); f.translate(.6+sx*1.86,.012,-.72+i/45*2.44); K.add('wax',f); } } }
