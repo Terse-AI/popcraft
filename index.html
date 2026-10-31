@@ -1117,7 +1117,7 @@ function updateAnimals(dt){ if(S.inMine||S.inHouse) return;
 /* the valley's town */
 const TOWN=[{id:'store',x:22,z:-37,w:8,d:6,zh:'杂货铺',en:'General Store',icon:'🏪',fn:()=>G.openStore()},{id:'smith',x:36,z:-42,w:7,d:5.4,zh:'铁匠铺',en:'Blacksmith',icon:'🔨',fn:()=>G.openSmith()},{id:'saloon',x:50,z:-38,w:9,d:6,zh:'星光酒馆',en:'Starlight Saloon',icon:'🍺',fn:()=>G.openSaloon()},{id:'cc',x:65,z:-37,w:10,d:7,zh:'社区中心',en:'Community Centre',icon:'🏛️',fn:()=>G.openCC()},{id:'museum',x:68,z:-13,w:8,d:6,zh:'博物馆',en:'Museum',icon:'🏺',fn:()=>G.openMuseum()},{id:'clinic',x:53,z:-6,w:6.6,d:5,zh:'诊所',en:'Clinic',icon:'🏥',fn:()=>G.openClinic()},{id:'carpenter',x:20,z:-11,w:6.6,d:5,zh:'木匠铺',en:'Carpenter',icon:'🪚',fn:()=>G.openCarpenter()},{id:'ranch',x:88,z:-32,w:7,d:5.4,zh:'牧场',en:'Ranch',icon:'🐄',fn:()=>G.openRanch()},{id:'fishshop',x:28,z:20,w:6.4,d:5,zh:'渔具店',en:'Fish Shop',icon:'🎣',fn:()=>G.openFishshop()}];
 /* farther doors than the town's streets */
-const OUTER=[{id:'joja',x:106,z:-31,w:8,d:6,zh:'快捷超市',en:'QuickMart',icon:'🏬',fn:()=>G.openMart()},{id:'guild',x:-57,z:-31,w:6.6,d:5,zh:'冒险家公会',en:"Adventurer's Guild",icon:'⚔️',fn:()=>G.openGuild()}];
+const OUTER=[{id:'joja',x:76,z:2,w:8,d:6,zh:'快捷超市',en:'QuickMart',icon:'🏬',fn:()=>G.openMart()},{id:'guild',x:-57,z:-31,w:6.6,d:5,zh:'冒险家公会',en:"Adventurer's Guild",icon:'⚔️',fn:()=>G.openGuild()}];
 const SITES={ cave:{x:-16,z:-34}, can1:{x:28,z:-30}, can2:{x:46,z:-30}, can3:{x:60,z:-30}, tower:{x:-108,z:-14}, board:{x:30,z:-30}, cart:{x:-30,z:24}, bus:{x:6,z:-40}, grate:{x:60,z:-20}, cartStop:{x:-34,z:-30}, quarry:{x:-26,z:-52}, well:{x:-8,z:-12}, shed:{x:-24,z:-19}, stable:{x:38,z:-8}, mill:{x:-24,z:20}, pond:{x:-8,z:22}, hutch:{x:44,z:8} };
 G.BUS=[SITES.bus.x,SITES.bus.z];
 function outerPlaces(){ const put=(id,s,ry=0,r=1.6)=>{ const m=placedModel(id); m.position.set(s.x,walkH(s.x,s.z),s.z); m.rotation.y=ry; world.add(m); if(r) addObstacle(s.x,s.z,r); return m; };
@@ -1133,7 +1133,7 @@ const giants=new Map(); G.spawnGiant=g=>{ const m=cropMesh(g.id,CROPS[g.id].days
 /* the desert: same rules as the mine for moving about, its own sky */
 let desert=null;
 let skyWas;
-function desertSky(){ if(skyWas===undefined) skyWas=scene.background; scene.background=new THREE.Color(0xf0b070); scene.fog.color.setHex(0xe8a868); scene.fog.density=.0042; sun.intensity=0; hemi.intensity=0; }
+function desertSky(){ if(skyWas===undefined) skyWas=scene.background; scene.background=new THREE.Color(0xf0a060); scene.fog.color.setHex(0xe89a62); scene.fog.density=.0016; sun.intensity=0; hemi.intensity=0; }
 G.desertReset=()=>{ scene.background=skyWas===undefined?null:skyWas; skyWas=undefined; if(desert) desert.visible=false; G.mine.mode=null; applyWeather(); renderStatus(); };
 G.enterDesert=()=>{ if(!desert){ desert=buildDesert(); scene.add(desert); } const M=G.mine; M.empty(); S.inMine=true; M.mode='desert'; M.cavern=false; S.mineLevel=0; world.visible=false; M.group.visible=false; desert.visible=true; player.pos.set(DESERT.bus.x-3,0,DESERT.bus.z-4); desertSky(); toast('🏜️ '+L('沙漠','The desert')); renderStatus(); };
 G.leaveDesert=()=>{ S.inMine=false; world.visible=true; G.desertReset(); player.pos.set(SITES.bus.x,0,SITES.bus.z+4); };
