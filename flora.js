@@ -26,7 +26,7 @@ function conifer(seed,{width=.17,whorls=36,droop=.42,fill=1}={}){
   const r=rng(seed), m=new Mesh3(), rects=['bough_a','bough_b','bough_c'].map(n=>ATLAS[n]);
   for(let l=0;l<5;l++){ const y0=l/5*.97, y1=(l+1)/5*.97; trunkPart(m,[0,y0,0],[0,y1,0],.016*(1-y0)+.0015,.016*(1-y1)+.0015); }
   // dark heart: an opaque cone inside the boughs, the deep shade you see between them in a real spruce
-  for(let l=0;l<5;l++){ const y0=.06+l/5*.82, y1=.06+(l+1)/5*.82, r0=width*.26*Math.pow(1-(y0-.06)/.86,1.1), r1=width*.26*Math.pow(1-(y1-.06)/.86,1.1)+.001, b=m.p.length/3;
+  for(let l=0;l<5;l++){ const y0=.06+l/5*.82, y1=.06+(l+1)/5*.82, r0=width*.21*Math.pow(1-(y0-.06)/.86,1.2), r1=width*.21*Math.pow(1-(y1-.06)/.86,1.2)+.001, b=m.p.length/3;
     for(let e=0;e<2;e++) for(let k=0;k<7;k++){ const a=k/7*tau+l, cr=e?r1:r0, yy=e?y1:y0; m.v(Math.cos(a)*cr,yy,Math.sin(a)*cr,0,0,Math.cos(a),.3,Math.sin(a),2,0,0,.1); }
     for(let k=0;k<7;k++){ const k2=(k+1)%7; m.q(b+k,b+7+k,b+7+k2,b+k2); } }
   for(let i=0;i<whorls;i++){ const t=(i+.15)/whorls, Rm=width*Math.pow(1-t,.82)*(1+.13*Math.sin(i*1.3+seed))+.014, cnt=t>.84?4:t>.55?7:9;
@@ -124,7 +124,7 @@ function floraMaterial(depth,plantsR,leafy){
       void main(){ float fade=smoothstep(uLodT-5.,uLodT-1.,vD); if(fade>dith(gl_FragCoord.xy)+.001) discard; if(vF<3.4&&(vF-1.2)/2.2<dith(gl_FragCoord.xy)) discard;
         if(vD<uReveal.z){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.26){ if(dith(gl_FragCoord.xy*.5)>rr/.26*1.1-.08) discard; } }
         vec3 c; float a=1.; float lam=dot(normalize(vN),uSunDirW);
-        if(vTrunk>1.5){ float bn=vShade>.3?texture2D(uBark,vN.xz*1.6+vP*.07).b-.5:0.; c=ramp((vShade>.3?.36:.22)+vTone+bn*.3,vRow)*mix(uShade,uLit,vShade>.3?.5:.36); }
+        if(vTrunk>1.5){ float bn=vShade>.3?texture2D(uBark,vN.xz*1.6+vP*.07).b-.5:0.; c=ramp((vShade>.3?.36:.3)+vTone+bn*.3,vRow)*mix(uShade,uLit,vShade>.3?.5:.46); }
         else if(vTrunk>.5){ vec2 bq=vUv*vec2(.62,.3); vec3 b=texture2D(uBark,bq).rgb, b2=texture2D(uBark,bq*3.3).rgb; vec3 nb=normalize(vN+vec3(b.r-.5,0.,b.g-.5)*1.6+vec3(b2.r-.5,0.,b2.g-.5)*.9); float l2=dot(nb,uSunDirW); float v=.4+.36*(l2*.5+.5)+(b.b-.5)*.95+(b2.b-.5)*.6; c=ramp(v,uWoodRow)*mix(uShade,uLit,.5+.45*max(l2,0.)); }
         else { vec4 t=texture2D(uMap,vUv,uMipBias); if(t.a<.32) discard; a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
           float v=mix(.42,t.r,uDetail)+(t.g-.5)*.2+vTone+lam*.3*(.6+.4*vShade)+(vShade-.5)*.34;
