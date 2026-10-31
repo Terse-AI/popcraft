@@ -1,6 +1,6 @@
 /* NOVA's page: language, accounts, the player that takes over the screen, and the bridge that keeps a game's save in your account */
 (function(){
-const $=s=>document.querySelector(s), boot=JSON.parse($('#boot').textContent), game=boot.game, GAME_ORIGIN='https://popcraft-production.up.railway.app';
+const $=s=>document.querySelector(s), boot=JSON.parse($('#boot').textContent), game=boot.game;
 let lang=null; try{ lang=localStorage.getItem('nova_lang'); }catch(e){} if(!lang) lang=(navigator.language||'').startsWith('zh')?'zh':'en';
 const T=(zh,en)=>lang==='zh'?zh:en;
 function applyLang(){ document.documentElement.lang=lang; document.querySelectorAll('[data-en]').forEach(e=>{ if(e.dataset.zh===undefined) e.dataset.zh=e.textContent; e.textContent=lang==='en'?e.dataset.en:e.dataset.zh; }); document.querySelectorAll('[data-en-ph]').forEach(e=>{ if(e.dataset.zhPh===undefined) e.dataset.zhPh=e.placeholder; e.placeholder=lang==='en'?e.dataset.enPh:e.dataset.zhPh; }); const l=$('#lang'); if(l) l.textContent=lang==='en'?'中文':'EN'; paintSave(); }

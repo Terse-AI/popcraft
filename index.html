@@ -90,6 +90,7 @@
   /* hiding panels */
   #hud>*{transition:opacity .22s}
   #hud>.gone,body.hudoff #top,body.hudoff #status,body.hudoff #mini,body.hudoff #energy,body.hudoff #hot,body.hudoff #cross,body.hudoff #help,body.hudoff #todo{opacity:0;pointer-events:none;visibility:hidden}
+  #buffs{position:absolute;left:12px;top:64px;padding:6px 11px;font-size:12px} body.hudoff #buffs{opacity:0}
   #eyeback{position:fixed;right:14px;top:14px;z-index:58;opacity:.34;display:none;pointer-events:auto} #eyeback:hover{opacity:1} body.hudoff #eyeback{display:inline-flex}
   .hudrow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 2px;border-top:1px solid rgba(255,246,230,.14);cursor:pointer;font-size:14px} .hudrow i{font-style:normal;color:#ffdc82;font-size:13px}
 
@@ -172,6 +173,7 @@
     <kbd>F</kbd> <span id="h11">钓鱼</span> · <kbd>J</kbd> <span id="h12">日志</span> · <kbd>M</kbd> <span id="h13">地图</span><br>
     <kbd>H</kbd> <span id="h14">隐藏面板</span>
   </div>
+  <div id="buffs" class="card hidden"></div>
   <span class="pill" id="eyeback" title="show panels">👁</span>
 </div>
 
@@ -216,6 +218,7 @@ import {
   collide, addObstacle, addBoxObstacle, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
 import { setupFlora, updateFlora, refreshFlora } from './flora.js';
+import { buildDesert, DESERT } from './desert.js';
 import { buildLife, updateLife } from './life.js';
 import { cropMesh, soilGeometry } from './crops.js';
 import { debrisMesh, forageMesh, placedModel } from './props.js';
@@ -669,7 +672,7 @@ function interact(){
     if(n(sp.door)){ leaveHouse(); return; } if(n(sp.bed)){ sleep(); return; } if(n(sp.tv)){ openTV(); return; }
     if(n(sp.stove)){ if(S.built.kitchen) G.openCook(); else toast(L('要先扩建厨房才能做饭','Upgrade the house to get a kitchen')); return; }
     if(n(sp.fridge)){ S.chests.fridge=S.chests.fridge||{}; G.openChest('fridge'); return; } return; }
-  if(S.inMine){ const M=G.mine, p=player.pos; if(M.chest&&Math.hypot(M.chest.x-p.x,M.chest.z-p.z)<1.9){ M.openChest(); return; } if(M.ladder&&Math.hypot(M.ladder.x-p.x,M.ladder.z-p.z)<1.8){ M.descend(); return; } if(Math.hypot(p.x,p.z)<2.2){ modal(L('矿洞','The Mine'),b=>{ const a=document.createElement('div'); a.className='buy'; a.textContent='🚪 '+L('回到地面','Back to the surface'); a.onclick=()=>{ $('#dynmodal').classList.add('hidden'); M.leave(); }; b.appendChild(a); const c=document.createElement('div'); c.className='buy'; c.textContent='🛗 '+L('电梯','Lift'); c.onclick=()=>M.openLift(); b.appendChild(c); }); } return; }
+  if(S.inMine){ const M=G.mine, p=player.pos; if(M.mode==='desert'){ desertAct(); return; } if(M.chest&&Math.hypot(M.chest.x-p.x,M.chest.z-p.z)<1.9){ M.openChest(); return; } if(M.ladder&&Math.hypot(M.ladder.x-p.x,M.ladder.z-p.z)<1.8){ M.descend(); return; } if(Math.hypot(p.x,p.z)<2.2){ modal(L('矿洞','The Mine'),b=>{ const a=document.createElement('div'); a.className='buy'; a.textContent='🚪 '+L('回到地面','Back to the surface'); a.onclick=()=>{ $('#dynmodal').classList.add('hidden'); M.leave(); }; b.appendChild(a); const c=document.createElement('div'); c.className='buy'; c.textContent='🛗 '+L('电梯','Lift'); c.onclick=()=>M.openLift(); b.appendChild(c); }); } return; }
   if(G.pickForage()) return; if(G.pullCrab()) return;
   if(G.harvestHere()) return;
   if(S.boating||nearBoat()){ if(toggleBoat()) return; }
@@ -1024,7 +1027,7 @@ function saveManager(info){ modal(L('💾 存档','💾 Saves'),b=>{ const row=(
 function savePrompt(){ if(promptOpen) return; promptOpen=true; const w=document.createElement('div'); w.id='signprompt'; w.className='card'; w.innerHTML='<b>'+L('登录后才能存档','Sign in to save')+'</b><p>'+L('今天的进度还在,登录或注册 NOVA 账号就能保存,换设备也能继续。','Your progress is safe for now. Sign in or sign up to NOVA to keep it and carry on from any device.')+'</p><div><button class="go">'+L('登录 / 注册','Sign in / Sign up')+'</button><button class="no">'+L('先玩着','Keep playing')+'</button></div>'; document.body.appendChild(w); const off=()=>{ promptOpen=false; w.remove(); };
   w.querySelector('.no').onclick=off; w.querySelector('.go').onclick=async()=>{ w.querySelector('.go').disabled=true; const r=await askSignIn(); off(); if(r&&r.ok) afterAuth(); }; }
 /* the valley map: every place, named */
-function places(){ const n=(x,z,ic,zh,en)=>({x,z,ic,zh,en}); return [n(CABIN.x,CABIN.z,'🏠','你的小屋','Your cabin'),n(0,4,'🌱','农田','Farm plot'),n(BIN.x,BIN.z,'📦','出货箱','Shipping bin'),n(COOP.x,COOP.z,'🐔','鸡舍','Coop'),n(BARN.x,BARN.z,'🐄','畜棚','Barn'),n(GREENHOUSE.x,GREENHOUSE.z,'🌿','温室','Greenhouse'),n(MINE_ENT.x,MINE_ENT.z,'⛏','矿洞','The mine'),n(PLAZA.x,PLAZA.z,'⛲','小镇广场','Town square'),n(DOCK.x,DOCK.z1,'🛶','码头','Dock'),n(0,128,'🌊','星星湖','Star Lake'),n(-212,33,'💧','瀑布','The falls'),n(-170,54,'〰','山溪','Mist Creek'),n(ISLANDS[4][0],ISLANDS[4][1],'🗼','灯塔','Lighthouse'),...TOWN.map(b=>n(b.x,b.z,b.icon,b.zh,b.en))]; }
+function places(){ const n=(x,z,ic,zh,en)=>({x,z,ic,zh,en}); return [n(CABIN.x,CABIN.z,'🏠','你的小屋','Your cabin'),n(0,4,'🌱','农田','Farm plot'),n(BIN.x,BIN.z,'📦','出货箱','Shipping bin'),n(COOP.x,COOP.z,'🐔','鸡舍','Coop'),n(BARN.x,BARN.z,'🐄','畜棚','Barn'),n(GREENHOUSE.x,GREENHOUSE.z,'🌿','温室','Greenhouse'),n(MINE_ENT.x,MINE_ENT.z,'⛏','矿洞','The mine'),n(PLAZA.x,PLAZA.z,'⛲','小镇广场','Town square'),n(DOCK.x,DOCK.z1,'🛶','码头','Dock'),n(0,128,'🌊','星星湖','Star Lake'),n(-212,33,'💧','瀑布','The falls'),n(-170,54,'〰','山溪','Mist Creek'),n(ISLANDS[4][0],ISLANDS[4][1],'🗼','灯塔','Lighthouse'),...OUTER.map(b=>n(b.x,b.z,b.icon,b.zh,b.en)),n(SITES.tower.x,SITES.tower.z,'🔮','法师塔',"Wizard's Tower"),n(SITES.cart.x,SITES.cart.z,'🛒','旅行货车','Travelling Cart'),n(SITES.bus.x,SITES.bus.z,'🚌','巴士站','Bus stop'),n(SITES.grate.x,SITES.grate.z,'🕳️','下水道','Sewer'),n(SITES.quarry.x,SITES.quarry.z,'⛰️','采石场','Quarry'),n(SITES.board.x,SITES.board.z,'📌','告示板','Notice board'),...TOWN.map(b=>n(b.x,b.z,b.icon,b.zh,b.en))]; }
 function openMap(){ if(document.getElementById('bigmap')){ document.getElementById('bigmap').remove(); return; } if(document.pointerLockElement) document.exitPointerLock(); const w=document.createElement('div'); w.id='bigmap'; const V={x0:-238,z0:-72,x1:166,z1:232}, asp=(V.x1-V.x0)/(V.z1-V.z0), CW=Math.min(innerWidth*.94,innerHeight*.9*asp), CH=CW/asp, c=document.createElement('canvas'), dpr=Math.min(devicePixelRatio,2); c.width=CW*dpr; c.height=CH*dpr; c.style.cssText='width:'+CW+'px;height:'+CH+'px'; w.appendChild(c); const g=c.getContext('2d'), sc=c.width/(V.x1-V.x0), P=(x,z)=>[(x-V.x0)*sc,(z-V.z0)*sc], full=(c.width/(V.x1-V.x0))*MAP_R*2;
   g.drawImage(mapBase,(-MAP_R-V.x0)*sc,(-MAP_R-V.z0)*sc,full,full); const fs=Math.round(12.5*dpr); g.font='600 '+fs+'px -apple-system,"PingFang SC",sans-serif'; g.textBaseline='middle';
   const H=20*dpr, used=[], dots=places().map(p=>({p,xy:P(p.x,p.z)})), hit=(x,y,tw)=>x<3||y<3||x+tw>c.width-3||y+H>c.height-3||used.some(u=>x<u[0]+u[2]+4&&x+tw+4>u[0]&&y<u[1]+H+3&&y+H+3>u[1])||dots.some(d=>{ const [a,b]=d.xy; return a>x-5*dpr&&a<x+tw+5*dpr&&b>y-5*dpr&&b<y+H+5*dpr; });
@@ -1111,6 +1114,26 @@ function updateAnimals(dt){ if(S.inMine||S.inHouse) return;
     if(big) poseQuadruped(A,dt,{speed:sp,graze:feed}); else poseBird(A,dt,{speed:sp,peck:feed&&Math.sin(performance.now()*.012+A.x)>0?1:0}); settle(A,dt); } }
 /* the valley's town */
 const TOWN=[{id:'store',x:22,z:-37,w:8,d:6,zh:'杂货铺',en:'General Store',icon:'🏪',fn:()=>G.openStore()},{id:'smith',x:36,z:-42,w:7,d:5.4,zh:'铁匠铺',en:'Blacksmith',icon:'🔨',fn:()=>G.openSmith()},{id:'saloon',x:50,z:-38,w:9,d:6,zh:'星光酒馆',en:'Starlight Saloon',icon:'🍺',fn:()=>G.openSaloon()},{id:'cc',x:65,z:-37,w:10,d:7,zh:'社区中心',en:'Community Centre',icon:'🏛️',fn:()=>G.openCC()},{id:'museum',x:68,z:-13,w:8,d:6,zh:'博物馆',en:'Museum',icon:'🏺',fn:()=>G.openMuseum()},{id:'clinic',x:53,z:-6,w:6.6,d:5,zh:'诊所',en:'Clinic',icon:'🏥',fn:()=>G.openClinic()},{id:'carpenter',x:20,z:-11,w:6.6,d:5,zh:'木匠铺',en:'Carpenter',icon:'🪚',fn:()=>G.openCarpenter()},{id:'ranch',x:88,z:-32,w:7,d:5.4,zh:'牧场',en:'Ranch',icon:'🐄',fn:()=>G.openRanch()},{id:'fishshop',x:28,z:20,w:6.4,d:5,zh:'渔具店',en:'Fish Shop',icon:'🎣',fn:()=>G.openFishshop()}];
+/* farther doors than the town's streets */
+const OUTER=[{id:'joja',x:106,z:-31,w:8,d:6,zh:'快捷超市',en:'QuickMart',icon:'🏬',fn:()=>G.openMart()},{id:'guild',x:-57,z:-31,w:6.6,d:5,zh:'冒险家公会',en:"Adventurer's Guild",icon:'⚔️',fn:()=>G.openGuild()}];
+const SITES={ tower:{x:-108,z:-14}, board:{x:30,z:-30}, cart:{x:-30,z:24}, bus:{x:6,z:-40}, grate:{x:60,z:-20}, cartStop:{x:-34,z:-30}, quarry:{x:-26,z:-52}, well:{x:-8,z:-12}, shed:{x:-24,z:-19}, stable:{x:38,z:-8}, mill:{x:-24,z:20}, pond:{x:-8,z:22}, hutch:{x:44,z:8} };
+G.BUS=[SITES.bus.x,SITES.bus.z];
+function outerPlaces(){ const put=(id,s,ry=0,r=1.6)=>{ const m=placedModel(id); m.position.set(s.x,walkH(s.x,s.z),s.z); m.rotation.y=ry; world.add(m); if(r) addObstacle(s.x,s.z,r); return m; };
+  for(const b of OUTER){ addSmoke(logHouse({world,x:b.x,z:b.z,w:b.w,d:b.d,h:2.9,rh:2.2,porch:false,chimney:false}).userData.smoke); signs.push([signBoard(world,b.x,3.5,b.z+b.d/2+.26,L(b.zh,b.en)),b]); addSpot(b.x,b.z+b.d/2+1.4,2.9,b.fn,()=>L(b.zh,b.en)); }
+  const T=SITES; put('tower',T.tower,0,3.4); addSpot(T.tower.x,T.tower.z+4.6,3,()=>G.openWizard(),()=>L('法师塔','wizard\'s tower')); put('notice',T.board,0,.8); addSpot(T.board.x,T.board.z+1,2.4,()=>G.openBoard(),()=>L('告示板','notice board')); const wag=put('wagon',T.cart,.4,1.8); addSpot(T.cart.x,T.cart.z+2,3.4,()=>G.openCart(),()=>L('旅行货车','travelling cart')); G.cartMesh=wag;
+  put('bus',T.bus,0,2.4); addSpot(T.bus.x,T.bus.z+2.6,3.2,()=>G.takeBus(),()=>L('巴士站','bus stop')); put('grate',T.grate,0,0); addSpot(T.grate.x,T.grate.z,2.4,()=>G.openSewer(),()=>L('下水道格栅','sewer grate')); put('minecart',T.cartStop,0,1); addSpot(T.cartStop.x,T.cartStop.z+1.6,2.6,()=>G.rideCart(),()=>L('矿车','minecart')); addSpot(T.quarry.x,T.quarry.z,3.2,()=>G.openQuarry(),()=>L('去采石场','to the quarry'));
+  const water=[]; for(let z=20;z<70;z+=1){ if(lakeField(-8,z)>0){ water.push(-8,z); break; } } G.PAN=water.length?water:[0,34]; }
+G.localWater=()=>{ const p=player.pos; if(Math.hypot(p.x-SITES.grate.x,p.z-SITES.grate.z)<3&&G.sewerOpen()) return 'sewer'; if(Math.hypot(p.x+212,p.z-33)<16) return 'swamp'; if(S.built.fish_pond&&Math.hypot(p.x-SITES.pond.x,p.z-SITES.pond.z)<4) return null; return null; };
+const panM=new THREE.Mesh(new THREE.CircleGeometry(.9,16),new THREE.MeshBasicMaterial({color:0xfff0b0,transparent:true,opacity:.5,toneMapped:false})); panM.rotation.x=-Math.PI/2; panM.visible=false; scene.add(panM);
+G.panMark=()=>{ panM.visible=!!S.pan; if(S.pan) panM.position.set(S.pan.x,WATER_Y+.05,S.pan.z); };
+const giants=new Map(); G.spawnGiant=g=>{ const m=cropMesh(g.id,CROPS[g.id].days,CROPS[g.id].days); m.scale.setScalar(3); m.position.set(g.x,walkH(g.x,g.z),g.z); world.add(m); giants.set(g,m); addObstacle(g.x,g.z,1.4); }; G.removeGiant=g=>{ const m=giants.get(g); if(m) world.remove(m); giants.delete(g); };
+/* the desert: same rules as the mine for moving about, its own sky */
+let desert=null;
+G.enterDesert=()=>{ if(!desert){ desert=buildDesert(); scene.add(desert); } const M=G.mine; S.inMine=true; M.mode='desert'; M.cavern=false; S.mineLevel=0; world.visible=false; M.group.visible=false; desert.visible=true; player.pos.set(DESERT.bus.x-3,0,DESERT.bus.z-4); sun.intensity=0; hemi.intensity=0; desertSky(true); toast('🏜️ '+L('沙漠','The desert')); renderStatus(); };
+function desertSky(on){ if(on){ mineBg=scene.background; scene.background=new THREE.Color(0xf0b070); scene.fog.color.setHex(0xe8a868); scene.fog.density=.0042; } else { scene.background=mineBg||null; applyWeather(); } }
+G.leaveDesert=()=>{ const M=G.mine; desert.visible=false; S.inMine=false; M.mode=null; world.visible=true; desertSky(false); player.pos.set(SITES.bus.x,0,SITES.bus.z+4); renderStatus(); };
+G.desertWater=()=>Math.hypot(player.pos.x-DESERT.pool.x,player.pos.z-DESERT.pool.z)<DESERT.pool.r+3;
+function desertAct(){ const p=player.pos, near=q=>Math.hypot(p.x-q.x,p.z-q.z); if(near({x:DESERT.shop.x,z:DESERT.shop.z+3.6})<3.2) return G.openOasis(); if(near({x:DESERT.door.x,z:DESERT.door.z+2})<3.4){ if(!G.invCount('mat','skull_key')){ toast('🗝️ '+L('门锁着,要骷髅钥匙。矿洞 120 层有。','The door needs the Skull Key, from floor 120 of the mine.')); return; } desert.visible=false; G.mine.enter(1,true); G.mine.back=()=>{ desert.visible=true; }; return; } if(near(DESERT.bus)<4.4) return G.leaveDesert(); if(Math.random()<.3&&near(DESERT.pool)>12){ G.give('crop','cactus',1); return; } }
 function buildFarmstead(){
   addSmoke(logHouse({world,x:CABIN.x,z:CABIN.z,w:9,d:6,h:3.1,rh:2.7}).userData.smoke);
   shippingBin(world,BIN.x,BIN.z); mailbox(world,4.6,-8.6);
@@ -1125,16 +1148,24 @@ function buildTown(){
 const onBuilt=G.onBuilt=(id,silent)=>{ if(id==='coop'&&!built.coop){ built.coop=1; logHouse({world,x:COOP.x,z:COOP.z,w:5,d:3.6,h:2,rh:1.5,porch:false,chimney:false,wins:1}); const a=COOP.x-6,b=COOP.x+6,c=COOP.z+2.4,d=COOP.z+10; fenceRun(world,[[a,c],[a,d],[b,d],[b,c]]); addSpot(COOP.x,COOP.z+3.2,3,()=>G.openCoopMenu(),()=>L('鸡舍','coop')); }
   if(id==='barn'&&!built.barn){ built.barn=1; logHouse({world,x:BARN.x,z:BARN.z,w:7,d:5,h:2.6,rh:2,porch:false,chimney:false,wins:1}); fenceRun(world,[[BARN.x-6,BARN.z+3],[BARN.x-6,BARN.z+11],[BARN.x+6,BARN.z+11],[BARN.x+6,BARN.z+3]]); addSpot(BARN.x,BARN.z+3.6,3,()=>G.openCoopMenu(),()=>L('畜棚','barn')); }
   if(id==='silo'&&!built.silo){ built.silo=1; const g=placedModel('silo'); g.position.set(32,walkH(32,-1),-1); world.add(g); addObstacle(32,-1,1.6); }
-  if(id==='greenhouse'&&!built.greenhouse){ built.greenhouse=1; greenhouse(world,GREENHOUSE.x,GREENHOUSE.z); } };
+  if(id==='greenhouse'&&!built.greenhouse){ built.greenhouse=1; greenhouse(world,GREENHOUSE.x,GREENHOUSE.z); }
+  const T=SITES, put=(mid,s,r)=>{ const m=placedModel(mid); m.position.set(s.x,walkH(s.x,s.z),s.z); world.add(m); addObstacle(s.x,s.z,r); };
+  if(id==='well'&&!built.well){ built.well=1; put('well',T.well,1.1); addSpot(T.well.x,T.well.z+1.6,2.4,()=>{ S.can=G.canCapacity(); snd('refill'); toast('💧 '+L('水壶装满了','Can refilled')); },()=>L('水井','well')); }
+  if(id==='mill'&&!built.mill){ built.mill=1; put('mill',T.mill,2.2); addSpot(T.mill.x,T.mill.z+2.8,2.8,()=>G.openMill(),()=>L('磨坊','mill')); }
+  if(id==='fish_pond'&&(built.pond||0)<(S.built.fish_pond||1)){ built.pond=(built.pond||0)+1; const s={x:T.pond.x+(built.pond-1)*7,z:T.pond.z}, i=built.pond-1; put('fish_pond',s,2.7); addSpot(s.x,s.z,4,()=>G.openPond(i),()=>L('鱼塘','fish pond')); }
+  if(id==='shed'&&!built.shed){ built.shed=1; logHouse({world,x:T.shed.x,z:T.shed.z,w:6,d:4.4,h:2.3,rh:1.6,porch:false,chimney:false,wins:1}); S.chests.shed=S.chests.shed||{}; addSpot(T.shed.x,T.shed.z+3.2,2.8,()=>G.openChest('shed'),()=>L('棚屋','shed')); }
+  if(id==='stable'&&!built.stable){ built.stable=1; logHouse({world,x:T.stable.x,z:T.stable.z,w:5,d:3.6,h:2.2,rh:1.4,porch:false,chimney:false,wins:1}); addSpot(T.stable.x,T.stable.z+2.8,2.6,()=>{ S.onHorse=!S.onHorse; toast(S.onHorse?'🐎 '+L('骑上了马','On horseback'):L('下了马','Back on foot')); },()=>L('马厩','stable')); }
+  if(id==='slime_hutch'&&!built.hutch){ built.hutch=1; logHouse({world,x:T.hutch.x,z:T.hutch.z,w:6,d:4.4,h:2.3,rh:1.6,porch:false,chimney:false,wins:1}); addSpot(T.hutch.x,T.hutch.z+3.2,2.8,()=>G.openHutch(),()=>L('史莱姆屋','slime hutch')); } };
 const built={};
 G.buildGreenhouse=()=>onBuilt('greenhouse');
+G.renderBuffs=()=>{ const b=$('#buffs'); if(!b) return; const t=G.buffLine(); b.textContent='✨ '+t; b.classList.toggle('hidden',!t); };
 const tapMarks={};
 G.tapperMark=(i,on,x,z)=>{ if(tapMarks[i]){ world.remove(tapMarks[i]); delete tapMarks[i]; } if(on){ const g=placedModel('tapper'); g.position.set(x+.42,walkH(x,z)+1.1,z+.2); g.scale.setScalar(.5); world.add(g); tapMarks[i]=g; } };
 /* the cabin inside */
 let house=null;
 function enterHouse(q){ if(!q) snd('door'); S.inHouse=true; world.visible=false; house.visible=true; house.userData.setDay(clamp(1-Math.abs(S.time-780)/420,0,1)*(S.weather==='clear'?1:.45)); if(!q){ player.pos.set(0,0,1.6); cam.yaw=Math.PI; } cam.dist=5; cam.height=1.9; cam.look=.8; cam.pitch=.3; onMine(true); hemi.intensity=0; sun.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=.18; scene.background=new THREE.Color(0x120c08); }
 function leaveHouse(){ snd('door'); S.inHouse=false; world.visible=true; house.visible=false; player.pos.set(0,0,-9.6); cam.yaw=0; cam.dist=8.5; cam.height=2.3; cam.look=2.7; cam.pitch=.08; onMine(false); }
-function openTV(){ modal('📺 '+L('电视','Television'),b=>{ b.innerHTML='<div style="font-size:15px;line-height:1.8">'+G.forecastText()+'</div>'; }); }
+function openTV(){ modal('📺 '+L('电视','Television'),b=>{ b.innerHTML='<div style="font-size:15px;line-height:1.8">'+G.forecastText()+'<br>'+G.tvShow()+'</div>'; }); }
 function onMine(on){ if(on){ scene.fog.density=.012; scene.fog.color.setHex(0x05070a); mineBg=scene.background; scene.background=new THREE.Color(0x05070a); sun.intensity=0; hemi.intensity=0; if(gradeFx) gradeFx.uniforms.get('amt').value=0; } else { scene.background=mineBg||null; applyWeather(); renderStatus(); } }
 let mineBg=null;
 /* fishing's underwater cutaway, the signature of the view: a second camera below the surface, joined at a waterline */
@@ -1188,7 +1219,7 @@ async function boot(){
   setupValley();
   buildScenery(world,QUAL); setupFlora(world,plantedTrees,plantedPlants,QUAL); setSeason(S.season); bakeMap(); setProgress(58);
   buildRain(); buildCritters(); buildFireflies(); buildPetals();
-  buildFarmstead(); buildTown(); dressValley(world,TOWN); buildLife(world); mineMouth(world,MINE_ENT.x,MINE_ENT.z); G.mine.build(); G.buildPeople(); boat=buildDock(world); buildLighthouse(world,ISLANDS[4][0],ISLANDS[4][1]); buildSmoke(world); setupBeasts(); house=cabinRoom(scene); setProgress(70);
+  buildFarmstead(); buildTown(); outerPlaces(); dressValley(world,TOWN); buildLife(world); mineMouth(world,MINE_ENT.x,MINE_ENT.z); G.mine.build(); G.buildPeople(); boat=buildDock(world); buildLighthouse(world,ISLANDS[4][0],ISLANDS[4][1]); buildSmoke(world); setupBeasts(); house=cabinRoom(scene); setProgress(70);
   buildAvatar(); await loadTwinkle(); avatar.add(toolMesh); setupPost(); setProgress(84);
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
   setProgress(90);
