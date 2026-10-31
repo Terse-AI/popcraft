@@ -965,7 +965,7 @@ function frame(now){
   }
   player.pos.y=(S.inMine||S.inHouse)?0:S.boating?WATER_Y+.08+Math.sin(now*.0016)*.05:walkH(player.pos.x,player.pos.z);
   updateBoat(dt,now); updateBeasts(dt,now);
-  if(S.inMine){ const r=Math.hypot(player.pos.x,player.pos.z); if(r>17){ player.pos.x*=17/r; player.pos.z*=17/r; } player.pos.y=0; }
+  if(S.inMine){ const mo=G.mine.mode, area=mo==='desert'?DESERT:mo==='island'?ISLAND:null, lim=area?area.R:17, r=Math.hypot(player.pos.x,player.pos.z); if(r>lim){ player.pos.x*=lim/r; player.pos.z*=lim/r; } if(area) for(const o of area.solid){ const dx=player.pos.x-o.x, dz=player.pos.z-o.z, d=Math.hypot(dx,dz), q=o.r+.4; if(d<q&&d>.01){ player.pos.x=o.x+dx/d*q; player.pos.z=o.z+dz/d*q; } } player.pos.y=0; }
   if(S.inHouse){ player.pos.x=clamp(player.pos.x,-5.6,5.6); player.pos.z=clamp(player.pos.z,-4,4); player.pos.y=0; }
   avatar.position.copy(player.pos);
   avatar.rotation.y=angDamp(avatar.rotation.y,player.yaw,S.boating?4:13,dt);
