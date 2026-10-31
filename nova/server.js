@@ -185,8 +185,11 @@ function landing(){ const games = listGames(), sv = games.find(g=>g.saves)||game
 <section class="wrap pitch"><p class="eyebrow" data-en="For creators">给创作者</p><h2 class="big" data-en="Your game, one link away.">把你的游戏,变成一个链接。</h2>
  <div class="tri"><div><h3 data-en="One-click upload">一键上传</h3><p data-en="Drop an HTML file or a ZIP. NOVA checks it and puts it online in seconds. Nothing to configure.">拖入 HTML 或 ZIP,NOVA 自动检查,几秒上线。不用配服务器,也不用打包发布。</p></div>
  <div><h3 data-en="One-click share">一键分享</h3><p data-en="Every game gets its own short link. Friends click and play. No install, no account.">每个游戏都有自己的短链接。朋友点开就玩,不用下载,也不用注册。</p></div>
- <div><h3 data-en="Everything runs on the web">全部是网页游戏</h3><p data-en="Computers, phones and tablets all work. Play fullscreen, and saves follow your account.">电脑、手机、平板都能玩。全屏沉浸,存档跟着账号走。</p></div></div>
- <a class="btn solid" href="/upload" data-en="Upload a game">上传游戏</a></section>
+ <div><h3 data-en="Everything runs on the web">全部是网页游戏</h3><p data-en="Computers, phones and tablets all work. Play fullscreen, and saves follow your account.">电脑、手机、平板都能玩。全屏沉浸,存档跟着账号走。</p></div>
+ <div><h3 data-en="Your agent can publish">Agent 一键发布</h3><p data-en="Connect Claude Code or any agent with one key. It submits, fixes what the checks report, and ships.">用一个 Key 连接 Claude Code 或任何 Agent。它会提交、按检查结果修改,然后上线。</p></div>
+ <div><h3 data-en="Reviewed before it reaches players">发布前自动审核</h3><p data-en="Every game is scanned. Anything risky goes to a person before it goes public.">每个游戏都会自动扫描,有风险的内容先由人工审核,再公开。</p></div>
+ <div><h3 data-en="Your backend, your rules">接入你自己的后端</h3><p data-en="Use NOVA accounts and cloud saves out of the box, or connect your own auth and database.">开箱即用 NOVA 账号和云存档,也可以接入你自己的登录和数据库。</p></div></div>
+ <div class="cta"><a class="btn solid" href="/upload" data-en="Upload a game">上传游戏</a><a class="btn" href="/portal" data-en="Creator portal">创作者后台</a></div></section>
 <footer><a class="logo" href="/">NOVA</a><span data-en="Web games, one link away.">打开就能玩的网页游戏。</span></footer>` }); }
 function gallery(){ return page({ title:'全部游戏 · NOVA', cls:'solidnav', body:`<section class="wrap top"><h1 class="big" data-en="All games">全部游戏</h1><input id="q" class="search" placeholder="搜索游戏" data-en-ph="Search games"><div class="grid" id="grid">${listGames().map(card).join('')}</div></section>` }); }
 function uploadPage(){ return page({ title:'上传游戏 · NOVA', cls:'solidnav', body:`<section class="wrap top narrow"><p class="eyebrow" data-en="Upload">上传</p><h1 class="big" data-en="Put your game on NOVA.">把游戏放到 NOVA。</h1>
