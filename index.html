@@ -759,7 +759,7 @@ function openInv(){
 const signs=[];
 function applyLang(){
   $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
-  document.documentElement.lang = LANG==='zh'?'zh':'en';
+  document.documentElement.lang = LANG==='zh'?'zh':'en'; document.title=L('StarVale · 星星人露谷','StarVale');
   $('#langbtn').textContent=t('lang'); $('#minit').textContent=t('map');
   $('#enlab').textContent=t('energy');
   $('#h0').textContent=t('ops'); $('#h1').textContent=t('move'); $('#h2').textContent=t('run');

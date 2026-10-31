@@ -181,7 +181,7 @@ const coverStyle = g => g.cover ? `background-image:url('${esc(g.cover)}')` : `b
 const card = g => `<a class="card" href="/${esc(g.slug)}"><div class="cv" style="${coverStyle(g)}">${g.cover?'':`<span>${esc(g.title)}</span>`}</div><div class="ct"><b>${esc(g.title)}</b><i>${esc(g.author||'')}</i></div></a>`;
 function landing(){ const games = listGames(), sv = games.find(g=>g.saves)||games[0];
   return page({ title:'NOVA · 打开就能玩的网页游戏', game:sv, cls:'home', body:`
-<header class="hero"><div class="art" style="background-image:url('/public/starvale-hero.jpg')"></div><video class="heroV" id="heroV" autoplay muted loop playsinline preload="metadata" poster="/public/starvale-hero.jpg"><source src="/public/starvale-reel.mp4" type="video/mp4"></video><div class="veil"></div>
+<header class="hero"><div class="art" style="background-image:url('/public/starvale-hero.jpg')"></div><video class="heroV" id="heroV" autoplay muted loop playsinline preload="metadata" poster="/public/starvale-hero.jpg"><source media="(max-width:760px)" src="/public/starvale-reel-sm.mp4" type="video/mp4"><source src="/public/starvale-reel.mp4" type="video/mp4"></video><div class="veil"></div>
  <div class="hin"><p class="eyebrow" data-en="Now playing on NOVA">正在 NOVA 上</p><h1>StarVale</h1><p class="lede" data-en="A little farm by the lake, through every season. Open the page and play.">湖边的小农场,一年四季。打开网页就能玩。</p>
   <div id="saveline" class="saveline" hidden></div>
   <div class="cta"><button class="btn solid" id="mainplay" data-en="New game">开始新游戏</button><button class="btn" id="altplay" data-en="Load save">读取存档</button></div>
