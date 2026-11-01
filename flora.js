@@ -138,16 +138,16 @@ function floraMaterial(depth,plantsR,leafy){
 }
 
 /* Lambert blades: they take the same light and shadows as the ground they grow from */
-const BLADE_COMMON=`uniform sampler2D uRamps; uniform float uSnow,uGroundRow,uTuftRow,uSpan,uGlow,uSeason; uniform vec4 uPush,uPush2; uniform vec3 uSunDirW; ${WIND} ${RAMP_GLSL}
+const BLADE_COMMON=`uniform sampler2D uRamps; uniform float uSnow,uGroundRow,uTuftRow,uSpan,uGlow,uSeason,uWet; uniform vec4 uPush,uPush2; uniform vec3 uSunDirW; ${WIND} ${RAMP_GLSL}
   varying vec3 vCol; varying vec2 vG; varying float vBack;
   vec2 pushAway(vec2 g,float s,inout float sink){ vec2 o=vec2(0.); for(int i=0;i<2;i++){ vec4 P=i==0?uPush:uPush2; vec2 d=g-P.xy; float l=length(d), k=1.-smoothstep(.15,P.z,l); o+=d/max(l,.01)*k*.46*s; sink+=k*.3; } return o; }`;
 function bladeMaterial(kind){
   const m=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
   m.defines={ ...(m.defines||{}), [kind]:1 };
   m.onBeforeCompile=sh=>{
-    Object.assign(sh.uniforms,WIND_U(),{ uRamps:U.uRamps, uSnow:U.uSnow, uGroundRow:{value:rowV('ground')}, uTuftRow:{value:rowV('tuft')}, uSpan:{value:bladeSpan}, uPush:U.uPush, uPush2:U.uPush2, uSunDirW:U.uSunDirW, uGlow:U.uGlow, uSeason:U.uSeason, uLitC:U.uLit, uCloud:U.uCloud, uCloudOff:U.uCloudOff, uCloudAmt:U.uCloudAmt, uCloudTint:U.uCloudTint });
+    Object.assign(sh.uniforms,WIND_U(),{ uRamps:U.uRamps, uSnow:U.uSnow, uGroundRow:{value:rowV('ground')}, uTuftRow:{value:rowV('tuft')}, uSpan:{value:bladeSpan}, uPush:U.uPush, uPush2:U.uPush2, uSunDirW:U.uSunDirW, uGlow:U.uGlow, uSeason:U.uSeason, uWet:U.uWet, uLitC:U.uLit, uCloud:U.uCloud, uCloudOff:U.uCloudOff, uCloudAmt:U.uCloudAmt, uCloudTint:U.uCloudTint });
     sh.vertexShader=`attribute vec3 aBlade; attribute vec4 iA; attribute vec4 iB; attribute vec3 aCol; attribute float aSeason;\n${BLADE_COMMON}\n`+sh.vertexShader
-     .replace('#include <beginnormal_vertex>',kind==='DECO'?'vec3 objectNormal=normal;':'vec3 objectNormal=vec3(0.,1.,0.);')
+     .replace('#include <beginnormal_vertex>',kind==='DECO'?'vec3 objectNormal=normal;':'vec3 objectNormal=normalize(vec3(sin(iB.x*3.+aBlade.y*9.)*.72,1.,cos(iB.x*2.+aBlade.y*7.)*.72));')
      .replace('#include <begin_vertex>',`
       float s=max(aBlade.x,0.); vec2 g; float h, size, rot=0.;
       #ifdef DECO
@@ -165,15 +165,16 @@ function bladeMaterial(kind){
       sway+=uWindDir*sin(uTime*3.4-dot(g,uWindDir)*.9+aBlade.y*3.)*.1*amp*s*s*size;
       sway+=pushAway(g,s,sink); p.y*=1.-sink*s;
       vec3 transformed=vec3(g.x+p.x+sway.x,h+p.y-.03,g.y+p.z+sway.y);
-      vG=g; vBack=s*s*pow(max(dot(normalize(transformed-cameraPosition),uSunDirW),0.),4.)*uGlow*1.15;
+      vG=g; vBack=s*s*pow(max(dot(normalize(transformed-cameraPosition),uSunDirW),0.),4.)*uGlow*1.8;
       #ifdef DECO
        transformed.y+=0.; if(hide>.5) transformed=vec3(0.,-900.,0.);
        vCol=aBlade.z<.5?ramp(.26+s*.5,uTuftRow)*.9:aCol; vBack*=aBlade.z<.5?1.:1.4;
       #elif defined(CARPET)
-       vCol=ramp(iB.y+s*.26+aBlade.z*.1,uGroundRow)*(.5+.72*s)*1.2*(1.-iB.z*.24);
+       vCol=ramp(iB.y+s*.3+aBlade.z*.14,uGroundRow)*(.34+.94*s)*1.2*(1.-iB.z*.24);
       #else
-       vCol=aBlade.x<0.?vec3(.05,.03,.02):ramp(.2+s*.62+aBlade.z*.16+iB.y,uTuftRow)*(.62+.6*s)*1.2;
+       vCol=aBlade.x<0.?vec3(.05,.03,.02):ramp(.2+s*.62+aBlade.z*.16+iB.y,uTuftRow)*(.42+.82*s)*1.2;
       #endif
+      vCol*=1.-.2*uWet;
     `);
     let f=`varying vec3 vCol; varying vec2 vG; varying float vBack; uniform vec3 uLitC; ${CLOUD_GLSL}\n`+sh.fragmentShader.replace('#include <map_fragment>','diffuseColor.rgb*=vCol*cloudShade(vG);').replace('#include <opaque_fragment>','outgoingLight+=vCol*uLitC*vBack;\n#include <opaque_fragment>');
     if(kind!=='DECO') f=f.replace('#include <normal_fragment_begin>','vec3 normal=normalize(vNormal);');
@@ -283,7 +284,7 @@ function bladeVariant(root,name,geo,cap,mat){
 const pickVar=it=>{ const n=it.name, h=Math.abs(Math.floor(it.x*3+it.z*7));
   if(n.startsWith('spruce')) return 'con'+(h%3); if(n.startsWith('larch')) return 'lar'+(h%2); if(n.startsWith('broad')) return 'bro'+(h%2); if(n.startsWith('shrub')) return 'shr';
   if(n.startsWith('fern')) return 'fer'; if(n.startsWith('reed')) return 'ree'; if(n.startsWith('tuft')) return 'tuf'+(h%2); return null; };
-const RAD={ low:[30,20,2], med:[46,28,3.2], high:[62,36,4.2] };
+const RAD={ low:[30,20,2], med:[46,28,3.2], high:[62,36,5.4] };
 let radT=46, radP=28, lastX=1e9, lastZ=1e9, lastYaw=9;
 export function setupFlora(root,trees,plants,qual){
   const [rt,rp,dens]=RAD[qual]||RAD.med; radT=rt; radP=rp; U.uLodT.value=rt; U.uLodP.value=rp; bladeSpan=rp*2; chunkDens=dens; chunkRoot=root; readTile();
@@ -296,7 +297,7 @@ export function setupFlora(root,trees,plants,qual){
   const tm=bladeMaterial('TUFT');
   bladeVariant(root,'tuf0',bladeClump(5,48,.2,.55,false,.7),600,tm); bladeVariant(root,'tuf1',bladeClump(6,42,.25,1,false,.7),600,tm); bladeVariant(root,'tuf0L',bladeClump(5,15,.2,.55,false,1.7),1200,tm); bladeVariant(root,'tuf1L',bladeClump(6,13,.25,1,false,1.7),1200,tm); bladeVariant(root,'ree',bladeClump(7,18,.14,.14,true,.8),520,tm);
   // the carpet: short grass baked chunk by chunk around the camera, plus the small things that grow in it
-  carpetBase=bladeClump(8,12,.85,.8,false,1.7); carpetMat=bladeMaterial('CARPET'); decoMat=bladeMaterial('DECO');
+  carpetBase=bladeClump(8,qual==='high'?16:12,.85,.8,false,qual==='high'?1.2:1.7); carpetMat=bladeMaterial('CARPET'); decoMat=bladeMaterial('DECO');
   blockHook.fn=(x,z,hx,hz)=>{ for(let i=Math.floor((x-hx)/CH);i<=Math.floor((x+hx)/CH);i++) for(let j=Math.floor((z-hz)/CH);j<=Math.floor((z+hz)/CH);j++){ const k=ckey(i,j); if(chunks.has(k)) dirty.add(k); } };
   for(const list of [trees,plants]) for(const it of list){ it.v=pickVar(it); if(!it.v) continue; if(it.trueH===undefined) it.trueH=it.h; const k=key(it.x,it.z); if(!cells.has(k)) cells.set(k,[]); cells.get(k).push(it); }
 }

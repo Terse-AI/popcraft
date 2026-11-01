@@ -100,18 +100,19 @@ const setC=(c,a)=>c.setRGB(a[0],a[1],a[2],THREE.SRGBColorSpace);
 const F=['top','mid','low','cloudL','cloudS','sun','rockS','rockL','snowS','snowL','forS','forL','haze','mist','water','shade','lit','gS','gM','gH'];
 const N=['mistAmt','gAmt','sunI','ambI','glint','fog','night'];
 const KEYS=[
+ // colours sampled from Cast n Chill's own screens, one scene to each hour: a muted body, deep cool shadow, and the heat kept to a few places
  //  t    sky top    mid       low       cloudL    cloudS    sun       rockS     rockL     snowS     snowL     forS      forL      haze      mist      water     shade     lit       gradS     gradM     gradH      mist grade sun  amb  glint fog     night
- [ 360,'#4a2f96','#d4528f','#ffa85a','#ffc898','#7c2f88','#fff0b0','#46267a','#e06a9c','#7656c2','#ffc4cc','#26164e','#a04678','#ec7a98','#f09ab8','#e680a2','#46287e','#ffd2a0','#160a32','#a84476','#ffd4a8', .42,.3,2.3,.7,1.,.0011,.0],
- [ 460,'#2a72d0','#6cc2e4','#ffd088','#fff0cc','#de8676','#fff4c0','#3a4a9c','#f0a47c','#6a80d4','#ffe6cc','#0f3838','#689c34','#f6c090','#ffd4a8','#4cb0d2','#2a3a8c','#ffe4ac','#081228','#568474','#fff0c0', .24,.26,3.0,.68,1.,.0009,.0],
- [ 600,'#0e5ccc','#2a9eea','#a0e6e8','#fffaf0','#789ee2','#fffcd4','#2838a4','#c89ca4','#6890ea','#ffffff','#06343a','#3c9c34','#74c6ea','#ace8f2','#1a8edc','#1a2d92','#fff0c0','#030e26','#28867c','#fff6cc', .08,.24,3.5,.66,.9,.0006,.0],
- [ 780,'#0a4cc4','#1a8cf2','#84e2f2','#ffffff','#6898ea','#ffffdc','#2232a4','#b8a0b8','#5888ea','#ffffff','#052f3a','#36a236','#62bef2','#a4e8fa','#0c86e4','#162a9a','#fff2c8','#020c24','#228a7e','#fffad0', .06,.24,3.7,.66,.9,.0005,.0],
- [ 930,'#1460bc','#52a6d4','#ffd680','#fff0c4','#c6866c','#fff0a4','#383894','#e89c5c','#7e7ed2','#ffdeac','#10363a','#869e2c','#efc47a','#ffda96','#268ebc','#282884','#ffdc98','#0a0e2c','#88783c','#ffe6a0', .1,.28,3.4,.62,1.,.0007,.0],
- [1050,'#dc8058','#f09a68','#ffc470','#ffe6b0','#be6660','#fff09c','#683868','#e88664','#ae6476','#ffdcb8','#582814','#e09c24','#f49a58','#f8ae70','#e08a42','#58265e','#ffc678','#1a0816','#c46428','#ffdc98', .12,.32,3.2,.56,1.15,.0008,.0],
- [1130,'#b44668','#f06a36','#ffac3c','#ffaa58','#882858','#fff09c','#481858','#e0564c','#88386e','#ffa472','#380e0e','#e0641c','#f07434','#f0844c','#e8642c','#481658','#ff9a48','#140316','#b43624','#ffc470', .12,.34,3.0,.5,1.25,.0009,.0],
- [1200,'#462890','#c63680','#ff743c','#ff8664','#581e80','#ffac6c','#28185e','#a03880','#583896','#f0869c','#140a2e','#682856','#ae4686','#be5c9e','#be467e','#281866','#ff947a','#0a0322','#782870','#ffac8c', .2,.36,1.5,.56,1.05,.0011,.1],
- [1275,'#181666','#482896','#ae4696','#8856ae','#1e185e','#ffb49c','#101048','#38287e','#282876','#8878c6','#070822','#1c1846','#482886','#583896','#38287e','#121258','#9888de','#05031a','#281e66','#a698de', .22,.36,.6,.58,.85,.0013,.55],
- [1380,'#060a30','#0e1c60','#1e3a92','#3858aa','#0a1040','#f4f0dc','#08103a','#1a2c72','#1e3682','#88a8ea','#040818','#0d1a40','#122260','#223e8a','#0c1e68','#0a1450','#78a0f2','#020418','#122260','#88b0f2', .18,.38,.36,.64,.95,.0012,1],
- [1560,'#040828','#0a1650','#16307e','#2c4a98','#080c38','#f4f0dc','#060c30','#142660','#182e72','#7a9cdc','#030614','#0a1636','#0e1c54','#1a3478','#0a1a5a','#081044','#6c94e2','#020314','#0e1c54','#7ca4e6', .18,.38,.32,.6,.95,.0012,1]
+ [ 360,'#4a2a78','#b0628c','#f2b09c','#f8c8c0','#6e3458','#fff0d0','#3c1c4a','#955566','#80445f','#f2bbb1','#22103e','#7a3460','#a8607c','#c88aa4','#6a3f70','#2c1a40','#f8c0a0','#160a28','#6d3a5c','#f8d0c0', .24,.42,2.4,.8,1.,.0007,.0],
+ [ 460,'#7fa0d4','#b4c6e0','#e8e0d4','#fbf6ea','#94a0b4','#fff4d8','#4e5a6a','#a4b8d0','#94a0ae','#eef2f6','#20241a','#7e6e48','#b4c0d0','#c8d0dc','#94a4b4','#44402e','#fff0d0','#14130c','#7a7054','#ecece4', .24,.28,2.7,.84,1.,.0006,.0],
+ [ 600,'#5e8cc8','#a0c0e0','#dce8f2','#fdf8ec','#a0acc4','#fff8e4','#4c6086','#8ca6c8','#88a4c8','#f4f6f8','#141e18','#4e6a3e','#a8c0dc','#d0e0f0','#54789c','#2c3e48','#fff2d4','#0c0e0a','#566a64','#f4f4ec', .05,.28,3.1,.8,.9,.0005,.0],
+ [ 780,'#4f80c4','#84b0de','#cfe2f0','#fffbf0','#a4b0c8','#ffffee','#4c6086','#98b0cc','#8ca8cc','#f8f8f8','#121e16','#4a6e3c','#9cbcdc','#c4dcee','#4a7098','#2c3e48','#fff4d8','#0a0e08','#566a64','#f8f6ea', .04,.28,3.3,.78,.9,.0004,.0],
+ [ 930,'#5c86b4','#a4c0d4','#f0dcb4','#fbf0d8','#a89c8c','#fff0c0','#465468','#bca484','#94a0b0','#f4ead4','#1e1608','#6e5a2c','#b8ac94','#d8c8a4','#587890','#2e2214','#ffe4b0','#141008','#6e5e3c','#f4e8cc', .06,.3,3.1,.78,1.,.0005,.0],
+ [1050,'#46648c','#8e8e8c','#f4d488','#f8e0a4','#425a78','#fff0b0','#344c68','#c4a474','#747674','#f0d890','#2c2214','#a0822c','#c0a06c','#dcc088','#4c5e70','#2c2214','#ffd890','#140f08','#7a6a4c','#f8e0a0', .08,.32,3.1,.72,1.15,.0006,.0],
+ [1130,'#a85a58','#e08a5c','#f4c47c','#f8cc94','#984e50','#fff0b8','#6a2c28','#d48a68','#a06858','#f4c8a0','#2a0e12','#b83a1c','#c88a6c','#d8986c','#7a4a3c','#30182a','#ffb468','#14060c','#8e4028','#f8d090', .08,.34,3.1,.64,1.3,.0004,.0],
+ [1200,'#e088ac','#f4a4bc','#f8c4bc','#fbd4cc','#b090bc','#ffe8d0','#262a48','#585a94','#585a94','#c0a0c8','#1c1c26','#3c3a64','#9c86a8','#b49ac4','#4a4670','#222a48','#f8bcc0','#101224','#544674','#f8ccd0', .12,.34,1.7,.66,1.,.0008,.1],
+ [1275,'#2e3078','#54589e','#a884b8','#9484bc','#343268','#ffd0c0','#1c2050','#5058a8','#3c3456','#a09cc0','#0e1034','#2c3060','#4c4880','#68588c','#2a3264','#181e54','#b0a4dc','#080a24','#3c3670','#b8acdc', .16,.42,.8,.72,.85,.0009,.55],
+ [1380,'#223c74','#4068ac','#5490bc','#6484b4','#14244a','#f4f0dc','#142450','#40669c','#30465c','#a4c0e0','#0c1416','#20343e','#20406c','#3c5870','#2a4060','#101e30','#a8c8f0','#060a1c','#20365c','#a4c4e4', .12,.46,.6,.92,.9,.0008,1],
+ [1560,'#1a3064','#34589c','#447ca8','#5474a8','#101e3c','#f4f0dc','#0e1c40','#34587c','#283c54','#94b0d4','#0a1012','#1a2c36','#1a3660','#304c60','#22344e','#0c1826','#98b8e4','#040818','#1a2e50','#98b4dc', .12,.46,.54,.88,.9,.0008,1]
 ].map(r=>{ const o={t:r[0]}; F.forEach((k,i)=>o[k]=hex(r[i+1])); N.forEach((k,i)=>o[k]=r[i+1+F.length]); return o; });
 
 function palette(t){
@@ -140,13 +141,13 @@ const RAMP={
   ice:   ['#3a3448','#6c6a8c','#a8acc8','#e4e8f4','#ffffff']
 };
 const SEASON={
-  broad1:[['#5a0f3a','#a81f5a','#e04a80','#f880a8','#ffb0c8','#ffd8e0'],['#06281c','#0c4a28','#1a7a34','#3ca83a','#7cc840','#c0e060'],['#3a0808','#7a0f0c','#c8200c','#f0480c','#ff7a14','#ffb024','#ffe060'],['#2a2a78','#5a60b8','#a0acec','#e4ecff','#ffffff']],
-  broad2:[['#2a2408','#6a5a0a','#b09a10','#e8cc20','#ffe83a','#fff890'],['#08301e','#106028','#259038','#56b83a','#98d840','#d4f070'],['#5a2408','#9a4a08','#e08a0c','#ffb414','#ffd82a','#fff080'],['#2a2a78','#5a60b8','#a0acec','#e4ecff','#ffffff']],
-  broad3:[['#3a0a10','#8a1f18','#d0501c','#f08a2c','#ffb84a','#ffe08a'],['#06281c','#0a4a2a','#18703a','#38a040','#70c844','#b8e05c'],['#2c0610','#600a14','#a8141c','#e0281a','#ff5a20','#ff9a30'],['#2a2a78','#5a60b8','#a0acec','#e4ecff','#ffffff']],
-  larch: [['#1a2a08','#3a5a0c','#6a9414','#a4cc24','#d8ec3c','#f8ff90'],['#06281e','#0c4a2e','#1a7a3a','#3ca040','#74c444','#b8e064'],['#3a1c08','#7a4a0c','#c48a10','#f0b818','#ffd830','#ffec70','#fff8b0'],['#1e1a60','#3e3a90','#7a80cc','#d0d8f4','#ffffff']],
-  shrub: [['#0c3a18','#1e6a24','#4a9c2c','#8ccc34','#d0e850'],['#06301e','#0e5a2a','#1f8a36','#4cb83a','#94dc48'],['#3a0810','#7c0f14','#c81c14','#f04414','#ff8420'],['#2a2470','#4c4498','#8880cc','#c8c4f0','#f4f4ff']],
-  tuft:  [['#0f3010','#26601a','#5c9a22','#a0cc30','#e0e850'],['#08301a','#105a24','#28902e','#68c038','#b4e048'],['#3a1808','#7a4a0c','#c08810','#f0b81c','#ffe048','#fff088'],['#2c2878','#5a58a8','#a0a4dc','#dce0f8','#ffffff']],
-  ground:[['#0f3a24','#1f6a2c','#4a9a2c','#8cc832','#cfe04a'],['#06302a','#0c5a34','#1f8a38','#5cb83a','#a8d848'],['#3a1408','#7a3a0c','#b86a14','#e8a024','#ffd04a'],['#5a6ac8','#8aa0e8','#c4d4f8','#eef4ff','#ffffff']]
+  broad1:[['#4a2038','#7e3a54','#b4607a','#dc90a0','#f0bcc0','#f8dcd4'],['#18261c','#27402a','#3e5a32','#5e7a3c','#84964a','#aeb060'],['#351416','#701c19','#9b2e18','#c84e1c','#e07828','#f0a840','#f8d070'],['#4a4660','#7a7690','#a8a4bc','#dcdce8','#f8f8fc']],
+  broad2:[['#2a2c14','#54561c','#8a8a2c','#b8b040','#dcd068','#f0e8a0'],['#1a2a1c','#2e4628','#4a6434','#6e8440','#94a04c','#bcb864'],['#3a2410','#6e4414','#a86e1c','#d8a02c','#eec450','#f8e088'],['#4a4660','#7a7690','#a8a4bc','#dcdce8','#f8f8fc']],
+  broad3:[['#3a1c18','#6e3624','#a85c34','#d08848','#e8b070','#f4d8a0'],['#16241a','#263c26','#3c5630','#5a743a','#7e9044','#a8a85a'],['#2c0e10','#5a1418','#8e2418','#b83c1a','#d4602a','#e88c40'],['#4a4660','#7a7690','#a8a4bc','#dcdce8','#f8f8fc']],
+  larch: [['#20280e','#424e16','#6e7a24','#9aa036','#c4c05c','#e4dc90'],['#18261c','#2a4028','#445c30','#647a3c','#8a9448','#b4b060'],['#2e1c0c','#5e3c10','#9a6c18','#ca9a28','#e4bc44','#f4dc80','#fbeeb0'],['#2a2640','#4a4660','#7c7a98','#c8c8dc','#f4f4f8']],
+  shrub: [['#1c2a16','#38481e','#5e6e2a','#869038','#b0b054'],['#16241a','#283e24','#42582c','#647434','#8a8c40'],['#2c0e10','#5a1418','#8e2418','#c0401c','#e07028'],['#3a3650','#5c5870','#8c8aa0','#c0bed0','#ece8f0']],
+  tuft:  [['#1e2810','#3c4c1c','#64722a','#8e9238','#b8b458'],['#1a2612','#303e1c','#505c28','#747834','#9c9644'],['#2e1c0c','#5e3c10','#96682a','#c09038','#e0bc60','#f0dc98'],['#4a4660','#7a7690','#a8a4bc','#d8d6e4','#f4f2f8']],
+  ground:[['#22301e','#3c4a26','#5e6a30','#86883e','#b0a858'],['#1c2a1e','#2c3e26','#48562e','#6a7036','#8e8a44'],['#2e1c12','#5a3418','#8a5420','#b87c2c','#dca848'],['#6a6686','#8c86a2','#b3a5bc','#d6cad8','#f0e8ec']]
 };
 const ROWS=['spruce','wood','earth','rock','snow','ice','broad1','broad2','broad3','larch','shrub','tuft','ground'];
 export const rowV=n=>(ROWS.indexOf(n)+.5)/ROWS.length;
@@ -162,7 +163,7 @@ for(const k in RAMP) writeRow(k,RAMP[k]);
 
 /* ---------- shared uniforms ---------- */
 export const U={
-  uRain:{value:0}, uLodT:{value:46}, uLodP:{value:28}, uWindAmp:{value:.6}, uWindDir:{value:new THREE.Vector2(.8,.6)}, uNoise:{value:null},
+  uRain:{value:0}, uWet:{value:0}, uLodT:{value:46}, uLodP:{value:28}, uWindAmp:{value:.6}, uWindDir:{value:new THREE.Vector2(.8,.6)}, uNoise:{value:null},
   uHeight:{value:null}, uHeightSpan:{value:440}, uPush:{value:new THREE.Vector4(0,0,1.3,0)}, uPush2:{value:new THREE.Vector4(0,0,.8,0)}, uSunDirW:{value:new THREE.Vector3(0,1,0)},
   uTime:{value:0}, uShade:{value:new THREE.Color()}, uLit:{value:new THREE.Color()}, uFog:{value:new THREE.Color()}, uFogD:{value:.0014},
   uSnow:{value:0}, uRamps:{value:rampTex}, uSide:{value:new THREE.Vector3(1,0,0)}, uReveal:{value:new THREE.Vector4(.5,.5,10,1)}, uRes:{value:new THREE.Vector2(1,1)},
@@ -251,12 +252,12 @@ function buildClouds(){ cloudU.uN.value=cloudNoise(256); cloudRT=new THREE.WebGL
     vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
     fragmentShader:`precision highp float; varying vec2 vUv; uniform sampler2D uN; uniform vec3 uSunD,uSunC,uAmb,uLow; uniform float uT,uCov;
       const float Y0=1500., Y1=2000.;
-      float den(vec3 p){ vec2 q=p.xz*.00017+vec2(uT*.0011,uT*.0005); float hf=clamp((p.y-Y0)/(Y1-Y0),0.,1.); vec2 sw=vec2(hf*.09,hf*.06); float b=texture2D(uN,q+sw*.4).r*.64+texture2D(uN,q*3.1+.17+sw*1.6).g*.26+texture2D(uN,q*8.3+.41-sw*3.).b*.1, dome=abs(hf-.3)/.7; return clamp((b-(1.-uCov)-dome*dome*.2)*10.,0.,1.)*smoothstep(0.,.08,hf)*(1.-smoothstep(.86,1.,hf)); }
+      float den(vec3 p){ vec2 q=p.xz*.00017+vec2(uT*.0011,uT*.0005); float hf=clamp((p.y-Y0)/(Y1-Y0),0.,1.); vec2 sw=vec2(hf*.09,hf*.06); float b=texture2D(uN,q+sw*.4).r*.64+texture2D(uN,q*3.1+.17+sw*1.6).g*.26+texture2D(uN,q*8.3+.41-sw*3.).b*.1, dome=abs(hf-.3)/.7; return clamp((b-(1.-uCov)-dome*dome*.2)*16.,0.,1.)*smoothstep(0.,.08,hf)*(1.-smoothstep(.86,1.,hf)); }
       float hg(float m,float g){ return (1.-g*g)/pow(1.+g*g-2.*g*m,1.5)*.25; }
       void main(){ float az=vUv.x*6.28318, h=vUv.y*vUv.y; if(h<.008){ gl_FragColor=vec4(0.); return; } float cl=sqrt(1.-h*h); vec3 d=vec3(sin(az)*cl,h,cos(az)*cl);
         float t0=Y0/d.y, t1=Y1/d.y; if(t0>30000.){ gl_FragColor=vec4(0.); return; } float st=(t1-t0)/12., mu=dot(d,uSunD), ph=hg(mu,.68)*.7+hg(mu,-.2)*.5, T=1., jit=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715)))); vec3 acc=vec3(0.);
         for(int i=0;i<12;i++){ vec3 p=d*(t0+st*(float(i)+jit)); float dn=den(p); if(dn<.01) continue; float lt=den(p+uSunD*170.)+den(p+uSunD*420.)+den(p+uSunD*900.)*.8; float sh=exp(-lt*1.5), powder=1.-exp(-(lt+dn)*2.2), hf=(p.y-Y0)/(Y1-Y0); vec3 li=uSunC*sh*powder*min(ph,1.5)*2.3+uAmb*(.42+.58*hf); float a=1.-exp(-dn*st*.034); acc+=T*a*li; T*=1.-a; if(T<.03) break; }
-        float dist=clamp(t0/30000.,0.,1.); acc=acc/(1.+dot(acc,vec3(.3))*.42); acc=mix(acc,uLow*(1.-T),dist*dist*.8); float fade=smoothstep(.05,.13,h); gl_FragColor=vec4(acc*fade,(1.-T)*fade); }` }))); }
+        float dist=clamp(t0/30000.,0.,1.); acc=acc/(1.+dot(acc,vec3(.3))*.2); acc=mix(acc,uLow*(1.-T),dist*dist*.8); float fade=smoothstep(.05,.13,h); gl_FragColor=vec4(acc*fade,(1.-T)*fade); }` }))); }
 /* n strips of the sky map this frame; returns nothing and leaves the renderer on the screen */
 export function cloudTick(r,n=1){ if(!cloudRT) return; const ac=r.autoClear, was=r.getRenderTarget(); r.autoClear=false; for(let i=0;i<n;i++){ cloudRT.scissor.set(cloudX,0,CLOUD_STRIP,CLOUD_H); r.setRenderTarget(cloudRT); r.render(cloudScene,cloudCam); cloudX=(cloudX+CLOUD_STRIP)%CLOUD_W; } r.autoClear=ac; r.setRenderTarget(was); }
 
@@ -433,11 +434,12 @@ function groundMaterial(){
   const m=new THREE.MeshLambertMaterial({color:0xffffff});
   splatT=groundU.uSplat.value=bakeSplat(); groundU.uTile.value=TEX.ground_tile; groundU.uBits.value=TEX.ground_bits;
   m.onBeforeCompile=sh=>{
-    Object.assign(sh.uniforms,groundU,{uRamps:U.uRamps,uSnow:U.uSnow,uCloud:U.uCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt,uCloudTint:U.uCloudTint,uFogSun:U.uFogSun,uSunDirW:U.uSunDirW});
+    Object.assign(sh.uniforms,groundU,{uWet:U.uWet,uRainG:U.uRain,uTimeG:U.uTime,uRamps:U.uRamps,uSnow:U.uSnow,uCloud:U.uCloud,uCloudOff:U.uCloudOff,uCloudAmt:U.uCloudAmt,uCloudTint:U.uCloudTint,uFogSun:U.uFogSun,uSunDirW:U.uSunDirW});
     sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <worldpos_vertex>',
       '#include <worldpos_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normal;');
-    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps,uBits; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow,uLeafRow,uSeasonG; uniform vec3 uFogSun,uSunDirW; ${ramp} ${CLOUD_GLSL}\n`+
-      sh.fragmentShader.replace('#include <fog_fragment>',`#ifdef USE_FOG
+    sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps,uBits; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow,uLeafRow,uSeasonG; uniform vec3 uFogSun,uSunDirW; uniform float uWet,uRainG,uTimeG; float gPud=0.; ${ramp} ${CLOUD_GLSL}\n`+
+      sh.fragmentShader.replace('#include <fog_fragment>',`if(uWet>.003){ vec3 vd=normalize(vWP-cameraPosition); float fr=pow(1.-clamp(-vd.y,0.,1.),3.); vec3 sky=fogColor*.62; gl_FragColor.rgb=mix(gl_FragColor.rgb,sky,clamp(gPud*(.34+.6*fr)+uWet*fr*.14,0.,1.)); if(gPud>.01&&uRainG>.5){ vec2 q=vWP.xz*1.2, cell=floor(q), f=fract(q)-.5; float h=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453), ph=fract(uTimeG*1.1+h*7.), r=length(f+vec2(h-.5,fract(h*3.)-.5)*.4); gl_FragColor.rgb+=sky*(1.-smoothstep(.012,.05,abs(r-ph*.46)))*(1.-ph)*gPud*.7; } }
+        #ifdef USE_FOG
         { float ff=1.-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth); gl_FragColor.rgb=mix(gl_FragColor.rgb,fogColor+uFogSun*pow(max(dot(normalize(vWP-cameraPosition),uSunDirW),0.),6.),ff); }
         #endif`).replace('#include <normal_fragment_maps>',`
         { float dn=length(vWP-cameraPosition), nk=1.-smoothstep(26.,64.,dn); if(nk>.01){ float e=.05; vec2 q=vWP.xz/9.; float h0=texture2D(uTile,q).g, hx=texture2D(uTile,q+vec2(e/9.,0.)).g, hz=texture2D(uTile,q+vec2(0.,e/9.)).g; vec3 wn=normalize(vWN+vec3(h0-hx,0.,h0-hz)*3.2*nk*(1.-uSnow*.9)); normal=normalize(mat3(viewMatrix)*wn); } }`).replace('#include <map_fragment>',`
@@ -460,6 +462,7 @@ function groundMaterial(){
           float lk=abs(uSeasonG-2.)<.5?1.:.3, lz=sp.r*(1.-smoothstep(.2,.6,sp.g))*smoothstep(.42,.64,t2.g+t3.r*.4)*lk, lf=max(smoothstep(.6,.64,b.b)*b.b,smoothstep(.74,.78,b2.b)*b2.b);
           c=mix(c,ramp(.3+lf*.6,uLeafRow),step(.1,lf)*lz*bk*.85); }
         c*=mix(1.,.55,wet);
+        if(uWet>.003){ gPud=smoothstep(.6,.65,t3.g*.6+t2.r*.4+sp.g*.16-.04)*(1.-steep)*(1.-smoothstep(50.,110.,gd))*smoothstep(.1,.9,uWet)*(1.-uSnow); c*=1.-.36*uWet; }
         c*=cloudShade(vWP.xz);
         if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.06)); }
         diffuseColor.rgb*=c;`);
@@ -484,7 +487,7 @@ export const setMirrorEvery=n=>{ mirrorEvery=n; };
 export const setMirrorFollow=on=>{ mirrorFollow=on; };
 let aboveWater=[];
 export const setUnderwater=on=>{ for(const o of aboveWater) o.visible=!on; };
-const waterU={ sunD:new THREE.Vector3(0,1,0), uSunC:{value:new THREE.Color()}, uShallow:{value:new THREE.Color()}, uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
+const waterU={ sunD:new THREE.Vector3(0,1,0), uSunC:{value:new THREE.Color()}, uShallow:{value:new THREE.Color()}, uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.07}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
 function shoreTex(){
   const S=512, d=new Uint8Array(S*S*4);
   for(let j=0;j<S;j++) for(let i=0;i<S;i++){ const x=(i+.5)/S*760-380, z=(j+.5)/S*460-50, f=lakeField(x,z), o=(j*S+i)*4; d[o]=clamp(f*16,0,1)*255; d[o+1]=clamp(f*3,0,1)*255; d[o+3]=255; }
@@ -492,7 +495,7 @@ function shoreTex(){
 }
 function buildLake(root,res){
   const shader={ name:'PaintedLake',
-    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.14},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null},uRain:{value:0},uSunD:{value:null},uSunC:{value:null},uShallow:{value:null},uGlow:{value:0},uCloud:{value:null},uCloudOff:{value:null},uCloudAmt:{value:0},uCloudTint:{value:null},uFogSun:{value:null} },
+    uniforms:{ color:{value:null}, tDiffuse:{value:null}, textureMatrix:{value:null}, uTint:{value:null},uGlint:{value:null},uGlintAmt:{value:1},uTimeW:{value:0},uShore:{value:null},uTintAmt:{value:.07},uFog:{value:null},uFogD:{value:.001},uNoise:{value:null},uRain:{value:0},uSunD:{value:null},uSunC:{value:null},uShallow:{value:null},uGlow:{value:0},uCloud:{value:null},uCloudOff:{value:null},uCloudAmt:{value:0},uCloudTint:{value:null},uFogSun:{value:null} },
     vertexShader:`uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW;
       void main(){ vUv=textureMatrix*vec4(position,1.); vW=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader:`precision highp float;
@@ -503,8 +506,8 @@ function buildLake(root,res){
       void main(){ vec2 p=vW.xz; float t=uTimeW; float d=length(cameraPosition-vW);
         vec4 s=texture2D(uShore,vec2((p.x+380.)/760.,(p.y+50.)/460.));
         float n=texture2D(uNoise,p*vec2(.006,.05)+vec2(t*.004,t*.0025)).b+texture2D(uNoise,p*vec2(.013,.11)-vec2(t*.006,0.)).b-1.;
-        vec4 uv=vUv; uv.x+=n*.012*uv.w; uv.y+=n*.026*uv.w;
-        vec3 c=texture2DProj(tDiffuse,uv).rgb;
+        vec4 uv=vUv; uv.x+=n*.006*uv.w; uv.y+=n*.015*uv.w;
+        vec3 c=texture2DProj(tDiffuse,uv).rgb*.9;
         vec3 vd=(vW-cameraPosition)/max(d,.001); vec3 rd=vec3(vd.x,-vd.y,vd.z);
         float fres=pow(1.-clamp(-vd.y,0.,1.),4.);
         c=mix(c,uTint,uTintAmt+.1*(1.-s.g)+(1.-fres)*.12);
@@ -807,7 +810,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   skyU.uMoonD.value.set(Math.cos(ma)*.75,Math.sin(ma)*.6+.12,.62).normalize();
   skyU.uSunD.value.copy(rig.sunDir);
   setC(skyU.uTop.value,P.top); setC(skyU.uMid.value,P.mid); setC(skyU.uLow.value,P.low); setC(skyU.uCL.value,P.cloudL); setC(skyU.uCS.value,P.cloudS); setC(skyU.uSunC.value,P.sun);
-  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.8:.56; if(cloudRT){ cloudU.uSunD.value.copy(P.night>.5?skyU.uMoonD.value:rig.sunDir); setC(cloudU.uSunC.value,mixc(mixc(P.sun,P.lit,.5),[1,.5,.16],(1-clamp(rig.sunDir.y/.42,0,1))*(1-P.night)*.72)); cloudU.uSunC.value.multiplyScalar(P.night>.5?.12:1); setC(cloudU.uAmb.value,mixc(mixc(P.cloudS,P.shade,.45),P.cloudL,.18+.62*clamp(rig.sunDir.y/.6,0,1))); setC(cloudU.uLow.value,mixc(P.low,P.cloudL,.3)); cloudU.uT.value=t; cloudU.uCov.value=weather==='rain'?.76:weather==='cloudy'?.62:.47; } skyU.uAurora.value=aurora?1:0;
+  skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.8:.56; if(cloudRT){ cloudU.uSunD.value.copy(P.night>.5?skyU.uMoonD.value:rig.sunDir); setC(cloudU.uSunC.value,mixc(mixc(P.sun,P.lit,.5),[1,.5,.16],(1-clamp(rig.sunDir.y/.42,0,1))*(1-P.night)*.72)); cloudU.uSunC.value.multiplyScalar(P.night>.5?.12:1); setC(cloudU.uAmb.value,mixc(mixc(P.cloudS,P.shade,.45),P.cloudL,.4+.56*clamp(rig.sunDir.y/.5,0,1))); setC(cloudU.uLow.value,mixc(P.low,P.cloudL,.3)); cloudU.uT.value=t; cloudU.uCov.value=weather==='rain'?.76:weather==='cloudy'?.62:.47; } skyU.uAurora.value=aurora?1:0;
   setC(mtU.uRS.value,P.rockS); setC(mtU.uRL.value,P.rockL); setC(mtU.uSS.value,P.snowS); setC(mtU.uSL.value,P.snowL); setC(mtU.uFS.value,P.forS); setC(mtU.uFL.value,P.forL); setC(mtU.uHz.value,P.haze);
   setC(mtU.uDS.value,mixc(P.forS,[.46,.2,.08],.55)); setC(mtU.uDL.value,mixc(P.forL,[.98,.66,.2],.7));
   setC(U.uShade.value,P.shade); setC(U.uLit.value,P.lit); setC(U.uFog.value,P.haze); U.uFogD.value=P.fog;

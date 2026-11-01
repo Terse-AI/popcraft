@@ -5,7 +5,7 @@ import { U, lakeField, WATER_Y, heightAt } from './scenery.js';
 
 const tau=Math.PI*2;
 let motes=null, leaves=null, leafD=[], flies=null, flyD=[], rings=[], dummy=new THREE.Object3D(), col=new THREE.Color(), active=true;
-const SEASONC=[[0xff6aa8,0xffb4d0,0xff4a90],[0xb8e850,0xe0f470,0x88d840],[0xff5a14,0xffa814,0xe02810],[0xffffff,0xffffff,0xffffff]];
+const SEASONC=[[0xe8a0b4,0xf4c8d0,0xd88098],[0x94a050,0xb4b468,0x6e8040],[0xd8602a,0xe8a040,0xb43c1e],[0xffffff,0xffffff,0xffffff]];
 
 function buildMotes(root){
   const N=220, g=new THREE.BufferGeometry(), P=new Float32Array(N*3), A=new Float32Array(N); for(let i=0;i<N;i++){ P.set([Math.random()*30,Math.random()*9,Math.random()*30],i*3); A[i]=Math.random(); }
