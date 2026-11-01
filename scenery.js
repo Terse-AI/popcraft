@@ -229,7 +229,7 @@ function buildSky(root){
         { vec2 ha=normalize(d.xz+1e-4), hs=normalize(uSunD.xz+1e-4); float low=1.-smoothstep(.04,.62,uSunD.y); c+=uSunC*above*low*.3*pow(max(dot(ha,hs)*.5+.5,0.),5.)*exp(-h*7.); }
         float cv=asin(h)/1.5708/.42; vec2 uv=vec2(az/6.28318*3.+uTime*.00028,clamp(cv,0.,1.)); vec3 t=texture2D(uClouds,uv).rgb;
         float cTop=1.-smoothstep(.8,.98,cv), e=mix(.8,.44,uCover), m=smoothstep(e,e+.01,t.g)*cTop, sm=smoothstep(e-.02,e+.16,t.b)*.72*cTop;   // the painted clouds end before the zenith, or their top row smears into streaks
-        vec3 cc=mix(uCS,uCL,t.r); float toSun=pow(max(dot(d,uSunD),0.),5.)*above, rim=smoothstep(e,e+.05,t.g)*(1.-smoothstep(e+.05,e+.26,t.g)); cc=mix(cc,uCS*.72,toSun*.7); cc+=uSunC*rim*toSun*.95; if(uVCOn>.5){ vec4 vc=texture2D(uVC,vec2(az/6.28318,sqrt(h))); c=c*(1.-vc.a)+vc.rgb; } else { c=mix(c,mix(uCS,uCL,.56),sm*(1.-m)); c=mix(c,cc,m); }
+        vec3 cc=mix(uCS,uCL,t.r); float toSun=pow(max(dot(d,uSunD),0.),5.)*above, rim=smoothstep(e,e+.05,t.g)*(1.-smoothstep(e+.05,e+.26,t.g)); cc=mix(cc,uCS*.72,toSun*.7); cc+=uSunC*rim*toSun*.95; if(uVCOn>.5){ vec2 u=vec2(az/6.28318,sqrt(h)), tx=vec2(1.5/1440.,1.5/440.); vec4 vc=(texture2D(uVC,u+tx*vec2(1.,.4))+texture2D(uVC,u+tx*vec2(-1.,-.4))+texture2D(uVC,u+tx*vec2(-.4,1.))+texture2D(uVC,u+tx*vec2(.4,-1.)))*.25; c=c*(1.-vc.a)+vc.rgb; } else { c=mix(c,mix(uCS,uCL,.56),sm*(1.-m)); c=mix(c,cc,m); }
         c=mix(c,uLow,smoothstep(.05,.0,h)*.7);
         gl_FragColor=vec4(c,1.); }` });
   const dome=new THREE.Mesh(new THREE.SphereGeometry(10,32,20),m); dome.frustumCulled=false; dome.renderOrder=-100; root.add(dome);
