@@ -80,14 +80,14 @@ function fern(seed){ const r=rng(seed), m=new Mesh3(), a0=ATLAS.frond_a, n=14;
 
 /* a clump of tapered blades, y up to 1: vertex colour is computed in the shader from height */
 function bladeClump(seed,count,spread,curl,heads=false,wide=1){
-  const r=rng(seed), P=[], W=[], I=[];
+  const r=rng(seed), P=[], W=[], I=[], A=[];
   for(let b=0;b<count;b++){ const a=r()*tau, bx=Math.cos(a)*r()*spread, bz=Math.sin(a)*r()*spread, h=.55+r()*.45, lean=(.1+r()*curl)*h, da=a+(r()-.5)*1.6, lx=Math.cos(da), lz=Math.sin(da), w=(.03+r()*.018)*wide, px=-lz, pz=lx, base=P.length/3, segs=3, ph=r();
-    for(let k=0;k<segs;k++){ const s=k/segs, ww=w*(1-s*.75), x=bx+lx*lean*s*s, z=bz+lz*lean*s*s, y=h*s*(1-.1*s*curl); P.push(x-px*ww,y,z-pz*ww, x+px*ww,y,z+pz*ww); W.push(s,ph,r(), s,ph,r()); }
-    P.push(bx+lx*lean,h*(1-.1*curl),bz+lz*lean); W.push(1,ph,r());
+    for(let k=0;k<segs;k++){ const s=k/segs, ww=w*(1-s*.75), x=bx+lx*lean*s*s, z=bz+lz*lean*s*s, y=h*s*(1-.1*s*curl); P.push(x-px*ww,y,z-pz*ww, x+px*ww,y,z+pz*ww); W.push(s,ph,r(), s,ph,r()); A.push(-1,1); }
+    P.push(bx+lx*lean,h*(1-.1*curl),bz+lz*lean); W.push(1,ph,r()); A.push(0);
     for(let k=0;k<segs-1;k++){ const q=base+k*2; I.push(q,q+1,q+3,q,q+3,q+2); }
     const q=base+(segs-1)*2; I.push(q,q+1,q+2);
-    if(heads&&r()<.5){ const hb=P.length/3, tx=bx+lx*lean, ty=h*.98, tz=bz+lz*lean; [[-.02,0],[.02,0],[.02,.14],[-.02,.14]].forEach(([dx,dy])=>{ P.push(tx+dx,ty+dy-.1,tz); W.push(-1,ph,0); }); I.push(hb,hb+1,hb+2,hb,hb+2,hb+3); } }
-  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('aBlade',new THREE.Float32BufferAttribute(W,3)); g.setIndex(I); return g;
+    if(heads&&r()<.5){ const hb=P.length/3, tx=bx+lx*lean, ty=h*.98, tz=bz+lz*lean; [[-.02,0],[.02,0],[.02,.14],[-.02,.14]].forEach(([dx,dy])=>{ P.push(tx+dx,ty+dy-.1,tz); W.push(-1,ph,0); A.push(0); }); I.push(hb,hb+1,hb+2,hb,hb+2,hb+3); } }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('aBlade',new THREE.Float32BufferAttribute(W,3)); g.setAttribute('aSide',new THREE.Float32BufferAttribute(A,1)); g.setIndex(I); return g;
 }
 
 /* ---------- shared GLSL ---------- */
@@ -131,7 +131,7 @@ function floraMaterial(depth,plantsR,leafy){
           c=ramp(v,vRow);
           if(uSnow>.01) c=mix(c,ramp(.45+v*.6,uIceRow),uSnow*smoothstep(.1,.6,t.b)*smoothstep(-.3,.35,normalize(vN).y));
           c*=mix(uShade,uLit,smoothstep(.08,.7,v));
-          float back=pow(max(dot(vV,uSunDirW),0.),4.); c=mix(c,ramp(v+.3,vRow)*uLit*1.7,min(1.,back*uGlow*1.6)*(.26+.74*vShade)); }           // sun through the leaves
+          float back=pow(max(dot(vV,uSunDirW),0.),4.); c=mix(c,ramp(v+.3,vRow)*uLit*1.7,min(1.,back*uGlow*1.6)*(.26+.74*vShade)); c+=ramp(v+.2,vRow)*uLit*pow(1.-abs(dot(normalize(vN),vV)),3.)*.1; }           // sun through the leaves
         c*=cloudShade(vP);
         c=mix(c,uFog+uFogSun*pow(max(dot(vV,uSunDirW),0.),6.),vFog);
         gl_FragColor=vec4(c,a); }` });
@@ -139,14 +139,14 @@ function floraMaterial(depth,plantsR,leafy){
 
 /* Lambert blades: they take the same light and shadows as the ground they grow from */
 const BLADE_COMMON=`uniform sampler2D uRamps; uniform float uSnow,uGroundRow,uTuftRow,uSpan,uGlow,uSeason,uWet; uniform vec4 uPush,uPush2; uniform vec3 uSunDirW; ${WIND} ${RAMP_GLSL}
-  varying vec3 vCol; varying vec2 vG; varying float vBack;
+  varying vec3 vCol,vSD; varying vec2 vG; varying float vBack,vSide,vTip;
   vec2 pushAway(vec2 g,float s,inout float sink){ vec2 o=vec2(0.); for(int i=0;i<2;i++){ vec4 P=i==0?uPush:uPush2; vec2 d=g-P.xy; float l=length(d), k=1.-smoothstep(.15,P.z,l); o+=d/max(l,.01)*k*.46*s; sink+=k*.3; } return o; }`;
 function bladeMaterial(kind){
   const m=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
   m.defines={ ...(m.defines||{}), [kind]:1 };
   m.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,WIND_U(),{ uRamps:U.uRamps, uSnow:U.uSnow, uGroundRow:{value:rowV('ground')}, uTuftRow:{value:rowV('tuft')}, uSpan:{value:bladeSpan}, uPush:U.uPush, uPush2:U.uPush2, uSunDirW:U.uSunDirW, uGlow:U.uGlow, uSeason:U.uSeason, uWet:U.uWet, uLitC:U.uLit, uCloud:U.uCloud, uCloudOff:U.uCloudOff, uCloudAmt:U.uCloudAmt, uCloudTint:U.uCloudTint });
-    sh.vertexShader=`attribute vec3 aBlade; attribute vec4 iA; attribute vec4 iB; attribute vec3 aCol; attribute float aSeason;\n${BLADE_COMMON}\n`+sh.vertexShader
+    sh.vertexShader=`attribute float aSide; attribute vec3 aBlade; attribute vec4 iA; attribute vec4 iB; attribute vec3 aCol; attribute float aSeason;\n${BLADE_COMMON}\n`+sh.vertexShader
      .replace('#include <beginnormal_vertex>',kind==='DECO'?'vec3 objectNormal=normal;':'vec3 objectNormal=normalize(vec3(sin(iB.x*3.+aBlade.y*9.)*.72,1.,cos(iB.x*2.+aBlade.y*7.)*.72));')
      .replace('#include <begin_vertex>',`
       float s=max(aBlade.x,0.); vec2 g; float h, size, rot=0.;
@@ -174,10 +174,10 @@ function bladeMaterial(kind){
       #else
        vCol=aBlade.x<0.?vec3(.05,.03,.02):ramp(.2+s*.62+aBlade.z*.16+iB.y,uTuftRow)*(.42+.82*s)*1.2;
       #endif
-      vCol*=1.-.2*uWet;
+      vCol*=1.-.2*uWet; vSide=aSide; vTip=s; { float ba=rot+aBlade.y*6.283; vSD=mat3(viewMatrix)*vec3(cos(ba),0.,sin(ba)); }
     `);
-    let f=`varying vec3 vCol; varying vec2 vG; varying float vBack; uniform vec3 uLitC; ${CLOUD_GLSL}\n`+sh.fragmentShader.replace('#include <map_fragment>','diffuseColor.rgb*=vCol*cloudShade(vG);').replace('#include <opaque_fragment>','outgoingLight+=vCol*uLitC*vBack;\n#include <opaque_fragment>');
-    if(kind!=='DECO') f=f.replace('#include <normal_fragment_begin>','vec3 normal=normalize(vNormal);');
+    let f=`varying vec3 vCol,vSD; varying vec2 vG; varying float vBack,vSide,vTip; uniform vec3 uLitC,uSunDirW; uniform float uWet; ${CLOUD_GLSL}\n`+sh.fragmentShader.replace('#include <map_fragment>','{ float rib=exp(-vSide*vSide*34.); diffuseColor.rgb*=vCol*cloudShade(vG)*(.9+.26*rib+.07*sin(vSide*11.)); }').replace('#include <opaque_fragment>','outgoingLight+=vCol*uLitC*vBack;\n{ vec3 sv=normalize((viewMatrix*vec4(uSunDirW,0.)).xyz), hv=normalize(sv+normalize(vViewPosition)); outgoingLight+=uLitC*vTip*vTip*pow(max(dot(normal,hv),0.),28.)*(.16+.5*uWet); }\n#include <opaque_fragment>');
+    if(kind!=='DECO') f=f.replace('#include <normal_fragment_begin>','vec3 normal=normalize(vNormal+vSD*vSide*.75);');
     sh.fragmentShader=f;
   };
   return m;
@@ -245,7 +245,7 @@ function bakeChunk(ci,cj){
 }
 const sstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
 function makeChunk(i,j,old){
-  const b=bakeChunk(i,j), cx=(i+.5)*CH, cz=(j+.5)*CH, g=new THREE.InstancedBufferGeometry(); g.index=carpetBase.index; g.setAttribute('position',carpetBase.attributes.position); g.setAttribute('aBlade',carpetBase.attributes.aBlade);
+  const b=bakeChunk(i,j), cx=(i+.5)*CH, cz=(j+.5)*CH, g=new THREE.InstancedBufferGeometry(); g.index=carpetBase.index; g.setAttribute('position',carpetBase.attributes.position); g.setAttribute('aBlade',carpetBase.attributes.aBlade); g.setAttribute('aSide',carpetBase.attributes.aSide);
   g.setAttribute('iA',new THREE.InstancedBufferAttribute(b.A,4)); g.setAttribute('iB',new THREE.InstancedBufferAttribute(b.B,4)); g.instanceCount=b.n; const y=heightAt(cx,cz); g.boundingSphere=new THREE.Sphere(new THREE.Vector3(cx,y,cz),CH*.78+Math.abs(y)*.2+2);
   const o=new THREE.Mesh(g,carpetMat); o.layers.set(1); o.receiveShadow=true; chunkRoot.add(o);
   const dg=new THREE.BufferGeometry(); let dm=null;

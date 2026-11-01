@@ -216,7 +216,7 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, obstacles, reskinTrees, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setMirrorFollow, cloudTick, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
+  collide, addObstacle, addBoxObstacle, obstacles, reskinTrees, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setMirrorFollow, cloudTick, cloudNoiseTex, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
 import { setupFlora, updateFlora, refreshFlora, bakeFar } from './flora.js';
 import { buildDesert, DESERT } from './desert.js';
@@ -885,22 +885,22 @@ let composer=null, gradeFx=null, lastRig=null;
 // the hour's three-colour key: every value in the frame is pulled toward it, so the picture stays in one harmony
 /* real shafts of light: a short march along each view ray at a fraction of the resolution, testing the sun's shadow map as it goes, so light falls between trunks and around roofs. What stands in open air is held back, so the picture stays crisp and only the beams read */
 class VolPass extends Pass {
-  constructor(cam){ super('VolPass'); this.cam=cam; this.needsSwap=false; this.needsDepthTexture=true; this.den=0; this.frame=0; this.rt=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType,depthBuffer:false}); this.rt.texture.minFilter=this.rt.texture.magFilter=THREE.LinearFilter;
-    this.fullscreenMaterial=new THREE.ShaderMaterial({ depthTest:false, depthWrite:false, uniforms:{ tDepth:{value:null}, tShadow:{value:null}, uInv:{value:new THREE.Matrix4()}, uShadow:{value:new THREE.Matrix4()}, uCam:{value:new THREE.Vector3()}, uSun:{value:new THREE.Vector3(0,1,0)}, uCol:{value:new THREE.Color()}, uDen:{value:0}, uJ:{value:0} },
+  constructor(cam){ super('VolPass'); this.cam=cam; this.needsSwap=false; this.needsDepthTexture=true; this.den=0; this.mist=0; this.mistH=8; this.col=new THREE.Color(); this.frame=0; this.rt=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType,depthBuffer:false}); this.rt.texture.minFilter=this.rt.texture.magFilter=THREE.LinearFilter;
+    this.fullscreenMaterial=new THREE.ShaderMaterial({ depthTest:false, depthWrite:false, uniforms:{ tDepth:{value:null}, tShadow:{value:null}, uInv:{value:new THREE.Matrix4()}, uShadow:{value:new THREE.Matrix4()}, uCam:{value:new THREE.Vector3()}, uSun:{value:new THREE.Vector3(0,1,0)}, uCol:{value:new THREE.Color()}, uDen:{value:0}, uJ:{value:0}, tN:{value:null}, uMist:{value:0}, uMistH:{value:8}, uT:{value:0} },
       vertexShader:`varying vec2 vUv; void main(){ vUv=position.xy*.5+.5; gl_Position=vec4(position.xy,1.,1.); }`,
-      fragmentShader:`precision highp float; varying vec2 vUv; uniform sampler2D tDepth,tShadow; uniform mat4 uInv,uShadow; uniform vec3 uCam,uSun,uCol; uniform float uDen,uJ;
+      fragmentShader:`precision highp float; varying vec2 vUv; uniform sampler2D tDepth,tShadow,tN; uniform mat4 uInv,uShadow; uniform vec3 uCam,uSun,uCol; uniform float uDen,uJ,uMist,uMistH,uT;
         #include <packing>
         float ign(vec2 p){ return fract(52.9829189*fract(dot(p,vec2(.06711056,.00583715)))); }
-        void main(){ vec4 w=uInv*vec4(vUv*2.-1.,texture2D(tDepth,vUv).r*2.-1.,1.); w/=w.w; vec3 v=w.xyz-uCam; float L=length(v), dist=min(L,64.); vec3 rd=v/L; float st=dist/11., j=ign(gl_FragCoord.xy+uJ), lit=0., all_=0.;
-          for(int i=0;i<11;i++){ vec3 p=uCam+rd*st*(float(i)+j); float air=exp(-max(p.y,0.)*.075); all_+=air; vec4 q=uShadow*vec4(p,1.); if(q.x>0.&&q.x<1.&&q.y>0.&&q.y<1.&&q.z<1.){ if(unpackRGBAToDepth(texture2D(tShadow,q.xy))>q.z-.0016) lit+=air; } else lit+=air; }
-          float mu=dot(rd,uSun), g=.55, ph=(1.-g*g)/pow(1.+g*g-2.*g*mu,1.5)*.13+.06, beam=max(lit-all_*.55,0.); gl_FragColor=vec4(uCol*beam*st*uDen*ph,1.); }` }); }
+        void main(){ vec4 w=uInv*vec4(vUv*2.-1.,texture2D(tDepth,vUv).r*2.-1.,1.); w/=w.w; vec3 v=w.xyz-uCam; float L=length(v), dist=min(L,64.); vec3 rd=v/L; float st=dist/11., j=ign(gl_FragCoord.xy+uJ), lit=0., all_=0., fog=0., fogL=0.;
+          for(int i=0;i<11;i++){ vec3 p=uCam+rd*st*(float(i)+j); float air=exp(-max(p.y,0.)*.075); all_+=air; vec4 q=uShadow*vec4(p,1.); bool open=true; if(q.x>0.&&q.x<1.&&q.y>0.&&q.y<1.&&q.z<1.){ open=unpackRGBAToDepth(texture2D(tShadow,q.xy))>q.z-.0016; } if(open) lit+=air; float hk=1.-smoothstep(uMistH*.3,uMistH,p.y); if(hk>.001&&uMist>.0001){ vec2 nq=p.xz*.019+vec2(uT*.0075,uT*.005); float n=texture2D(tN,nq).r*.72+texture2D(tN,nq*3.7+.2).g*.28, m=max(n-.44,0.)*3.*hk; fog+=m; if(open) fogL+=m; } }
+          float mu=dot(rd,uSun), g=.55, ph=(1.-g*g)/pow(1.+g*g-2.*g*mu,1.5)*.13+.06, beam=max(lit-all_*.55,0.), tr=exp(-fog*st*uMist), sh=fog>.001?fogL/fog:1.; gl_FragColor=vec4(uCol*(beam*st*uDen*ph+sh*(1.-tr)*ph*.1),1.-tr); }` }); }
   setDepthTexture(t){ this.fullscreenMaterial.uniforms.tDepth.value=t; }
   setSize(w,h){ this.rt.setSize(Math.max(2,Math.round(w*.42)),Math.max(2,Math.round(h*.42))); }
-  render(r){ const u=this.fullscreenMaterial.uniforms, map=sun.shadow.map; if(!map||this.den<=.0001){ r.setRenderTarget(this.rt); r.clear(); return; } const c=this.cam; u.tShadow.value=map.texture; u.uShadow.value.copy(sun.shadow.matrix); u.uInv.value.multiplyMatrices(c.matrixWorld,c.projectionMatrixInverse); u.uCam.value.copy(c.position); u.uSun.value.copy(sunDirL); u.uDen.value=this.den; u.uJ.value=(this.frame++%16)*5.588; r.setRenderTarget(this.rt); r.render(this.scene,this.camera); }
+  render(r){ const u=this.fullscreenMaterial.uniforms, map=sun.shadow.map; if(!map||(this.den<=.0001&&this.mist<=.0001)){ const a=r.getClearAlpha(); r.setClearAlpha(0); r.setRenderTarget(this.rt); r.clear(); r.setClearAlpha(a); return; } const c=this.cam; u.tShadow.value=map.texture; u.uShadow.value.copy(sun.shadow.matrix); u.uInv.value.multiplyMatrices(c.matrixWorld,c.projectionMatrixInverse); u.uCam.value.copy(c.position); u.uSun.value.copy(sunDirL); u.uDen.value=this.den; u.uCol.value.copy(this.col); u.tN.value=cloudNoiseTex(); u.uMist.value=this.mist; u.uMistH.value=this.mistH; u.uT.value=performance.now()*.001; u.uJ.value=(this.frame++%16)*5.588; r.setRenderTarget(this.rt); r.render(this.scene,this.camera); }
 }
 class HourGrade extends Effect {
   constructor(){ super('HourGrade',
-    `uniform vec3 gS,gM,gH,uTint,uSunC; uniform float amt,flash,uLine,uT,uShaft,uAsp,uAO,uSharp; uniform vec2 uSunP; uniform sampler2D tUnder,tVol; uniform float uVolOn,uRainK,uNightK,uLock; uniform vec3 uRainC;
+    `uniform vec3 gS,gM,gH,uTint,uSunC; uniform float amt,flash,uLine,uT,uShaft,uAsp,uAO,uSharp; uniform vec2 uSunP; uniform sampler2D tUnder,tVol; uniform float uVolOn,uRainK,uNightK,uLock; uniform vec3 uRainC,uMistC;
      float ign(vec2 p){ return fract(52.9829189*fract(dot(p,vec2(.06711056,.00583715)))); }
      float zlin(float d){ return cameraNear*cameraFar/(cameraFar-d*(cameraFar-cameraNear)); }
      // contact shade: a few depth taps around each pixel, so things sit on the ground and boughs hold shadow between them
@@ -915,20 +915,21 @@ class HourGrade extends Effect {
        float l=dot(col,vec3(0.2126,0.7152,0.0722));
        vec3 g=l<0.5?mix(s,m,l*2.0):mix(m,h,(l-0.5)*2.0);
        col=mix(col,g+(col-vec3(l))*1.05,amt); col=mix(col,g,uLock);
-       { float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)), lv=dot(col,vec3(.2126,.7152,.0722)); col=mix(vec3(lv),col,1.+.34*(1.-clamp(mx-mn,0.,1.))-uNightK*.5); }
+       { float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)), lv=dot(col,vec3(.2126,.7152,.0722)); col=mix(vec3(lv),col,1.+.34*(1.-clamp(mx-mn,0.,1.))-uNightK*.72); }
+       if(uNightK>.01) col=pow(max(col,vec3(0.)),vec3(1.-uNightK*.2));
        col=clamp(col,0.0,1.0); col=mix(col,col*col*(3.0-2.0*col),0.46+uNightK*.34);
        if(uRainK>.001&&uv.y>=ln){ float z=depth>=.99999?420.:zlin(depth), cur=.74+.26*sin(uv.x*23.+uT*.6+sin(uv.x*8.-uT*.27)*2.2)*(.62+.38*sin(uv.y*6.+uT*3.)); col=mix(col,pow(uRainC,vec3(1.0/2.2)),clamp((1.-exp(-z*.017))*uRainK*cur,0.,.84)); }
        if(uShaft>.001&&uv.y>=ln){ vec2 dl=uSunP-uv; float r=length(dl*vec2(uAsp,1.));              // light falling through the trees and over the ridges, stopped by whatever stands in the way
          if(r<1.5){ float j=ign(gl_FragCoord.xy), occ=0.; for(int i=0;i<10;i++){ vec2 q=clamp(uv+dl*(float(i)+j)/10.,vec2(.001),vec2(.999)); occ+=step(.9999995,readDepth(q)); } occ/=10.;
            vec3 sc=pow(uSunC,vec3(1.0/2.2)); float a=occ*(exp(-r*3.)*.2+exp(-r*r*18.)*.5)*uShaft; col=1.-(1.-col)*(1.-sc*clamp(a,0.,.95)); } }
-       if(uVolOn>.5){ vec2 tx=texelSize*2.2; vec3 v=(texture2D(tVol,uv).rgb*2.+texture2D(tVol,uv+tx).rgb+texture2D(tVol,uv-tx).rgb+texture2D(tVol,uv+vec2(tx.x,-tx.y)).rgb+texture2D(tVol,uv+vec2(-tx.x,tx.y)).rgb)/6.; v=pow(clamp(v,0.,.5),vec3(1.0/2.2)); if(uv.y>=ln) col=1.-(1.-col)*(1.-v); }
+       if(uVolOn>.5){ vec2 tx=texelSize*2.2; vec4 vm=(texture2D(tVol,uv)*2.+texture2D(tVol,uv+tx)+texture2D(tVol,uv-tx)+texture2D(tVol,uv+vec2(tx.x,-tx.y))+texture2D(tVol,uv+vec2(-tx.x,tx.y)))/6.; vec3 v=pow(clamp(vm.rgb,0.,.5),vec3(1.0/2.2)); if(uv.y>=ln){ col=mix(col,pow(uMistC,vec3(1.0/2.2)),clamp(vm.a,0.,.86)); col=1.-(1.-col)*(1.-v); } }
        if(uShaft>.001&&uSunP.x>-.2&&uSunP.x<1.2&&uSunP.y>-.2&&uSunP.y<1.2){ float sv=step(.9999995,readDepth(clamp(uSunP,vec2(.001),vec2(.999)))); vec2 q=(uv-uSunP)*vec2(uAsp,1.); vec2 g2=(uv-(vec2(1.)-uSunP))*vec2(uAsp,1.); float gr=length(g2); col+=pow(uSunC,vec3(1.0/2.2))*sv*uShaft*(exp(-abs(q.y)*46.)*exp(-abs(q.x)*2.1)*.2+smoothstep(.2,.17,gr)*smoothstep(.1,.18,gr)*.035); }
        float d=distance(uv,vec2(0.5)); col*=1.0-d*d*0.54;
        if(uLine>.01){ float e=smoothstep(.0035,.0,abs(uv.y-ln)); col=mix(col,vec3(.96,.98,1.),e*.85); }
        col+=flash*.42;
        o=vec4(pow(col,vec3(2.2)),c.a);
      }`,
-    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)],['tVol',new THREE.Uniform(null)],['uVolOn',new THREE.Uniform(0)],['uRainK',new THREE.Uniform(0)],['uNightK',new THREE.Uniform(0)],['uLock',new THREE.Uniform(0)],['uRainC',new THREE.Uniform(new THREE.Color())]]) }); }
+    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)],['tVol',new THREE.Uniform(null)],['uVolOn',new THREE.Uniform(0)],['uRainK',new THREE.Uniform(0)],['uNightK',new THREE.Uniform(0)],['uLock',new THREE.Uniform(0)],['uRainC',new THREE.Uniform(new THREE.Color())],['uMistC',new THREE.Uniform(new THREE.Color())]]) }); }
 }
 let QUAL = (()=>{ try{ return sessionStorage.getItem('sv_safe')?'med':'high'; }catch(e){ return 'high'; } })();   // every visit opens at the best picture; the quality button lasts for that visit only, and a lost graphics context steps down for that visit
 try{ localStorage.removeItem('sv_qual2'); }catch(e){}
@@ -1124,8 +1125,8 @@ function animateWalk(dt){
 }
 const sunDirL=new THREE.Vector3(0,1,0), sunWant=new THREE.Vector3(), sunFix=new THREE.Vector3(), lightX=new THREE.Vector3(), lightY=new THREE.Vector3(), UP3=new THREE.Vector3(0,1,0), sunNdc=new THREE.Vector3(), camFwd=new THREE.Vector3();
 function dayNight(t,dt){
-  if(S.inMine||S.inHouse){ if(gradeFx){ gradeFx.uniforms.get('uShaft').value=0; gradeFx.uniforms.get('uVolOn').value=0; gradeFx.uniforms.get('uRainK').value=0; gradeFx.uniforms.get('uLock').value=0; gradeFx.uniforms.get('uNightK').value=0; } if(volPass) volPass.den=0; return; }     // the mine keeps its own dark lighting
-  const R=updateScenery(t,dt,S.time,S.weather,camera,player,S.day%9===4); lastRig=R;
+  if(S.inMine||S.inHouse){ if(gradeFx){ gradeFx.uniforms.get('uShaft').value=0; gradeFx.uniforms.get('uVolOn').value=0; gradeFx.uniforms.get('uRainK').value=0; gradeFx.uniforms.get('uLock').value=0; gradeFx.uniforms.get('uNightK').value=0; } if(volPass){ volPass.den=0; volPass.mist=0; } return; }     // the mine keeps its own dark lighting
+  const R=updateScenery(t,dt,S.time,S.weather,camera,player,S.season>=2?S.day%3===1:S.day%9===4); lastRig=R;
   // long low shadows at the ends of the day. The light only turns in small steps and its frustum snaps to whole shadow texels, so edges stay still as you walk
   sunWant.copy(R.sunDir); sunWant.y=Math.max(sunWant.y,.25); sunWant.normalize(); if(sunWant.distanceToSquared(sunDirL)>.00002) sunDirL.copy(sunWant);
   lightX.crossVectors(sunDirL,UP3).normalize(); lightY.crossVectors(lightX,sunDirL).normalize();
@@ -1139,7 +1140,7 @@ function dayNight(t,dt){
   if(jellyOn) updateJellies(t);
   if(gradeFx){ const u=gradeFx.uniforms; u.get('gS').value.copy(R.gS); u.get('gM').value.copy(R.gM); u.get('gH').value.copy(R.gH); u.get('amt').value=R.gAmt; u.get('flash').value=flash; u.get('tUnder').value=underRT.texture; u.get('uTint').value.copy(R.water); u.get('uT').value=t;
     camera.getWorldDirection(camFwd); const facing=camFwd.dot(R.sunDir); sunNdc.copy(camera.position).addScaledVector(R.sunDir,3000).project(camera); u.get('uSunP').value.set(sunNdc.x*.5+.5,sunNdc.y*.5+.5); u.get('uAsp').value=camera.aspect; u.get('uSunC').value.copy(R.sunC);
-    u.get('uShaft').value=R.shaft*clamp(facing*2.6,0,1)*clamp(1.25-R.sunDir.y*1.1,.3,1); const vol=volPass&&govStep<2; u.get('uVolOn').value=vol?1:0; if(volPass) volPass.den=vol?R.vol*.011:0; u.get('uRainK').value=weather?weather.veil():0; u.get('uRainC').value.copy(R.fogCol); u.get('uNightK').value=R.night; u.get('uLock').value=R.lock; }
+    u.get('uShaft').value=R.shaft*clamp(facing*2.6,0,1)*clamp(1.25-R.sunDir.y*1.1,.3,1); const vol=volPass&&govStep<2; u.get('uVolOn').value=vol?1:0; if(volPass){ volPass.den=vol?R.vol*.011:0; volPass.mist=vol?R.mistK*.1:0; volPass.mistH=R.rain?15:8; volPass.col.copy(R.sunC); } u.get('uMistC').value.copy(R.mistC); u.get('uRainK').value=weather?weather.veil():0; u.get('uRainC').value.copy(R.fogCol); u.get('uNightK').value=R.night; u.get('uLock').value=R.lock; }
 }
 let promptEl=null, promptTxt='';
 function hintProximity(){ let txt=''; if(S.inHouse){ const sp=house.userData.spots, p=player.pos, n=q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9; txt=n(sp.door)?L('E 出门','E go outside'):n(sp.bed)?L('E 睡觉','E sleep'):n(sp.tv)?L('E 看电视','E watch TV'):n(sp.stove)?L('E 烹饪','E cook'):n(sp.fridge)?L('E 冰箱','E icebox'):nearKid()?'E '+nearKid().k.nm:S.heldFur?L('左键摆放 · R 旋转','Click to place · R to turn'):G.nearDecor()?L('E 整理家具','E move this'):''; }

@@ -102,7 +102,7 @@ const N=['mistAmt','gAmt','sunI','ambI','glint','fog','night','lock'];   // lock
 const KEYS=[
  // colours sampled from Cast n Chill's own screens, one scene to each hour: a muted body, deep cool shadow, and the heat kept to a few places
  //  t    sky top    mid       low       cloudL    cloudS    sun       rockS     rockL     snowS     snowL     forS      forL      haze      mist      water     shade     lit       gradS     gradM     gradH      mist grade sun  amb  glint fog     night
- [ 360,'#3c2470','#a4568a','#f0a48c','#f8c0b0','#642e58','#fff0d0','#34184a','#8a4c6a','#74406a','#f2b4a8','#1e0e3a','#5e2a58','#8e4e72','#a86a90','#54305e','#241436','#f4b49c','#120826','#5c2e58','#f4c0ac', .05,.34,2.0,.66,1.1,.0005,.0, .42],
+ [ 360,'#3c2470','#a4568a','#f0a48c','#f8c0b0','#642e58','#fff0d0','#301448','#964e7c','#74406a','#f2b4a8','#1e0e3a','#6a2a64','#8e4e72','#a86a90','#54305e','#241436','#f4b49c','#140626','#682a68','#f8b89c', .05,.38,2.0,.66,1.1,.0005,.0, .54],
  [ 460,'#7fa0d4','#b4c6e0','#e8e0d4','#fbf6ea','#94a0b4','#fff4d8','#4e5a6a','#a4b8d0','#94a0ae','#eef2f6','#20241a','#7e6e48','#b4c0d0','#c8d0dc','#94a4b4','#44402e','#fff0d0','#14130c','#7a7054','#ecece4', .24,.28,2.7,.84,1.,.0006,.0, 0.06],
  [ 600,'#5e8cc8','#a0c0e0','#dce8f2','#fdf8ec','#a0acc4','#fff8e4','#4c6086','#8ca6c8','#88a4c8','#f4f6f8','#141e18','#4e6a3e','#a8c0dc','#d0e0f0','#54789c','#2c3e48','#fff2d4','#0c0e0a','#566a64','#f4f4ec', .05,.28,3.1,.8,.9,.0005,.0, 0],
  [ 780,'#4f80c4','#84b0de','#cfe2f0','#fffbf0','#a4b0c8','#ffffee','#4c6086','#98b0cc','#8ca8cc','#f8f8f8','#121e16','#4a6e3c','#9cbcdc','#c4dcee','#4a7098','#2c3e48','#fff4d8','#0a0e08','#566a64','#f8f6ea', .04,.28,3.3,.78,.9,.0004,.0, 0],
@@ -110,9 +110,9 @@ const KEYS=[
  [1050,'#46648c','#8e8e8c','#f4d488','#f8e0a4','#425a78','#fff0b0','#344c68','#c4a474','#747674','#f0d890','#2c2214','#a0822c','#c0a06c','#dcc088','#4c5e70','#2c2214','#ffd890','#140f08','#7a6a4c','#f8e0a0', .08,.32,3.1,.72,1.15,.0006,.0, 0.04],
  [1130,'#a85a58','#e08a5c','#f4c47c','#f8cc94','#984e50','#fff0b8','#6a2c28','#d48a68','#a06858','#f4c8a0','#2a0e12','#b83a1c','#c88a6c','#d8986c','#7a4a3c','#30182a','#ffb468','#14060c','#8e4028','#f8d090', .08,.34,3.1,.64,1.3,.0004,.0, 0.12],
  [1200,'#e088ac','#f4a4bc','#f8c4bc','#fbd4cc','#b090bc','#ffe8d0','#262a48','#585a94','#585a94','#c0a0c8','#1c1c26','#3c3a64','#9c86a8','#b49ac4','#4a4670','#222a48','#f8bcc0','#101224','#544674','#f8ccd0', .12,.34,1.7,.66,1.,.0008,.1, 0.22],
- [1275,'#2c2e7c','#5054a4','#a07cb4','#8c7cbc','#30306c','#ffd0c0','#1a1e54','#4e56a8','#3a3460','#a09cc4','#0c0e38','#262a64','#464684','#605490','#28306c','#161c58','#b4a8e0','#0a0a2c','#3e3a7a','#bcb0e4', .12,.36,.9,.84,.85,.0008,.55, .34],
- [1380,'#3444a0','#4c5cb0','#7476b8','#7c80bc','#262c70','#f4f0dc','#20285e','#5a68b4','#3c4674','#b4c0e8','#10143c','#2c3468','#2a3474','#46508c','#28347c','#161e58','#b8c8f8','#0a0e30','#3e48a0','#e8ecff', .1,.34,.95,1.2,.95,.0007,1, .44],
- [1560,'#2c3c94','#4454a8','#6a6cb0','#7076b4','#222868','#f4f0dc','#1c2458','#505eac','#36406c','#a8b4e0','#0e1236','#283060','#262e6c','#404a84','#242e74','#141a50','#acbcf0','#080c2a','#38429a','#dce2fc', .1,.34,.9,1.15,.95,.0007,1, .44]
+ [1320,'#2c2e7c','#5054a4','#a07cb4','#8c7cbc','#30306c','#ffd0c0','#1a1e54','#4e56a8','#3a3460','#a09cc4','#0c0e38','#262a64','#464684','#605490','#28306c','#161c58','#b4a8e0','#0a0a2c','#3e3a7a','#bcb0e4', .12,.36,.9,.84,.85,.0008,.55, .34],
+ [1380,'#3444a0','#4c5cb0','#7476b8','#7c80bc','#262c70','#f4f0dc','#20285e','#5a68b4','#3c4674','#b4c0e8','#10143c','#2c3468','#2a3474','#46508c','#28347c','#161e58','#b8c8f8','#0a0e30','#3e48a0','#e8ecff', .1,.34,.95,1.4,.95,.0007,1, .5],
+ [1560,'#2c3c94','#4454a8','#6a6cb0','#7076b4','#222868','#f4f0dc','#1c2458','#505eac','#36406c','#a8b4e0','#0e1236','#283060','#262e6c','#404a84','#242e74','#141a50','#acbcf0','#080c2a','#38429a','#dce2fc', .1,.34,.9,1.35,.95,.0007,1, .5]
 ].map(r=>{ const o={t:r[0]}; F.forEach((k,i)=>o[k]=hex(r[i+1])); N.forEach((k,i)=>o[k]=r[i+1+F.length]); return o; });
 
 function palette(t){
@@ -217,12 +217,12 @@ function buildSky(root){
           if(s>.93&&h>.03){ float w=h21(id+7.)*.34+.1; float k=step(abs(f.x),w)*step(abs(f.y),.045)+step(abs(f.y),w*1.3)*step(abs(f.x),.03);
             c+=clamp(k,0.,1.)*uNight*(.35+.65*h21(id+3.))*vec3(.92,.94,1.); }
           float ms=acos(clamp(dot(d,uMoonD),-1.,1.));
-          c+=uNight*(step(ms,.2)*.07+step(ms,.14)*.1+exp(-ms*ms*34.)*.26)*vec3(.74,.78,1.);
-          vec3 mr=normalize(cross(uMoonD,vec3(0.,1.,0.))); float cres=length(vec2(dot(d-uMoonD,mr)-.022,d.y-uMoonD.y));
-          if(ms<.075&&cres>.055) c=mix(c,vec3(1.,.98,.9),uNight);
-          if(uAurora>.01){ float w=sin(az*3.+uTime*.05)+sin(az*7.3-uTime*.03)*.4; float y=h-(.34+.09*w);
-            float r=exp(-y*y*190.)*(.55+.45*sin(az*44.+uTime*.2+w*3.));
-            c+=uAurora*r*uNight*vec3(.16,.72,.56); }
+          c+=uNight*(exp(-ms*ms*260.)*.3+exp(-ms*ms*40.)*.13)*vec3(.74,.78,1.);
+          vec3 mr=normalize(cross(uMoonD,vec3(0.,1.,0.))); float cres=length(vec2(dot(d-uMoonD,mr)-.015,d.y-uMoonD.y));
+          c=mix(c,vec3(1.,.98,.9),uNight*(1.-smoothstep(.04,.044,ms))*smoothstep(.033,.037,cres));
+          if(uAurora>.01){ float w=sin(az*3.+uTime*.05)+sin(az*7.3-uTime*.03)*.4; float y=h-(.3+.07*w), rays=.6+.4*sin(az*47.+uTime*.2+w*3.)*sin(az*19.-uTime*.13);
+            float foot=exp(-y*y*(y<0.?900.:70.))*rays, top=exp(-(y-.13)*(y-.13)*60.)*rays;
+            c+=uAurora*uNight*(foot*vec3(.14,1.,.72)+top*vec3(.3,.22,.72)*.8); }
         }
         float sd=acos(clamp(dot(d,uSunD),-1.,1.)); float above=1.-uNight;                                      // sun: hard concentric rings
         c=mix(c,mix(c,uSunC,.1),step(sd,.26)*above); c=mix(c,mix(c,uSunC,.18),step(sd,.17)*above); c=mix(c,uSunC,step(sd,.075)*above);
@@ -259,6 +259,7 @@ function buildClouds(){ cloudU.uN.value=cloudNoise(256); cloudRT=new THREE.WebGL
         for(int i=0;i<12;i++){ vec3 p=d*(t0+st*(float(i)+jit)); float dn=den(p); if(dn<.01) continue; float lt=den(p+uSunD*170.)+den(p+uSunD*420.)+den(p+uSunD*900.)*.8; float sh=exp(-lt*1.5), powder=1.-exp(-(lt+dn)*2.2), hf=(p.y-Y0)/(Y1-Y0); vec3 li=uSunC*sh*powder*min(ph,1.5)*2.3+uAmb*(.42+.58*hf); float a=1.-exp(-dn*st*.034); acc+=T*a*li; T*=1.-a; if(T<.03) break; }
         float dist=clamp(t0/30000.,0.,1.); acc=acc/(1.+dot(acc,vec3(.3))*.2); acc=mix(acc,uLow*(1.-T),dist*dist*.8); float fade=smoothstep(.05,.13,h); gl_FragColor=vec4(acc*fade,(1.-T)*fade); }` }))); }
 /* n strips of the sky map this frame; returns nothing and leaves the renderer on the screen */
+export const cloudNoiseTex=()=>cloudU.uN.value;
 export function cloudTick(r,n=1){ if(!cloudRT) return; const ac=r.autoClear, was=r.getRenderTarget(); r.autoClear=false; for(let i=0;i<n;i++){ cloudRT.scissor.set(cloudX,0,CLOUD_STRIP,CLOUD_H); r.setRenderTarget(cloudRT); r.render(cloudScene,cloudCam); cloudX=(cloudX+CLOUD_STRIP)%CLOUD_W; } r.autoClear=ac; r.setRenderTarget(was); }
 
 /* ---------- painted mountain layers: cylinders that hold their distance, a parallax stack ---------- */
@@ -438,7 +439,8 @@ function groundMaterial(){
     sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <worldpos_vertex>',
       '#include <worldpos_vertex>\n vWP=(modelMatrix*vec4(transformed,1.)).xyz; vWN=normal;');
     sh.fragmentShader=`varying vec3 vWP; varying vec3 vWN; uniform sampler2D uSplat,uTile,uRamps,uBits; uniform float uGroundRow,uEarthRow,uRockRow,uIceRow,uSnow,uLeafRow,uSeasonG; uniform vec3 uFogSun,uSunDirW; uniform float uWet,uRainG,uTimeG; float gPud=0.; ${ramp} ${CLOUD_GLSL}\n`+
-      sh.fragmentShader.replace('#include <fog_fragment>',`if(uWet>.003){ vec3 vd=normalize(vWP-cameraPosition); float fr=pow(1.-clamp(-vd.y,0.,1.),3.); vec3 sky=fogColor*.62; gl_FragColor.rgb=mix(gl_FragColor.rgb,sky,clamp(gPud*(.34+.6*fr)+uWet*fr*.14,0.,1.)); if(gPud>.01&&uRainG>.5){ vec2 q=vWP.xz*1.2, cell=floor(q), f=fract(q)-.5; float h=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453), ph=fract(uTimeG*1.1+h*7.), r=length(f+vec2(h-.5,fract(h*3.)-.5)*.4); gl_FragColor.rgb+=sky*(1.-smoothstep(.012,.05,abs(r-ph*.46)))*(1.-ph)*gPud*.7; } }
+      sh.fragmentShader.replace('#include <fog_fragment>',`if(uSnow>.5){ vec3 vs=normalize(vWP-cameraPosition); vec2 sq=floor(vWP.xz*30.); float g0=fract(sin(dot(sq,vec2(12.9898,78.233)))*43758.5453); gl_FragColor.rgb+=vec3(.95,.97,1.)*pow(max(sin(dot(vs.xz,vec2(61.,47.))+g0*40.),0.),24.)*step(.93,g0)*(1.-smoothstep(6.,26.,length(vWP-cameraPosition)))*.9; }
+        if(uWet>.003){ vec3 vd=normalize(vWP-cameraPosition); float fr=pow(1.-clamp(-vd.y,0.,1.),3.); vec3 sky=fogColor*.52; gl_FragColor.rgb=mix(gl_FragColor.rgb,sky,clamp(gPud*(.34+.6*fr)+uWet*fr*.14,0.,1.)); if(gPud>.01&&uRainG>.5){ vec2 q=vWP.xz*1.2, cell=floor(q), f=fract(q)-.5; float h=fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453), ph=fract(uTimeG*1.1+h*7.), r=length(f+vec2(h-.5,fract(h*3.)-.5)*.4); gl_FragColor.rgb+=sky*(1.-smoothstep(.012,.05,abs(r-ph*.46)))*(1.-ph)*gPud*.7; } }
         #ifdef USE_FOG
         { float ff=1.-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth); gl_FragColor.rgb=mix(gl_FragColor.rgb,fogColor+uFogSun*pow(max(dot(normalize(vWP-cameraPosition),uSunDirW),0.),6.),ff); }
         #endif`).replace('#include <normal_fragment_maps>',`
@@ -462,7 +464,7 @@ function groundMaterial(){
           float lk=abs(uSeasonG-2.)<.5?1.:.3, lz=sp.r*(1.-smoothstep(.2,.6,sp.g))*smoothstep(.42,.64,t2.g+t3.r*.4)*lk, lf=max(smoothstep(.6,.64,b.b)*b.b,smoothstep(.74,.78,b2.b)*b2.b);
           c=mix(c,ramp(.3+lf*.6,uLeafRow),step(.1,lf)*lz*bk*.85); }
         c*=mix(1.,.55,wet);
-        if(uWet>.003){ gPud=smoothstep(.67,.72,t3.g*.6+t2.r*.4+sp.g*.16-.04)*(1.-steep)*(1.-smoothstep(50.,110.,gd))*smoothstep(.1,.9,uWet)*(1.-uSnow); c*=1.-.36*uWet; }
+        if(uWet>.003){ gPud=smoothstep(.62,.78,t3.g*.6+t2.r*.4+sp.g*.16-.04)*(1.-steep)*(1.-smoothstep(50.,110.,gd))*smoothstep(.1,.9,uWet)*(1.-uSnow); c*=1.-.36*uWet; }
         c*=cloudShade(vWP.xz);
         if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.06)); }
         diffuseColor.rgb*=c;`);
@@ -797,7 +799,7 @@ export function setSeason(season){
 
 // returns the frame's light rig so index.html can drive the directional light and grade
 const revealV=new THREE.Vector3();
-export const rig={ water:new THREE.Color(), rain:0, sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color(), sunC:new THREE.Color(), shaft:0 };
+export const rig={ mistC:new THREE.Color(), mistK:0, water:new THREE.Color(), rain:0, sunDir:new THREE.Vector3(0,1,0), sunI:2, ambI:1, sunCol:new THREE.Color(), ambCol:new THREE.Color(), gS:new THREE.Color(), gM:new THREE.Color(), gH:new THREE.Color(), gAmt:.3, night:0, fog:.001, fogCol:new THREE.Color(), sunC:new THREE.Color(), shaft:0 };
 export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   U.uTime.value=t;
   const weather=weather0==='storm'?'rain':weather0==='snow'?'cloudy':weather0;
@@ -837,7 +839,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
   mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
   if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }
-  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value); setC(rig.sunC,P.sun); rig.shaft=day*wxK; rig.vol=day*wxK*(.3+.7*(1-clamp(rig.sunDir.y/.7,0,1)))*(1-P.lock*1.5);
+  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value); setC(rig.sunC,P.sun); setC(rig.mistC,P.mist); rig.mistK=Math.max(0,P.mistAmt-.06); rig.shaft=day*wxK; rig.vol=day*wxK*(.3+.7*(1-clamp(rig.sunDir.y/.7,0,1)))*(1-P.lock*1.5);
   return rig;
 }
 /* tilled soil, painted to sit in the same ground */
