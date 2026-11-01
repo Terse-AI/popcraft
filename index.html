@@ -937,15 +937,17 @@ class HourGrade extends Effect {
      }`,
     { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)],['tVol',new THREE.Uniform(null)],['uVolOn',new THREE.Uniform(0)]]) }); }
 }
-let QUAL = 'high';   // every visit opens at the best picture; the quality button lasts for that visit only
+let QUAL = (()=>{ try{ return sessionStorage.getItem('sv_safe')?'med':'high'; }catch(e){ return 'high'; } })();   // every visit opens at the best picture; the quality button lasts for that visit only, and a lost graphics context steps down for that visit
 try{ localStorage.removeItem('sv_qual2'); }catch(e){}
 const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false,ao:0,sharp:.3},
             med:{dpr:1.4,shadow:1536,bloom:true,msaa:0,smaa:true,ao:.56,sharp:.26,vol:false},
             high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false,ao:.68,sharp:.2,vol:true} };
 let volPass=null;
+const PIX_BUDGET={low:.9e6,med:2e6,high:3e6};
+const pixelRatio=()=>Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr,Math.sqrt((PIX_BUDGET[QUAL]||2e6)/Math.max(1,innerWidth*innerHeight)))*GOV_SCALE[govStep];
 function setupPost(){
   const q=QSET[QUAL]||QSET.med;
-  renderer.setPixelRatio(Math.min(devicePixelRatio,q.dpr));
+  renderer.setPixelRatio(pixelRatio());
   sun.shadow.mapSize.set(q.shadow,q.shadow); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
   renderer.shadowMap.needsUpdate=true;
   if(composer){ composer.dispose(); composer=null; }
@@ -967,10 +969,13 @@ const camAim=new THREE.Vector3(0,0,4), cForward=new THREE.Vector3(), cRight=new 
 let last=performance.now(), miniT=0, statusT=0, fCnt=0, fAcc=0, sTick=0;
 // frame governor: if a machine truly cannot hold its tier, resolution steps down quietly, and a long smooth run earns it back.
 // Shaders compiling on arrival, a tab in the background and open menus are not slowness, so none of them count
-let govT=0, govN=0, govStep=0, govSlow=0, govGood=0, govHold=20, govFrom=performance.now()+15000;
+let govT=0, govN=0, govStep=0, govSlow=0, govGood=0, govHold=20, govFrom=performance.now()+15000, govRun=0, govAt=0;
 const GOV_SCALE=[1,.85,.72,.6];
-function govApply(){ setMirrorEvery(Math.min(3,2+govStep)); setMirrorFollow(govStep<3); renderer.setPixelRatio(Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr)*GOV_SCALE[govStep]); composer.setSize(innerWidth,innerHeight); syncRes(); govFrom=performance.now()+6000; }
-function governor(raw){ if(DBG&&!DBG.gov) return; if(document.hidden||paused()||raw>.4||performance.now()<govFrom){ govT=0; govN=0; return; }
+function govApply(){ setMirrorEvery(Math.min(3,2+govStep)); setMirrorFollow(govStep<3); renderer.setPixelRatio(pixelRatio()); composer.setSize(innerWidth,innerHeight); syncRes(); if(gradeFx){ const q=QSET[QUAL]||QSET.med; gradeFx.uniforms.get('uAO').value=govStep>=2?0:q.ao||0; gradeFx.uniforms.get('uSharp').value=govStep>=2?0:q.sharp||0; } govFrom=performance.now()+6000; }
+function governor(raw){ if(DBG&&!DBG.gov) return; if(document.hidden){ govT=0; govN=0; govRun=0; return; }
+  /* a picture this slow can't wait for a measurement, and the first screen after loading is where it would strand you */
+  const now=performance.now(); govRun=raw>.11&&raw<6?govRun+1:0; if(govRun>=4&&govStep<3&&now>govAt){ govRun=0; govAt=now+2000; govStep=Math.min(3,govStep+2); govSlow=0; govGood=0; govHold=240; govApply(); return; }
+  if(paused()||raw>=6||now<govFrom){ govT=0; govN=0; return; }
   govT+=raw; govN++; if(govT<2.5) return;
   const fps=govN/govT; govT=0; govN=0;
   if(fps<42){ govGood=0; if(++govSlow>=2&&govStep<3){ govSlow=0; govStep++; govApply(); } return; }
@@ -1059,7 +1064,7 @@ function frame(now){
   miniT+=dt; if(miniT>0.25){ drawMini(); miniT=0; }
   governor(raw);
 
-  if(!S.inMine&&!S.inHouse) cloudTick(renderer,DBG?8:1);
+  if(!S.inMine&&!S.inHouse&&govStep<3) cloudTick(renderer,DBG?8:1);
   if((sTick++ % (S.boating?12:4))===0) renderer.shadowMap.needsUpdate=true;   // throttle shadow pass to ~15Hz, ~5Hz out on the water where nothing near casts one
   if(cut.on||cut.k>.02) renderUnder();
   composer.render();
@@ -1328,7 +1333,7 @@ function setupValley(){
 
 /* ============================ BOOT ============================ */
 /* the bar lives here and on NOVA's loading screen. The awaited wait lets it paint before the next heavy step */
-function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; nova('progress',{p,msg:msg||''},300); return new Promise(r=>setTimeout(r,24)); }
+function setProgress(p,msg){ $('#bar>i').style.width=p+'%'; if(msg)$('#loadsub').textContent=msg; nova('progress',{p,msg:msg||''},300); return new Promise(r=>{ setTimeout(r,160); requestAnimationFrame(()=>requestAnimationFrame(r)); }); }
 async function boot(){
   $('#loadsub').textContent=L('正在铺开湖谷…','Painting the valley…');
   await setProgress(4,L('正在加载美术资源…','Loading the art…')); await loadScenery(p=>setProgress(5+p*35)); await setProgress(42,L('正在铺开湖谷…','Laying out the valley…')); new Image().src='assets/paint/portraits.webp';
@@ -1351,9 +1356,11 @@ async function boot(){
   if(DBG) applyDebugShot();
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); updateQualBtn(); buildTouch(); document.body.classList.toggle('lowfx',QUAL==='low'); paintHud();
+  await setProgress(95,L('正在准备光影…','Preparing the light…'));
+  try{ await Promise.race([renderer.compileAsync(scene,camera),new Promise(r=>setTimeout(r,7000))]); }catch(e){}
   await setProgress(100,L('马上就好…','Almost there…'));
-  setTimeout(()=>{ $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ G.pickFarm(()=>showCards(L,()=>startChecklist(S,L,player,snd))); } if(bootMode==='parked') afterAuth(); } },250); // ensure render targets match the (now-visible) viewport
-  requestAnimationFrame(frame);
+  let shown=false; const reveal=()=>{ if(shown) return; shown=true; $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ G.pickFarm(()=>showCards(L,()=>startChecklist(S,L,player,snd))); } if(bootMode==='parked') afterAuth(); } };   // render targets match the now-visible viewport
+  setTimeout(reveal,4000); requestAnimationFrame(t=>{ frame(t); setTimeout(reveal,80); });
 }
 /* touch: on-screen actions, the stick is the left half of the screen */
 function buildTouch(){ if(!('ontouchstart' in window)&&!(DBG&&DBG.touch)) return; const w=document.createElement('div'); w.id='touchpad'; w.style.cssText='position:absolute;right:12px;bottom:88px;display:grid;grid-template-columns:repeat(2,64px);gap:10px;pointer-events:auto;z-index:56';
@@ -1367,7 +1374,9 @@ function applyDebugShot(){ const q=DBG;
   window.__sv={ISLAND,decorG,hop,SITES,OUTER,terrainH,lakeField,inWater,obstacles,composer,syncRes,cut,house,DOCK,DESERT,grade:()=>gradeFx,step:ms=>frame(ms),shot:(w,h,q)=>{ renderer.setPixelRatio(1); renderer.setSize(w,h); composer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); syncRes(); composer.render(); return renderer.domElement.toDataURL('image/jpeg',q||.88); },auditSounds,audioLevel,G,S,player,cam,camera,renderer,setSeason,keys,scene,interact,toggleBoat,sleep,enterHouse,leaveHouse,updateTarget,getTarget:()=>targetCell,setTarget:c=>{targetCell=c;},spawnAnimal,animals:()=>animals,dog,inWaterAt:inWater,walkH,TOWN,boat:()=>boat,applyWeather,renderStatus};
   if(DBG&&DBG.film) import('./film.js').then(m=>{ m.setup(window.__sv); window.__filmReady=true; });
 }
-addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); });
+let sizeT=0; const fitView=()=>{ camera.aspect=Math.max(.1,innerWidth/Math.max(1,innerHeight)); camera.updateProjectionMatrix(); if(composer) renderer.setPixelRatio(pixelRatio()); renderer.setSize(innerWidth,innerHeight); composer&&composer.setSize(innerWidth,innerHeight); syncRes(); };
+addEventListener('resize',()=>{ clearTimeout(sizeT); sizeT=setTimeout(fitView,140); });
+canvas.addEventListener('webglcontextlost',e=>{ e.preventDefault(); try{ sessionStorage.setItem('sv_safe','1'); }catch(x){} if(inNova) nova('reload',{mode:'continue'}); else location.reload(); });
 boot().catch(e=>{ console.error(e); const m=$('#loadsub'); if(m){ m.textContent='加载失败,点这里重试 · Could not load, tap to retry'; m.style.cursor='pointer'; m.onclick=()=>location.reload(); } });
 </script>
 </body>
