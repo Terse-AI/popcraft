@@ -914,8 +914,8 @@ class HourGrade extends Effect {
        vec3 s=pow(gS,vec3(1.0/2.2)), m=pow(gM,vec3(1.0/2.2)), h=pow(gH,vec3(1.0/2.2));
        float l=dot(col,vec3(0.2126,0.7152,0.0722));
        vec3 g=l<0.5?mix(s,m,l*2.0):mix(m,h,(l-0.5)*2.0);
-       col=mix(col,g+(col-vec3(l))*1.05,amt); col=mix(col,g,uLock);
-       { float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)), lv=dot(col,vec3(.2126,.7152,.0722)); col=mix(vec3(lv),col,1.+.34*(1.-clamp(mx-mn,0.,1.))-uNightK*.72); }
+       float land=1.-step(.99999,depth)*step(.001,uNightK); col=mix(col,g+(col-vec3(l))*1.05,amt*mix(.4,1.,land)); col=mix(col,g,uLock*land);
+       { float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)), lv=dot(col,vec3(.2126,.7152,.0722)); col=mix(vec3(lv),col,1.+.34*(1.-clamp(mx-mn,0.,1.))-uNightK*.72*land); }
        if(uNightK>.01) col=pow(max(col,vec3(0.)),vec3(1.-uNightK*.2));
        col=clamp(col,0.0,1.0); col=mix(col,col*col*(3.0-2.0*col),0.46+uNightK*.34);
        if(uRainK>.001&&uv.y>=ln){ float z=depth>=.99999?420.:zlin(depth), cur=.74+.26*sin(uv.x*23.+uT*.6+sin(uv.x*8.-uT*.27)*2.2)*(.62+.38*sin(uv.y*6.+uT*3.)); col=mix(col,pow(uRainC,vec3(1.0/2.2)),clamp((1.-exp(-z*.017))*uRainK*cur,0.,.84)); }

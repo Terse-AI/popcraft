@@ -222,7 +222,7 @@ function buildSky(root){
           c=mix(c,vec3(1.,.98,.9),uNight*(1.-smoothstep(.04,.044,ms))*smoothstep(.033,.037,cres));
           if(uAurora>.01){ float w=sin(az*3.+uTime*.05)+sin(az*7.3-uTime*.03)*.4; float y=h-(.3+.07*w), rays=.6+.4*sin(az*47.+uTime*.2+w*3.)*sin(az*19.-uTime*.13);
             float foot=exp(-y*y*(y<0.?900.:70.))*rays, top=exp(-(y-.13)*(y-.13)*60.)*rays;
-            c+=uAurora*uNight*(foot*vec3(.14,1.,.72)+top*vec3(.3,.22,.72)*.8); }
+            c+=uAurora*uNight*(foot*vec3(.06,.52,.38)+top*vec3(.16,.1,.4)*.7); }
         }
         float sd=acos(clamp(dot(d,uSunD),-1.,1.)); float above=1.-uNight;                                      // sun: hard concentric rings
         c=mix(c,mix(c,uSunC,.1),step(sd,.26)*above); c=mix(c,mix(c,uSunC,.18),step(sd,.17)*above); c=mix(c,uSunC,step(sd,.075)*above);
