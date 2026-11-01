@@ -900,7 +900,7 @@ class VolPass extends Pass {
 }
 class HourGrade extends Effect {
   constructor(){ super('HourGrade',
-    `uniform vec3 gS,gM,gH,uTint,uSunC; uniform float amt,flash,uLine,uT,uShaft,uAsp,uAO,uSharp; uniform vec2 uSunP; uniform sampler2D tUnder,tVol; uniform float uVolOn,uRainK,uNightK; uniform vec3 uRainC;
+    `uniform vec3 gS,gM,gH,uTint,uSunC; uniform float amt,flash,uLine,uT,uShaft,uAsp,uAO,uSharp; uniform vec2 uSunP; uniform sampler2D tUnder,tVol; uniform float uVolOn,uRainK,uNightK,uLock; uniform vec3 uRainC;
      float ign(vec2 p){ return fract(52.9829189*fract(dot(p,vec2(.06711056,.00583715)))); }
      float zlin(float d){ return cameraNear*cameraFar/(cameraFar-d*(cameraFar-cameraNear)); }
      // contact shade: a few depth taps around each pixel, so things sit on the ground and boughs hold shadow between them
@@ -914,9 +914,9 @@ class HourGrade extends Effect {
        vec3 s=pow(gS,vec3(1.0/2.2)), m=pow(gM,vec3(1.0/2.2)), h=pow(gH,vec3(1.0/2.2));
        float l=dot(col,vec3(0.2126,0.7152,0.0722));
        vec3 g=l<0.5?mix(s,m,l*2.0):mix(m,h,(l-0.5)*2.0);
-       col=mix(col,g+(col-vec3(l))*1.05,amt);
+       col=mix(col,g+(col-vec3(l))*1.05,amt); col=mix(col,g,uLock);
        { float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)), lv=dot(col,vec3(.2126,.7152,.0722)); col=mix(vec3(lv),col,1.+.34*(1.-clamp(mx-mn,0.,1.))-uNightK*.5); }
-       col=clamp(col,0.0,1.0); col=mix(col,col*col*(3.0-2.0*col),0.46);
+       col=clamp(col,0.0,1.0); col=mix(col,col*col*(3.0-2.0*col),0.46+uNightK*.34);
        if(uRainK>.001&&uv.y>=ln){ float z=depth>=.99999?420.:zlin(depth), cur=.74+.26*sin(uv.x*23.+uT*.6+sin(uv.x*8.-uT*.27)*2.2)*(.62+.38*sin(uv.y*6.+uT*3.)); col=mix(col,pow(uRainC,vec3(1.0/2.2)),clamp((1.-exp(-z*.017))*uRainK*cur,0.,.84)); }
        if(uShaft>.001&&uv.y>=ln){ vec2 dl=uSunP-uv; float r=length(dl*vec2(uAsp,1.));              // light falling through the trees and over the ridges, stopped by whatever stands in the way
          if(r<1.5){ float j=ign(gl_FragCoord.xy), occ=0.; for(int i=0;i<10;i++){ vec2 q=clamp(uv+dl*(float(i)+j)/10.,vec2(.001),vec2(.999)); occ+=step(.9999995,readDepth(q)); } occ/=10.;
@@ -928,7 +928,7 @@ class HourGrade extends Effect {
        col+=flash*.42;
        o=vec4(pow(col,vec3(2.2)),c.a);
      }`,
-    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)],['tVol',new THREE.Uniform(null)],['uVolOn',new THREE.Uniform(0)],['uRainK',new THREE.Uniform(0)],['uNightK',new THREE.Uniform(0)],['uRainC',new THREE.Uniform(new THREE.Color())]]) }); }
+    { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)],['tVol',new THREE.Uniform(null)],['uVolOn',new THREE.Uniform(0)],['uRainK',new THREE.Uniform(0)],['uNightK',new THREE.Uniform(0)],['uLock',new THREE.Uniform(0)],['uRainC',new THREE.Uniform(new THREE.Color())]]) }); }
 }
 let QUAL = (()=>{ try{ return sessionStorage.getItem('sv_safe')?'med':'high'; }catch(e){ return 'high'; } })();   // every visit opens at the best picture; the quality button lasts for that visit only, and a lost graphics context steps down for that visit
 try{ localStorage.removeItem('sv_qual2'); }catch(e){}
@@ -1124,7 +1124,7 @@ function animateWalk(dt){
 }
 const sunDirL=new THREE.Vector3(0,1,0), sunWant=new THREE.Vector3(), sunFix=new THREE.Vector3(), lightX=new THREE.Vector3(), lightY=new THREE.Vector3(), UP3=new THREE.Vector3(0,1,0), sunNdc=new THREE.Vector3(), camFwd=new THREE.Vector3();
 function dayNight(t,dt){
-  if(S.inMine||S.inHouse){ if(gradeFx){ gradeFx.uniforms.get('uShaft').value=0; gradeFx.uniforms.get('uVolOn').value=0; gradeFx.uniforms.get('uRainK').value=0; } if(volPass) volPass.den=0; return; }     // the mine keeps its own dark lighting
+  if(S.inMine||S.inHouse){ if(gradeFx){ gradeFx.uniforms.get('uShaft').value=0; gradeFx.uniforms.get('uVolOn').value=0; gradeFx.uniforms.get('uRainK').value=0; gradeFx.uniforms.get('uLock').value=0; gradeFx.uniforms.get('uNightK').value=0; } if(volPass) volPass.den=0; return; }     // the mine keeps its own dark lighting
   const R=updateScenery(t,dt,S.time,S.weather,camera,player,S.day%9===4); lastRig=R;
   // long low shadows at the ends of the day. The light only turns in small steps and its frustum snaps to whole shadow texels, so edges stay still as you walk
   sunWant.copy(R.sunDir); sunWant.y=Math.max(sunWant.y,.25); sunWant.normalize(); if(sunWant.distanceToSquared(sunDirL)>.00002) sunDirL.copy(sunWant);
@@ -1139,7 +1139,7 @@ function dayNight(t,dt){
   if(jellyOn) updateJellies(t);
   if(gradeFx){ const u=gradeFx.uniforms; u.get('gS').value.copy(R.gS); u.get('gM').value.copy(R.gM); u.get('gH').value.copy(R.gH); u.get('amt').value=R.gAmt; u.get('flash').value=flash; u.get('tUnder').value=underRT.texture; u.get('uTint').value.copy(R.water); u.get('uT').value=t;
     camera.getWorldDirection(camFwd); const facing=camFwd.dot(R.sunDir); sunNdc.copy(camera.position).addScaledVector(R.sunDir,3000).project(camera); u.get('uSunP').value.set(sunNdc.x*.5+.5,sunNdc.y*.5+.5); u.get('uAsp').value=camera.aspect; u.get('uSunC').value.copy(R.sunC);
-    u.get('uShaft').value=R.shaft*clamp(facing*2.6,0,1)*clamp(1.25-R.sunDir.y*1.1,.3,1); const vol=volPass&&govStep<2; u.get('uVolOn').value=vol?1:0; if(volPass) volPass.den=vol?R.vol*.011:0; u.get('uRainK').value=weather?weather.veil():0; u.get('uRainC').value.copy(R.fogCol); u.get('uNightK').value=R.night; }
+    u.get('uShaft').value=R.shaft*clamp(facing*2.6,0,1)*clamp(1.25-R.sunDir.y*1.1,.3,1); const vol=volPass&&govStep<2; u.get('uVolOn').value=vol?1:0; if(volPass) volPass.den=vol?R.vol*.011:0; u.get('uRainK').value=weather?weather.veil():0; u.get('uRainC').value.copy(R.fogCol); u.get('uNightK').value=R.night; u.get('uLock').value=R.lock; }
 }
 let promptEl=null, promptTxt='';
 function hintProximity(){ let txt=''; if(S.inHouse){ const sp=house.userData.spots, p=player.pos, n=q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9; txt=n(sp.door)?L('E 出门','E go outside'):n(sp.bed)?L('E 睡觉','E sleep'):n(sp.tv)?L('E 看电视','E watch TV'):n(sp.stove)?L('E 烹饪','E cook'):n(sp.fridge)?L('E 冰箱','E icebox'):nearKid()?'E '+nearKid().k.nm:S.heldFur?L('左键摆放 · R 旋转','Click to place · R to turn'):G.nearDecor()?L('E 整理家具','E move this'):''; }

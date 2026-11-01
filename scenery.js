@@ -98,21 +98,21 @@ const setC=(c,a)=>c.setRGB(a[0],a[1],a[2],THREE.SRGBColorSpace);
 
 // Each row is one hour of the painted day, sampled from reference palettes. Times are minutes from midnight.
 const F=['top','mid','low','cloudL','cloudS','sun','rockS','rockL','snowS','snowL','forS','forL','haze','mist','water','shade','lit','gS','gM','gH'];
-const N=['mistAmt','gAmt','sunI','ambI','glint','fog','night'];
+const N=['mistAmt','gAmt','sunI','ambI','glint','fog','night','lock'];   // lock: how far the hour's own hue takes over the whole frame, so a green forest reads navy by night and plum at dawn
 const KEYS=[
  // colours sampled from Cast n Chill's own screens, one scene to each hour: a muted body, deep cool shadow, and the heat kept to a few places
  //  t    sky top    mid       low       cloudL    cloudS    sun       rockS     rockL     snowS     snowL     forS      forL      haze      mist      water     shade     lit       gradS     gradM     gradH      mist grade sun  amb  glint fog     night
- [ 360,'#4a2a78','#b0628c','#f2b09c','#f8c8c0','#6e3458','#fff0d0','#3c1c4a','#955566','#80445f','#f2bbb1','#22103e','#7a3460','#a8607c','#c88aa4','#6a3f70','#2c1a40','#f8c0a0','#160a28','#6d3a5c','#f8d0c0', .24,.42,2.4,.8,1.,.0007,.0],
- [ 460,'#7fa0d4','#b4c6e0','#e8e0d4','#fbf6ea','#94a0b4','#fff4d8','#4e5a6a','#a4b8d0','#94a0ae','#eef2f6','#20241a','#7e6e48','#b4c0d0','#c8d0dc','#94a4b4','#44402e','#fff0d0','#14130c','#7a7054','#ecece4', .24,.28,2.7,.84,1.,.0006,.0],
- [ 600,'#5e8cc8','#a0c0e0','#dce8f2','#fdf8ec','#a0acc4','#fff8e4','#4c6086','#8ca6c8','#88a4c8','#f4f6f8','#141e18','#4e6a3e','#a8c0dc','#d0e0f0','#54789c','#2c3e48','#fff2d4','#0c0e0a','#566a64','#f4f4ec', .05,.28,3.1,.8,.9,.0005,.0],
- [ 780,'#4f80c4','#84b0de','#cfe2f0','#fffbf0','#a4b0c8','#ffffee','#4c6086','#98b0cc','#8ca8cc','#f8f8f8','#121e16','#4a6e3c','#9cbcdc','#c4dcee','#4a7098','#2c3e48','#fff4d8','#0a0e08','#566a64','#f8f6ea', .04,.28,3.3,.78,.9,.0004,.0],
- [ 930,'#5c86b4','#a4c0d4','#f0dcb4','#fbf0d8','#a89c8c','#fff0c0','#465468','#bca484','#94a0b0','#f4ead4','#1e1608','#6e5a2c','#b8ac94','#d8c8a4','#587890','#2e2214','#ffe4b0','#141008','#6e5e3c','#f4e8cc', .06,.3,3.1,.78,1.,.0005,.0],
- [1050,'#46648c','#8e8e8c','#f4d488','#f8e0a4','#425a78','#fff0b0','#344c68','#c4a474','#747674','#f0d890','#2c2214','#a0822c','#c0a06c','#dcc088','#4c5e70','#2c2214','#ffd890','#140f08','#7a6a4c','#f8e0a0', .08,.32,3.1,.72,1.15,.0006,.0],
- [1130,'#a85a58','#e08a5c','#f4c47c','#f8cc94','#984e50','#fff0b8','#6a2c28','#d48a68','#a06858','#f4c8a0','#2a0e12','#b83a1c','#c88a6c','#d8986c','#7a4a3c','#30182a','#ffb468','#14060c','#8e4028','#f8d090', .08,.34,3.1,.64,1.3,.0004,.0],
- [1200,'#e088ac','#f4a4bc','#f8c4bc','#fbd4cc','#b090bc','#ffe8d0','#262a48','#585a94','#585a94','#c0a0c8','#1c1c26','#3c3a64','#9c86a8','#b49ac4','#4a4670','#222a48','#f8bcc0','#101224','#544674','#f8ccd0', .12,.34,1.7,.66,1.,.0008,.1],
- [1275,'#2e3078','#54589e','#a884b8','#9484bc','#343268','#ffd0c0','#1c2050','#5058a8','#3c3456','#a09cc0','#0e1034','#2c3060','#4c4880','#68588c','#2a3264','#181e54','#b0a4dc','#080a24','#3c3670','#b8acdc', .16,.42,.8,.72,.85,.0009,.55],
- [1380,'#223c74','#4068ac','#5490bc','#6484b4','#14244a','#f4f0dc','#142450','#40669c','#30465c','#a4c0e0','#0c1416','#20343e','#20406c','#3c5870','#2a4060','#101e30','#a8c8f0','#060a1c','#20365c','#a4c4e4', .12,.46,.6,.92,.9,.0008,1],
- [1560,'#1a3064','#34589c','#447ca8','#5474a8','#101e3c','#f4f0dc','#0e1c40','#34587c','#283c54','#94b0d4','#0a1012','#1a2c36','#1a3660','#304c60','#22344e','#0c1826','#98b8e4','#040818','#1a2e50','#98b4dc', .12,.46,.54,.88,.9,.0008,1]
+ [ 360,'#3c2470','#a4568a','#f0a48c','#f8c0b0','#642e58','#fff0d0','#34184a','#8a4c6a','#74406a','#f2b4a8','#1e0e3a','#5e2a58','#8e4e72','#a86a90','#54305e','#241436','#f4b49c','#120826','#5c2e58','#f4c0ac', .05,.34,2.0,.66,1.1,.0005,.0, .42],
+ [ 460,'#7fa0d4','#b4c6e0','#e8e0d4','#fbf6ea','#94a0b4','#fff4d8','#4e5a6a','#a4b8d0','#94a0ae','#eef2f6','#20241a','#7e6e48','#b4c0d0','#c8d0dc','#94a4b4','#44402e','#fff0d0','#14130c','#7a7054','#ecece4', .24,.28,2.7,.84,1.,.0006,.0, 0.06],
+ [ 600,'#5e8cc8','#a0c0e0','#dce8f2','#fdf8ec','#a0acc4','#fff8e4','#4c6086','#8ca6c8','#88a4c8','#f4f6f8','#141e18','#4e6a3e','#a8c0dc','#d0e0f0','#54789c','#2c3e48','#fff2d4','#0c0e0a','#566a64','#f4f4ec', .05,.28,3.1,.8,.9,.0005,.0, 0],
+ [ 780,'#4f80c4','#84b0de','#cfe2f0','#fffbf0','#a4b0c8','#ffffee','#4c6086','#98b0cc','#8ca8cc','#f8f8f8','#121e16','#4a6e3c','#9cbcdc','#c4dcee','#4a7098','#2c3e48','#fff4d8','#0a0e08','#566a64','#f8f6ea', .04,.28,3.3,.78,.9,.0004,.0, 0],
+ [ 930,'#5c86b4','#a4c0d4','#f0dcb4','#fbf0d8','#a89c8c','#fff0c0','#465468','#bca484','#94a0b0','#f4ead4','#1e1608','#6e5a2c','#b8ac94','#d8c8a4','#587890','#2e2214','#ffe4b0','#141008','#6e5e3c','#f4e8cc', .06,.3,3.1,.78,1.,.0005,.0, 0],
+ [1050,'#46648c','#8e8e8c','#f4d488','#f8e0a4','#425a78','#fff0b0','#344c68','#c4a474','#747674','#f0d890','#2c2214','#a0822c','#c0a06c','#dcc088','#4c5e70','#2c2214','#ffd890','#140f08','#7a6a4c','#f8e0a0', .08,.32,3.1,.72,1.15,.0006,.0, 0.04],
+ [1130,'#a85a58','#e08a5c','#f4c47c','#f8cc94','#984e50','#fff0b8','#6a2c28','#d48a68','#a06858','#f4c8a0','#2a0e12','#b83a1c','#c88a6c','#d8986c','#7a4a3c','#30182a','#ffb468','#14060c','#8e4028','#f8d090', .08,.34,3.1,.64,1.3,.0004,.0, 0.12],
+ [1200,'#e088ac','#f4a4bc','#f8c4bc','#fbd4cc','#b090bc','#ffe8d0','#262a48','#585a94','#585a94','#c0a0c8','#1c1c26','#3c3a64','#9c86a8','#b49ac4','#4a4670','#222a48','#f8bcc0','#101224','#544674','#f8ccd0', .12,.34,1.7,.66,1.,.0008,.1, 0.22],
+ [1275,'#2c2e7c','#5054a4','#a07cb4','#8c7cbc','#30306c','#ffd0c0','#1a1e54','#4e56a8','#3a3460','#a09cc4','#0c0e38','#262a64','#464684','#605490','#28306c','#161c58','#b4a8e0','#0a0a2c','#3e3a7a','#bcb0e4', .12,.36,.9,.84,.85,.0008,.55, .34],
+ [1380,'#3444a0','#4c5cb0','#7476b8','#7c80bc','#262c70','#f4f0dc','#20285e','#5a68b4','#3c4674','#b4c0e8','#10143c','#2c3468','#2a3474','#46508c','#28347c','#161e58','#b8c8f8','#0a0e30','#3e48a0','#e8ecff', .1,.34,.95,1.2,.95,.0007,1, .44],
+ [1560,'#2c3c94','#4454a8','#6a6cb0','#7076b4','#222868','#f4f0dc','#1c2458','#505eac','#36406c','#a8b4e0','#0e1236','#283060','#262e6c','#404a84','#242e74','#141a50','#acbcf0','#080c2a','#38429a','#dce2fc', .1,.34,.9,1.15,.95,.0007,1, .44]
 ].map(r=>{ const o={t:r[0]}; F.forEach((k,i)=>o[k]=hex(r[i+1])); N.forEach((k,i)=>o[k]=r[i+1+F.length]); return o; });
 
 function palette(t){
@@ -217,7 +217,7 @@ function buildSky(root){
           if(s>.93&&h>.03){ float w=h21(id+7.)*.34+.1; float k=step(abs(f.x),w)*step(abs(f.y),.045)+step(abs(f.y),w*1.3)*step(abs(f.x),.03);
             c+=clamp(k,0.,1.)*uNight*(.35+.65*h21(id+3.))*vec3(.92,.94,1.); }
           float ms=acos(clamp(dot(d,uMoonD),-1.,1.));
-          c+=uNight*(step(ms,.2)*.05+step(ms,.14)*.07)*vec3(.7,.75,1.);
+          c+=uNight*(step(ms,.2)*.07+step(ms,.14)*.1+exp(-ms*ms*34.)*.26)*vec3(.74,.78,1.);
           vec3 mr=normalize(cross(uMoonD,vec3(0.,1.,0.))); float cres=length(vec2(dot(d-uMoonD,mr)-.022,d.y-uMoonD.y));
           if(ms<.075&&cres>.055) c=mix(c,vec3(1.,.98,.9),uNight);
           if(uAurora>.01){ float w=sin(az*3.+uTime*.05)+sin(az*7.3-uTime*.03)*.4; float y=h-(.34+.09*w);
@@ -807,7 +807,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   const sx=Math.cos(a)*.92, sy=Math.sin(a)*.72+.012, sz=.6;
   rig.sunDir.set(sx,Math.max(sy,.02),sz).normalize();
   const ma=clamp((minutes-1190)/(1560-1190),0,1)*Math.PI;
-  skyU.uMoonD.value.set(Math.cos(ma)*.75,Math.sin(ma)*.6+.12,.62).normalize();
+  skyU.uMoonD.value.set(Math.cos(ma)*.75,Math.sin(ma)*.3+.1,.86).normalize();
   skyU.uSunD.value.copy(rig.sunDir);
   setC(skyU.uTop.value,P.top); setC(skyU.uMid.value,P.mid); setC(skyU.uLow.value,P.low); setC(skyU.uCL.value,P.cloudL); setC(skyU.uCS.value,P.cloudS); setC(skyU.uSunC.value,P.sun);
   skyU.uNight.value=P.night; skyU.uCover.value=weather==='rain'?1:weather==='cloudy'?.8:.56; if(cloudRT){ cloudU.uSunD.value.copy(P.night>.5?skyU.uMoonD.value:rig.sunDir); setC(cloudU.uSunC.value,mixc(mixc(P.sun,P.lit,.5),[1,.5,.16],(1-clamp(rig.sunDir.y/.42,0,1))*(1-P.night)*.72)); cloudU.uSunC.value.multiplyScalar(P.night>.5?.12:1); setC(cloudU.uAmb.value,mixc(mixc(P.cloudS,P.shade,.45),P.cloudL,.4+.56*clamp(rig.sunDir.y/.5,0,1))); setC(cloudU.uLow.value,mixc(P.low,P.cloudL,.3)); cloudU.uT.value=t; cloudU.uCov.value=weather==='rain'?.76:weather==='cloudy'?.62:.47; } skyU.uAurora.value=aurora?1:0;
@@ -818,6 +818,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   rig.water.copy(waterU.uTint.value); rig.rain=weather==='rain'?1:0;
   if(waterU.uni){ waterU.uni.uRain.value=U.uRain.value; waterU.uni.uTimeW.value=t; waterU.uni.uGlintAmt.value=P.glint; waterU.uni.uFogD.value=P.fog*.8; }
   setC(mistU.uMistC.value,P.mist); mistU.uMistA.value=P.mistAmt;
+  rig.lock=P.lock;
   // the sun side of every sprite, in world XZ
   U.uSide.value.set(rig.sunDir.x,0,rig.sunDir.z).normalize(); U.uSunDirW.value.copy(rig.sunDir);
   // cloud shadows drift with the high wind; the low sun lights the air toward it, and leaves and grass glow against it
@@ -836,7 +837,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
   mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
   if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }
-  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value); setC(rig.sunC,P.sun); rig.shaft=day*wxK; rig.vol=day*wxK*(.3+.7*(1-clamp(rig.sunDir.y/.7,0,1)));
+  rig.sunI=P.sunI; rig.ambI=P.ambI*(1+P.night*1.6); setC(rig.sunCol,P.lit); setC(rig.ambCol,mixc(P.mid,P.lit,.35+P.night*.55)); setC(rig.gS,P.gS); setC(rig.gM,P.gM); setC(rig.gH,P.gH); rig.gAmt=P.gAmt; rig.night=P.night; rig.fog=P.fog; rig.fogCol.copy(U.uFog.value); setC(rig.sunC,P.sun); rig.shaft=day*wxK; rig.vol=day*wxK*(.3+.7*(1-clamp(rig.sunDir.y/.7,0,1)))*(1-P.lock*1.5);
   return rig;
 }
 /* tilled soil, painted to sit in the same ground */
