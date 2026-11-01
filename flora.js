@@ -315,9 +315,9 @@ export function bakeFar(renderer){ const CW=512, CH=1024, names=['con0','con1','
   const scene=new THREE.Scene(), cam=new THREE.OrthographicCamera(-1,1,1,0,-4,4), mesh=new THREE.Mesh(new THREE.BufferGeometry(),mat(.9)), leafy=mat(.78); mesh.frustumCulled=false; scene.add(mesh); const info={}, was={ rt:renderer.getRenderTarget(), auto:renderer.autoClear }, col=new THREE.Color(); renderer.getClearColor(col); const wasA=renderer.getClearAlpha(); renderer.autoClear=false; renderer.setClearColor(new THREE.Color(.46,0,0),0); renderer.setRenderTarget(rt); renderer.clear();
   names.forEach((nm,i)=>{ const V=VAR[nm]; if(!V) return; const g=V.base, P=g.attributes.position, O=g.attributes.aOff; let rx=0,ry=0; for(let k=0;k<P.count;k++){ const e=O?O.getZ(k)*Math.hypot(O.getX(k),O.getY(k)):0; rx=Math.max(rx,Math.hypot(P.getX(k),P.getZ(k))+e); ry=Math.max(ry,P.getY(k)+e); } rx*=1.04; ry*=1.03; const x=(i%4)*CW, y=Math.floor(i/4)*CH; mesh.geometry=g; mesh.material=/^(bro|shr)/.test(nm)?leafy:mat(.9); cam.left=-rx; cam.right=rx; cam.top=ry; cam.bottom=0; cam.updateProjectionMatrix(); rt.viewport.set(x,y,CW,CH); rt.scissor.set(x,y,CW,CH); rt.scissorTest=true; renderer.setRenderTarget(rt); renderer.render(scene,cam); info[nm]={ w:rx*2, h:ry, k:nm==='shr'?1.1:1, u0:x/(CW*4), v0:y/(CH*2), u1:(x+CW)/(CW*4), v1:(y+CH)/(CH*2) }; });
   renderer.setRenderTarget(was.rt); renderer.autoClear=was.auto; renderer.setClearColor(col,wasA); rt.scissorTest=false; return {tex:rt.texture,info}; }
-export function updateFlora(cam,fwd){
+export function updateFlora(cam,fwd,step=2.6){
   if(chunkFrame++%6===0||dirty.size) updateChunks(cam,chunkFrame<3?999:2);
-  const cx=cam.x, cz=cam.z, yaw=Math.atan2(fwd.x,fwd.z), dy=Math.abs(((yaw-lastYaw+Math.PI)%tau+tau)%tau-Math.PI); if(Math.hypot(cx-lastX,cz-lastZ)<2.6&&dy<.3) return; lastX=cx; lastZ=cz; lastYaw=yaw;
+  const cx=cam.x, cz=cam.z, yaw=Math.atan2(fwd.x,fwd.z), dy=Math.abs(((yaw-lastYaw+Math.PI)%tau+tau)%tau-Math.PI); if(Math.hypot(cx-lastX,cz-lastZ)<step&&dy<.3) return; lastX=cx; lastZ=cz; lastYaw=yaw;
   for(const k in VAR) VAR[k].n=0;
   const Rc=Math.ceil(radT/CELL), mx=Math.floor(cx/CELL), mz=Math.floor(cz/CELL);
   for(let i=mx-Rc;i<=mx+Rc;i++) for(let j=mz-Rc;j<=mz+Rc;j++){ const l=cells.get(i*8192+j); if(!l) continue;
@@ -325,5 +325,5 @@ export function updateFlora(cam,fwd){
       const far=VAR[it.v+'L']; if(far&&d2>(V.kind==='blade'?144:400)) V=far; if(V.n>=V.cap) continue; const n=V.n++;
       if(V.kind==='flora'){ V.a.setXYZ(n,it.x,it.y,it.z); V.b.setXYZW(n,it.v==='shr'?it.trueH*1.1:it.v==='fer'?it.trueH*1.5:it.trueH,rowV(it.row),it.tone||0,(it.x*7.3+it.z*3.1)%6.28); }
       else { V.a.setXYZW(n,it.x,it.y,it.z,it.trueH*1.05); V.b.setXYZW(n,(it.x*7.3+it.z*3.1)%6.28,it.tone||0,0,0); } } }
-  for(const k in VAR){ const V=VAR[k]; V.g.instanceCount=V.n; V.a.needsUpdate=true; V.b.needsUpdate=true; }
+  for(const k in VAR){ const V=VAR[k]; V.g.instanceCount=V.n; if(!V.n) continue; for(const at of [V.a,V.b]){ at.clearUpdateRanges(); at.addUpdateRange(0,V.n*at.itemSize); at.needsUpdate=true; } }
 }

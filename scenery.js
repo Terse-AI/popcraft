@@ -453,8 +453,9 @@ function buildGround(root){
 }
 
 /* ---------- lake ---------- */
-export let water=null; let mirrorEvery=1;
+export let water=null; let mirrorEvery=1, mirrorFollow=true;
 export const setMirrorEvery=n=>{ mirrorEvery=n; };
+export const setMirrorFollow=on=>{ mirrorFollow=on; };
 let aboveWater=[];
 export const setUnderwater=on=>{ for(const o of aboveWater) o.visible=!on; };
 const waterU={ sunD:new THREE.Vector3(0,1,0), uSunC:{value:new THREE.Color()}, uShallow:{value:new THREE.Color()}, uTint:{value:new THREE.Color()}, uGlint:{value:new THREE.Color()}, uGlintAmt:{value:1}, uTimeW:U.uTime, uShore:{value:null}, uTintAmt:{value:.14}, uFog:U.uFog, uFogD:U.uFogD, uNoise:{value:null} };
@@ -501,8 +502,9 @@ function buildLake(root,res){
   const geo=new THREE.PlaneGeometry(760,460);
   water=new Reflector(geo,{ textureWidth:res[0], textureHeight:res[1], shader, multisample:0, clipBias:.002 });
   water.rotation.x=-Math.PI/2; water.position.set(0,WATER_Y,180); water.frustumCulled=false; water.camera.layers.enable(2); root.add(water);
-  const mirror=water.onBeforeRender; let tick=0;       // the reflection may refresh every 2nd or 3rd frame on slower machines
-  water.onBeforeRender=function(r,sc,cam){ if(cam.isPerspectiveCamera&&(tick++%mirrorEvery)===0) mirror.call(this,r,sc,cam); };
+  /* a still view may refresh the reflection every 2nd or 3rd frame. A moving one refreshes every frame, or the water shows last frame's projection and the reflection judders. Nothing is drawn while the lake is out of view */
+  const mirror=water.onBeforeRender; let tick=0; const lakeBox=new THREE.Box3(new THREE.Vector3(-380,WATER_Y-.5,-50),new THREE.Vector3(380,WATER_Y+.5,410)), fr=new THREE.Frustum(), vp=new THREE.Matrix4();
+  water.onBeforeRender=function(r,sc,cam){ if(!cam.isPerspectiveCamera) return; fr.setFromProjectionMatrix(vp.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse)); if(!fr.intersectsBox(lakeBox)) return; const e=cam.matrixWorld.elements, was=cam.userData.mirrorWas||(cam.userData.mirrorWas=new Float32Array(16)); let moved=false; for(let i=0;i<16;i++) if(Math.abs(e[i]-was[i])>2e-4){ moved=true; break; } if(moved) was.set(e); if((moved&&mirrorFollow)||(tick++%mirrorEvery)===0) mirror.call(this,r,sc,cam); };
   const u=water.material.uniforms;
   u.uTint.value=waterU.uTint.value; u.uGlint.value=waterU.uGlint.value; u.uFog.value=U.uFog.value; u.uShore.value=shoreTex(); u.uNoise.value=TEX.clouds; u.uSunD.value=waterU.sunD; u.uSunC.value=waterU.uSunC.value; u.uShallow.value=waterU.uShallow.value; u.uCloud.value=U.uCloud.value; u.uCloudOff.value=U.uCloudOff.value; u.uCloudTint.value=U.uCloudTint.value; u.uFogSun.value=U.uFogSun.value;
   waterU.uni=u;

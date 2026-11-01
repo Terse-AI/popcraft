@@ -131,7 +131,7 @@
 
 <div id="hud" class="hidden">
   <div id="top">
-    <span class="pill" id="qualbtn">⚙ 均衡</span>
+    <span class="pill" id="qualbtn">⚙ 极致</span>
     <span class="pill" id="sndbtn">🔊</span>
     <span class="pill" id="langbtn">🌐 中文</span>
     <span class="pill" id="cobtn" title="co-op">👥</span>
@@ -216,7 +216,7 @@ import {
 } from 'postprocessing';
 import {
   FARM_HALF, WATER_Y, terrainH, lakeField, inWater, PATHS, ISLANDS, vnoise, loadScenery, buildScenery, updateScenery, setSeason,
-  collide, addObstacle, addBoxObstacle, obstacles, reskinTrees, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
+  collide, addObstacle, addBoxObstacle, obstacles, reskinTrees, splatAt, softGrad, miniTrees, toonOf, paintedSoil, walkH, onDock, DOCK, nearestOf, setMirrorEvery, setMirrorFollow, setUnderwater, U as paintU, plantedTrees, plantedPlants, stampBlock, riverAt, water
 } from './scenery.js';
 import { setupFlora, updateFlora, refreshFlora, bakeFar } from './flora.js';
 import { buildDesert, DESERT } from './desert.js';
@@ -919,7 +919,8 @@ class HourGrade extends Effect {
      }`,
     { attributes:EffectAttribute.DEPTH, uniforms:new Map([['uSunC',new THREE.Uniform(new THREE.Color())],['uShaft',new THREE.Uniform(0)],['uAO',new THREE.Uniform(0)],['uSharp',new THREE.Uniform(0)],['uAsp',new THREE.Uniform(1.6)],['uSunP',new THREE.Uniform(new THREE.Vector2(.5,.5))],['gS',new THREE.Uniform(new THREE.Color())],['gM',new THREE.Uniform(new THREE.Color())],['gH',new THREE.Uniform(new THREE.Color())],['amt',new THREE.Uniform(0.3)],['flash',new THREE.Uniform(0)],['uLine',new THREE.Uniform(0)],['uT',new THREE.Uniform(0)],['uTint',new THREE.Uniform(new THREE.Color())],['tUnder',new THREE.Uniform(null)]]) }); }
 }
-let QUAL = localStorage.getItem('sv_qual2')||'high';   // the best picture by default; the governor below still keeps a slower machine smooth
+let QUAL = 'high';   // every visit opens at the best picture; the quality button lasts for that visit only
+try{ localStorage.removeItem('sv_qual2'); }catch(e){}
 const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false,ao:0,sharp:.3},
             med:{dpr:1.4,shadow:1536,bloom:true,msaa:0,smaa:true,ao:.46,sharp:.26},
             high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false,ao:.52,sharp:.2} };
@@ -937,21 +938,23 @@ function setupPost(){
   gradeFx=new HourGrade(); gradeFx.uniforms.get('uAO').value=q.ao||0; gradeFx.uniforms.get('uSharp').value=q.sharp||0; gradeFx.uniforms.get('uAsp').value=innerWidth/innerHeight; fx.push(gradeFx);
   if(q.smaa) fx.push(new SMAAEffect());
   composer.addPass(new EffectPass(camera, ...fx));
-  composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(2);
+  composer.setSize(innerWidth,innerHeight); syncRes(); setMirrorEvery(2); setMirrorFollow(true);
 }
-function setQuality(q){ QUAL=q; localStorage.setItem('sv_qual2',q); setupPost(); updateQualBtn(); document.body.classList.toggle('lowfx',q==='low'); }
+function setQuality(q){ QUAL=q; govStep=0; govSlow=0; govGood=0; setupPost(); updateQualBtn(); document.body.classList.toggle('lowfx',q==='low'); }
 function updateQualBtn(){ const b=document.getElementById('qualbtn'); if(b) b.textContent='⚙ '+({low:L('流畅','Smooth'),med:L('均衡','Balanced'),high:L('极致','Ultra')}[QUAL]||QUAL); }
 
 const camAim=new THREE.Vector3(0,0,4), cForward=new THREE.Vector3(), cRight=new THREE.Vector3(), moveV=new THREE.Vector3();
 let last=performance.now(), miniT=0, statusT=0, fCnt=0, fAcc=0, sTick=0;
-// frame governor: if a machine cannot hold its tier, step resolution and mirror rate down, quietly and for this session
-let govT=0, govN=0, govStep=0, govScale=1;
-function governor(raw){ if(DBG&&!DBG.gov) return;
+// frame governor: if a machine truly cannot hold its tier, resolution steps down quietly, and a long smooth run earns it back.
+// Shaders compiling on arrival, a tab in the background and open menus are not slowness, so none of them count
+let govT=0, govN=0, govStep=0, govSlow=0, govGood=0, govHold=20, govFrom=performance.now()+15000;
+const GOV_SCALE=[1,.85,.72,.6];
+function govApply(){ setMirrorEvery(Math.min(3,2+govStep)); setMirrorFollow(govStep<3); renderer.setPixelRatio(Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr)*GOV_SCALE[govStep]); composer.setSize(innerWidth,innerHeight); syncRes(); govFrom=performance.now()+6000; }
+function governor(raw){ if(DBG&&!DBG.gov) return; if(document.hidden||paused()||raw>.4||performance.now()<govFrom){ govT=0; govN=0; return; }
   govT+=raw; govN++; if(govT<2.5) return;
   const fps=govN/govT; govT=0; govN=0;
-  if(fps<42&&govStep<3&&!document.hidden){ govStep++; govScale=[1,.82,.68,.56][govStep];
-    setMirrorEvery(Math.min(3,2+govStep));
-    renderer.setPixelRatio(Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr)*govScale); composer.setSize(innerWidth,innerHeight); syncRes(); }
+  if(fps<42){ govGood=0; if(++govSlow>=2&&govStep<3){ govSlow=0; govStep++; govApply(); } return; }
+  govSlow=0; if(fps>=57&&govStep){ govGood+=2.5; if(govGood>=govHold){ govGood=0; govHold=Math.min(240,govHold*2); govStep--; govApply(); } } else govGood=0;
 }
 function syncRes(){ renderer.getDrawingBufferSize(paintU.uRes.value); }
 const paused=()=>!!document.querySelector('.panel:not(.hidden)');
@@ -1030,13 +1033,13 @@ function frame(now){
   // proximity hints
   hintProximity();
 
-  updateFlora(camera.position,cForward);
+  updateFlora(camera.position,cForward,S.boating?6:2.6);
   soundTick(dt,now*0.001);
   statusT+=dt; if(statusT>.3){ renderStatus(); statusT=0; }
   miniT+=dt; if(miniT>0.25){ drawMini(); miniT=0; }
   governor(raw);
 
-  if((sTick++ % 4)===0) renderer.shadowMap.needsUpdate=true;   // throttle shadow pass to ~15Hz
+  if((sTick++ % (S.boating?12:4))===0) renderer.shadowMap.needsUpdate=true;   // throttle shadow pass to ~15Hz, ~5Hz out on the water where nothing near casts one
   if(cut.on||cut.k>.02) renderUnder();
   composer.render();
   if(DBG){ DBG.frames=(DBG.frames||0)+1; if(DBG.frames===8) document.body.dataset.ready='1'; }
