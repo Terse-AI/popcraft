@@ -1,0 +1,1 @@
+export const logHouse=()=>({userData:{}}), fenceRun=()=>{}, makeVillager=()=>({position:{set(){}},rotation:{},userData:{}}), addSmoke=()=>{}, signBoard=()=>{}, mailbox=()=>{}, greenhouse=()=>{}, cabinRoom=()=>{};

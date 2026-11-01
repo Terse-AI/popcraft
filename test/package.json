@@ -1,0 +1,11 @@
+{
+  "name": "starvale-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run.mjs && node check_data.mjs .build/data.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}

@@ -1,0 +1,2 @@
+export const terrainH=()=>0, walkH=()=>0, lakeField=()=>-1, riverAt=()=>null, inWater=()=>false, collide=()=>{}, addObstacle=()=>({}), addBoxObstacle=()=>{}, nearestOf=()=>null, stampBlock=()=>{}, RIVER=[], DOCK={x:15,z0:30,z1:45,w:2.5,y:.02}, FARM_HALF=13, WATER_Y=0, toonOf=()=>({}), removeTree=()=>{}, breakRock=()=>{}, restoreWorld=()=>{}, rockGeoFor=()=>({}), TEX={};
+export let plantedTrees=[];

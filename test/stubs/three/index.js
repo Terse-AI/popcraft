@@ -1,0 +1,2 @@
+class O{ constructor(){ this.children=[]; this.position={set(){},x:0,y:0,z:0}; this.rotation={}; this.scale={set(){},setScalar(){}}; this.visible=true; this.userData={}; this.material={}; this.color={setHex(){}}; } add(){} remove(){} rotateX(){} clone(){return new O();} }
+export class Group extends O{} export class PointLight extends O{} export class AmbientLight extends O{} export class Mesh extends O{} export class BoxGeometry{} export class CircleGeometry{ rotateX(){} } export class SphereGeometry{} export class MeshBasicMaterial{}
