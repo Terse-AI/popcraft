@@ -462,7 +462,7 @@ function groundMaterial(){
           float lk=abs(uSeasonG-2.)<.5?1.:.3, lz=sp.r*(1.-smoothstep(.2,.6,sp.g))*smoothstep(.42,.64,t2.g+t3.r*.4)*lk, lf=max(smoothstep(.6,.64,b.b)*b.b,smoothstep(.74,.78,b2.b)*b2.b);
           c=mix(c,ramp(.3+lf*.6,uLeafRow),step(.1,lf)*lz*bk*.85); }
         c*=mix(1.,.55,wet);
-        if(uWet>.003){ gPud=smoothstep(.6,.65,t3.g*.6+t2.r*.4+sp.g*.16-.04)*(1.-steep)*(1.-smoothstep(50.,110.,gd))*smoothstep(.1,.9,uWet)*(1.-uSnow); c*=1.-.36*uWet; }
+        if(uWet>.003){ gPud=smoothstep(.67,.72,t3.g*.6+t2.r*.4+sp.g*.16-.04)*(1.-steep)*(1.-smoothstep(50.,110.,gd))*smoothstep(.1,.9,uWet)*(1.-uSnow); c*=1.-.36*uWet; }
         c*=cloudShade(vWP.xz);
         if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.06)); }
         diffuseColor.rgb*=c;`);
