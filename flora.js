@@ -131,7 +131,7 @@ function floraMaterial(depth,plantsR,leafy){
           c=ramp(v,vRow);
           if(uSnow>.01) c=mix(c,ramp(.45+v*.6,uIceRow),uSnow*smoothstep(.1,.6,t.b)*smoothstep(-.3,.35,normalize(vN).y));
           c*=mix(uShade,uLit,smoothstep(.08,.7,v));
-          float back=pow(max(dot(vV,uSunDirW),0.),4.); c=mix(c,ramp(v+.3,vRow)*uLit*1.6,back*uGlow*(.26+.74*vShade)); }           // sun through the leaves
+          float back=pow(max(dot(vV,uSunDirW),0.),4.); c=mix(c,ramp(v+.3,vRow)*uLit*1.7,min(1.,back*uGlow*1.6)*(.26+.74*vShade)); }           // sun through the leaves
         c*=cloudShade(vP);
         c=mix(c,uFog+uFogSun*pow(max(dot(vV,uSunDirW),0.),6.),vFog);
         gl_FragColor=vec4(c,a); }` });

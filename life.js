@@ -5,7 +5,7 @@ import { U, lakeField, WATER_Y, heightAt } from './scenery.js';
 
 const tau=Math.PI*2;
 let motes=null, leaves=null, leafD=[], flies=null, flyD=[], rings=[], dummy=new THREE.Object3D(), col=new THREE.Color(), active=true;
-const SEASONC=[[0xf6c6d6,0xfbe4ea,0xf0b0c8],[0x7c9c44,0x96a850,0x6e8c3c],[0xd2642a,0xe49a30,0xb43c1e],[0xffffff,0xffffff,0xffffff]];
+const SEASONC=[[0xff6aa8,0xffb4d0,0xff4a90],[0xb8e850,0xe0f470,0x88d840],[0xff5a14,0xffa814,0xe02810],[0xffffff,0xffffff,0xffffff]];
 
 function buildMotes(root){
   const N=220, g=new THREE.BufferGeometry(), P=new Float32Array(N*3), A=new Float32Array(N); for(let i=0;i<N;i++){ P.set([Math.random()*30,Math.random()*9,Math.random()*30],i*3); A[i]=Math.random(); }
@@ -18,7 +18,7 @@ function buildMotes(root){
   motes=new THREE.Points(g,m); motes.frustumCulled=false; motes.layers.set(1); root.add(motes);
 }
 function buildLeaves(root){
-  const N=110, g=new THREE.BufferGeometry(), P=[0,0,-.5, .22,.05,-.1, 0,0,.5, -.22,.05,-.1], I=[0,1,2,0,2,3]; g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
+  const N=260, g=new THREE.BufferGeometry(), P=[0,0,-.5, .22,.05,-.1, 0,0,.5, -.22,.05,-.1], I=[0,1,2,0,2,3]; g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
   leaves=new THREE.InstancedMesh(g,new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}),N); leaves.frustumCulled=false; leaves.layers.set(1); leaves.castShadow=false; root.add(leaves);
   for(let i=0;i<N;i++){ leafD.push({x:Math.random()*44,y:Math.random()*15,z:Math.random()*44,v:.5+Math.random()*.6,ph:Math.random()*tau,rx:1.5+Math.random()*2.5,ry:1+Math.random()*2,s:.11+Math.random()*.1}); leaves.setColorAt(i,col.set(0xffffff)); }
 }
@@ -41,7 +41,7 @@ export function buildLife(root){ buildMotes(root); buildLeaves(root); buildFlies
 export function updateLife(t,dt,cam,season,rig,inside){
   const on=!inside; if(on!==active){ active=on; motes.visible=leaves.visible=flies.visible=on; for(const r of rings) r.m.visible=false; }
   if(!on) return;
-  const sc=SEASONC[season], count=[70,14,110,0][season], dayK=1-rig.night;
+  const sc=SEASONC[season], count=[210,90,260,0][season], dayK=1-rig.night;
   motes.material.uniforms.uAmt.value=season===3?.25:rig.rain?.1:1;
   leaves.count=rig.rain?0:count;
   for(let i=0;i<leaves.count;i++){ const l=leafD[i]; l.y-=l.v*dt; l.x+=(U.uWindDir.value.x*U.uWindAmp.value*1.1+Math.sin(t*.9+l.ph)*.5)*dt; l.z+=(U.uWindDir.value.y*U.uWindAmp.value*1.1+Math.cos(t*.7+l.ph)*.5)*dt; if(l.y<0){ l.y=14+Math.random()*3; }
