@@ -79,6 +79,11 @@ function fern(seed){ const r=rng(seed), m=new Mesh3(), a0=ATLAS.frond_a, n=14;
 }
 
 /* a clump of tapered blades, y up to 1: vertex colour is computed in the shader from height */
+/* a tile of individual leaves with midribs and veins. Near crowns are read through it, so a clump resolves into leaves as you walk up */
+function leafTile(){ const n=512, c=document.createElement('canvas'); c.width=c.height=n; const x=c.getContext('2d'), r=rng(733);
+  const leaf=(px,py,a,L,g)=>{ x.save(); x.translate(px,py); x.rotate(a); const W=L*(.3+r()*.14), gr=x.createLinearGradient(0,-W,0,W); gr.addColorStop(0,`rgb(${g+26},0,0)`); gr.addColorStop(.5,`rgb(${g},0,0)`); gr.addColorStop(1,`rgb(${Math.max(0,g-34)},0,0)`); x.fillStyle=gr; x.beginPath(); x.moveTo(-L,0); x.quadraticCurveTo(-L*.2,-W*1.5,L,0); x.quadraticCurveTo(-L*.2,W*1.5,-L,0); x.fill(); x.strokeStyle=`rgb(${Math.max(0,g-70)},0,0)`; x.lineWidth=1.2; x.beginPath(); x.moveTo(-L,0); x.lineTo(L,0); x.stroke(); x.lineWidth=.55; for(let i=-3;i<=3;i++){ const q=i/3.6*L; x.beginPath(); x.moveTo(q,0); x.lineTo(q+L*.2,-W*.62); x.moveTo(q,0); x.lineTo(q+L*.2,W*.62); x.stroke(); } x.restore(); };
+  for(let i=0;i<620;i++){ const px=r()*n, py=r()*n, a=r()*tau, L=20+r()*20, g=70+Math.floor(r()*150); for(const dx of [-n,0,n]) for(const dy of [-n,0,n]) if(px+dx>-60&&px+dx<n+60&&py+dy>-60&&py+dy<n+60) leaf(px+dx,py+dy,a,L,g); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; return t; }
 function bladeClump(seed,count,spread,curl,heads=false,wide=1){
   const r=rng(seed), P=[], W=[], I=[], A=[];
   for(let b=0;b<count;b++){ const a=r()*tau, bx=Math.cos(a)*r()*spread, bz=Math.sin(a)*r()*spread, h=.55+r()*.45, lean=(.1+r()*curl)*h, da=a+(r()-.5)*1.6, lx=Math.cos(da), lz=Math.sin(da), w=(.03+r()*.018)*wide, px=-lz, pz=lx, base=P.length/3, segs=3, ph=r();
@@ -118,16 +123,17 @@ function floraMaterial(depth,plantsR,leafy){
     fragmentShader:`#include <packing>\n precision highp float; uniform sampler2D uMap; uniform float uLodT; varying vec2 vUv; varying float vTrunk;
       void main(){ if(vTrunk<.5&&texture2D(uMap,vUv).a<.4) discard; gl_FragColor=packDepthToRGBA(gl_FragCoord.z); }` });
   return new THREE.ShaderMaterial({ fog:false, toneMapped:false, side:THREE.DoubleSide, alphaToCoverage:true,
-    uniforms:{ ...U, uLodT:plantsR?U.uLodP:U.uLodT, uDetail:{value:leafy?.78:.9}, uMipBias:{value:leafy?-1.2:-.6}, uMap:{value:TEX.sheet_near}, uBark:{value:TEX.mt_detail}, uWoodRow:{value:rowV('wood')}, uIceRow:{value:rowV('ice')} }, vertexShader:vs,
-    fragmentShader:`precision highp float; uniform sampler2D uMap,uRamps,uBark; uniform vec3 uShade,uLit,uFog,uSunDirW,uFogSun; uniform float uSnow,uWoodRow,uIceRow,uLodT,uDetail,uMipBias,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
+    uniforms:{ ...U, uLeafT:{value:leafT||(leafT=leafTile())}, uLodT:plantsR?U.uLodP:U.uLodT, uDetail:{value:leafy?.78:.9}, uMipBias:{value:leafy?-1.2:-.6}, uMap:{value:TEX.sheet_near}, uBark:{value:TEX.mt_detail}, uWoodRow:{value:rowV('wood')}, uIceRow:{value:rowV('ice')} }, vertexShader:vs,
+    fragmentShader:`precision highp float; uniform sampler2D uMap,uRamps,uBark,uLeafT; uniform vec3 uShade,uLit,uFog,uSunDirW,uFogSun; uniform float uSnow,uWoodRow,uIceRow,uLodT,uDetail,uMipBias,uGlow; uniform vec4 uReveal; uniform vec2 uRes;
       varying vec2 vUv,vP; varying vec3 vN,vV; varying float vRow,vTone,vShade,vTrunk,vFog,vD,vY,vF; ${RAMP_GLSL} ${CLOUD_GLSL} ${dith}
       void main(){ float fade=smoothstep(uLodT-5.,uLodT-1.,vD); if(fade>dith(gl_FragCoord.xy)+.001) discard; if(vF<3.4&&(vF-1.2)/2.2<dith(gl_FragCoord.xy)) discard;
-        if(vD<uReveal.z){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.26){ if(dith(gl_FragCoord.xy*.5)>rr/.26*1.1-.08) discard; } }
+        if(vD<uReveal.z){ vec2 sp=(gl_FragCoord.xy/uRes-uReveal.xy)*vec2(uReveal.w,1.); float rr=length(sp); if(rr<.26){ if(dith(gl_FragCoord.xy)>smoothstep(.1,.26,rr)*1.08-.06) discard; } }
         vec3 c; float a=1.; float lam=dot(normalize(vN),uSunDirW);
         if(vTrunk>1.5){ float bn=vShade>.3?texture2D(uBark,vN.xz*1.6+vP*.07).b-.5:0.; c=ramp((vShade>.3?.36:.3)+vTone+bn*.3,vRow)*mix(uShade,uLit,vShade>.3?.5:.46); }
         else if(vTrunk>.5){ vec2 bq=vUv*vec2(.62,.3); vec3 b=texture2D(uBark,bq).rgb, b2=texture2D(uBark,bq*3.3).rgb; vec3 nb=normalize(vN+vec3(b.r-.5,0.,b.g-.5)*1.6+vec3(b2.r-.5,0.,b2.g-.5)*.9); float l2=dot(nb,uSunDirW); float v=.4+.36*(l2*.5+.5)+(b.b-.5)*.95+(b2.b-.5)*.6; c=ramp(v,uWoodRow)*mix(uShade,uLit,.5+.45*max(l2,0.)); }
         else { vec4 t=texture2D(uMap,vUv,uMipBias); if(t.a<.32) discard; a=clamp((t.a-.5)/max(fwidth(t.a),.0001)+.5,0.,1.);
-          float v=mix(.42,t.r,uDetail)+(t.g-.5)*.2+vTone+lam*.3*(.6+.4*vShade)+(vShade-.5)*.34;
+          float nr=1.-smoothstep(9.,30.,vD), lv=.0; if(nr>.01){ vec4 ld=texture2D(uLeafT,vUv*5.); if(t.a<.9&&ld.a<.5*nr) discard; lv=(ld.r-.5)*.72*nr*step(.5,ld.a)-.16*nr*(1.-step(.5,ld.a)); }
+          float v=mix(.42,t.r,uDetail*(1.-nr*.46))+(t.g-.5)*.2+vTone+lam*.3*(.6+.4*vShade)+(vShade-.5)*.34+lv; v=mix(v,min(v,.62),nr);
           c=ramp(v,vRow);
           if(uSnow>.01) c=mix(c,ramp(.45+v*.6,uIceRow),uSnow*smoothstep(.1,.6,t.b)*smoothstep(-.3,.35,normalize(vN).y));
           c*=mix(uShade,uLit,smoothstep(.08,.7,v));
@@ -266,7 +272,7 @@ function updateChunks(cam,budget){
 
 /* ---------- LOD set ---------- */
 const CELL=16, cells=new Map(), key=(x,z)=>Math.floor(x/CELL)*8192+Math.floor(z/CELL);
-const VAR={}; let bladeSpan=46;
+const VAR={}; let bladeSpan=46, leafT=null;
 function variant(root,name,geo,cap,mat,dep){
   const g=new THREE.InstancedBufferGeometry(); g.index=geo.index; for(const k in geo.attributes) g.setAttribute(k,geo.attributes[k]);
   const a=new THREE.InstancedBufferAttribute(new Float32Array(cap*3),3), b=new THREE.InstancedBufferAttribute(new Float32Array(cap*4),4); a.setUsage(THREE.DynamicDrawUsage); b.setUsage(THREE.DynamicDrawUsage);
@@ -295,7 +301,7 @@ export function setupFlora(root,trees,plants,qual){
   const lm=floraMaterial(false,false,true); [0,1].forEach(i=>{ variant(root,'bro'+i,broadleaf(51+i),60,lm,dep); variant(root,'bro'+i+'L',broadleaf(51+i,210,1.5),110,lm,dep); });
   const pm=floraMaterial(false,true,true); variant(root,'shr',shrub(3),260,pm); variant(root,'fer',fern(4),320,pm);
   const tm=bladeMaterial('TUFT');
-  bladeVariant(root,'tuf0',bladeClump(5,48,.2,.55,false,.7),600,tm); bladeVariant(root,'tuf1',bladeClump(6,42,.25,1,false,.7),600,tm); bladeVariant(root,'tuf0L',bladeClump(5,15,.2,.55,false,1.7),1200,tm); bladeVariant(root,'tuf1L',bladeClump(6,13,.25,1,false,1.7),1200,tm); bladeVariant(root,'ree',bladeClump(7,18,.14,.14,true,.8),520,tm);
+  bladeVariant(root,'tuf0',bladeClump(5,48,.2,.55,false,.7),600,tm); bladeVariant(root,'tuf1',bladeClump(6,42,.25,1,false,.7),600,tm); bladeVariant(root,'tuf0L',bladeClump(5,24,.2,.55,false,1.2),1200,tm); bladeVariant(root,'tuf1L',bladeClump(6,22,.25,1,false,1.2),1200,tm); bladeVariant(root,'ree',bladeClump(7,18,.14,.14,true,.8),520,tm);
   // the carpet: short grass baked chunk by chunk around the camera, plus the small things that grow in it
   carpetBase=bladeClump(8,qual==='high'?16:12,.85,.8,false,qual==='high'?1.2:1.7); carpetMat=bladeMaterial('CARPET'); decoMat=bladeMaterial('DECO');
   blockHook.fn=(x,z,hx,hz)=>{ for(let i=Math.floor((x-hx)/CH);i<=Math.floor((x+hx)/CH);i++) for(let j=Math.floor((z-hz)/CH);j<=Math.floor((z+hz)/CH);j++){ const k=ckey(i,j); if(chunks.has(k)) dirty.add(k); } };

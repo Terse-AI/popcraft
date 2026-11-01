@@ -451,12 +451,12 @@ export function makeValley(G){
   /* ---------- villagers walk their day ---------- */
   const PLACES={}; let CLINIC={x:0,z:0}; G.placeSet=(id,x,z)=>{ PLACES[id]={x,z}; if(id==='clinic') CLINIC={x,z}; };
   const people=G.people=[];
-  G.buildPeople=()=>{ for(const n of NPCS){ const m=makeVillager(n.col,n.style,NPCS.indexOf(n)), s=PLACES[n.sched[n.sched.length-1][1]]||{x:30,z:-22}; const p={n,mesh:m,x:s.x+rnd(-2,2),z:s.z+rnd(-2,2),yaw:0,speed:0,ph:Math.random()*6,tx:0,tz:0,wait:0}; p.tx=p.x; p.tz=p.z; m.position.set(p.x,walkH(p.x,p.z),p.z); world.add(m); people.push(p); } };
+  G.buildPeople=()=>{ for(const n of NPCS){ const m=makeVillager(n.col,n.style,NPCS.indexOf(n)), s=PLACES[n.sched[n.sched.length-1][1]]||{x:30,z:-22}; const p={n,mesh:m,x:s.x+rnd(-2,2),z:s.z+rnd(-2,2),yaw:0,speed:0,ph:Math.random()*6,tx:0,tz:0,wait:0}; p.tx=p.x; p.tz=p.z; m.position.set(p.x,walkH(p.x,p.z),p.z); m.traverse&&m.traverse(o=>o.layers.set(1)); world.add(m); people.push(p); } };
   G.updatePeople=dt=>{ if(S.inMine||S.inHouse) return; const t=S.time; for(const p of people){ const sch=p.n.sched; let cur=sch[sch.length-1]; for(const e of sch) if(t>=e[0]) cur=e; const home=!(t>=sch[0][0]); const place=home?PLACES[sch[sch.length-1][1]]:PLACES[cur[1]]||PLACES.plaza; if(place&&p.placeId!==cur[1]+home){ p.placeId=cur[1]+home; p.tx=place.x+rnd(-3,3); p.tz=place.z+rnd(-3,3); }
       const dx=p.tx-p.x, dz=p.tz-p.z, d=Math.hypot(dx,dz); let want=0; if(d>.4){ want=d>30?3.2:1.9; p.yaw=angDamp(p.yaw,Math.atan2(dx,dz),6,dt); } else { p.wait-=dt; if(p.wait<0){ p.wait=rnd(5,14); if(place){ p.tx=place.x+rnd(-4,4); p.tz=place.z+rnd(-4,4); } } }
       if(Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<2.6){ want=0; p.yaw=angDamp(p.yaw,Math.atan2(player.pos.x-p.x,player.pos.z-p.z),6,dt); }
       p.speed=damp(p.speed,want,8,dt); p.x+=Math.sin(p.yaw)*p.speed*dt; p.z+=Math.cos(p.yaw)*p.speed*dt; const q={x:p.x,z:p.z}; collide(q,.4); p.x=q.x; p.z=q.z; p.ph+=p.speed*dt*3.1; const s=Math.sin(p.ph), l=p.mesh.userData.limbs, a=Math.min(1,p.speed/1.6); if(l){ l.legL.rotation.x=s*.55*a; l.legR.rotation.x=-s*.55*a; l.armL.rotation.x=-s*.42*a; l.armR.rotation.x=s*.42*a; l.torso.rotation.z=s*.03*a; }
-      p.mesh.visible=!(S.time>=1320&&d<1.6)||S.spouse===p.n.id; p.mesh.position.set(p.x,walkH(p.x,p.z)+Math.abs(s)*.035*a,p.z); p.mesh.rotation.y=p.yaw; } };
+      p.mesh.visible=(!(S.time>=1320&&d<1.6)||S.spouse===p.n.id)&&Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<72; p.mesh.position.set(p.x,walkH(p.x,p.z)+Math.abs(s)*.035*a,p.z); p.mesh.rotation.y=p.yaw; } };
   G.nearPerson=()=>{ let b=null,d=2.6; for(const p of people){ const q=Math.hypot(player.pos.x-p.x,player.pos.z-p.z); if(q<d){ d=q; b=p; } } return b; };
 
   /* ---------- festivals ---------- */

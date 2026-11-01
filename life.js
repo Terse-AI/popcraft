@@ -1,7 +1,7 @@
 /* The small life of the valley: dust caught in the sun, leaves and petals tumbling down, dragonflies working
    the shallows, rings where fish rise. Everything here wraps around the camera, so it costs the same anywhere. */
 import * as THREE from 'three';
-import { U, lakeField, WATER_Y, heightAt } from './scenery.js';
+import { U, lakeField, WATER_Y, heightAt, plantedTrees, inWater } from './scenery.js';
 
 const tau=Math.PI*2;
 let motes=null, leaves=null, leafD=[], flies=null, flyD=[], rings=[], dummy=new THREE.Object3D(), col=new THREE.Color(), active=true;
@@ -18,9 +18,10 @@ function buildMotes(root){
   motes=new THREE.Points(g,m); motes.frustumCulled=false; motes.layers.set(1); root.add(motes);
 }
 function buildLeaves(root){
-  const N=260, g=new THREE.BufferGeometry(), P=[0,0,-.5, .22,.05,-.1, 0,0,.5, -.22,.05,-.1], I=[0,1,2,0,2,3]; g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
-  leaves=new THREE.InstancedMesh(g,new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}),N); leaves.frustumCulled=false; leaves.layers.set(1); leaves.castShadow=false; root.add(leaves);
-  for(let i=0;i<N;i++){ leafD.push({x:Math.random()*44,y:Math.random()*15,z:Math.random()*44,v:.5+Math.random()*.6,ph:Math.random()*tau,rx:1.5+Math.random()*2.5,ry:1+Math.random()*2,s:.17+Math.random()*.15}); leaves.setColorAt(i,col.set(0xffffff)); }
+  const N=760, g=new THREE.BufferGeometry(), P=[0,0,-.5, .22,.05,-.1, 0,0,.5, -.22,.05,-.1], I=[0,1,2,0,2,3]; g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
+  const lm=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}); lm.onBeforeCompile=sh=>{ sh.uniforms.uLitC=U.uLit; sh.fragmentShader='uniform vec3 uLitC;\n'+sh.fragmentShader.replace('#include <opaque_fragment>','outgoingLight=mix(outgoingLight,diffuseColor.rgb*uLitC,.66);\n#include <opaque_fragment>'); };
+  leaves=new THREE.InstancedMesh(g,lm,N); leaves.frustumCulled=false; leaves.layers.set(1); leaves.castShadow=false; root.add(leaves);
+  for(let i=0;i<N;i++){ leafD.push({x:Math.random()*44,y:Math.random()*15,z:Math.random()*44,v:.5+Math.random()*.6,ph:Math.random()*tau,rx:1.5+Math.random()*2.5,ry:1+Math.random()*2,s:.2+Math.random()*.18}); leaves.setColorAt(i,col.set(0xffffff)); }
 }
 function buildFlies(root){
   const P=[], W=[], Cc=[], add=(a,b,c,w,cl)=>{ for(const q of [a,b,c]){ P.push(...q); W.push(w); Cc.push(...cl); } };
@@ -37,14 +38,21 @@ function buildFlies(root){
 }
 function buildRings(root){ const g=new THREE.RingGeometry(.86,1,40); g.rotateX(-Math.PI/2); for(let i=0;i<6;i++){ const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,fog:false,toneMapped:false})); m.layers.set(1); m.visible=false; root.add(m); rings.push({m,t:-Math.random()*6}); } }
 
-export function buildLife(root){ buildMotes(root); buildLeaves(root); buildFlies(root); buildRings(root); }
-export function updateLife(t,dt,cam,season,rig,inside){
+let litter=null, litterMax=0;
+function buildLitter(root){ const LIM=9000, trees=plantedTrees.filter(t=>/^broad/.test(t.row)||t.row==='larch'), g=new THREE.BufferGeometry(), P=[-.5,0,0, 0,.03,-.2, .5,0,0, 0,.03,.2], I=[0,1,2,0,2,3]; g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
+  litter=new THREE.InstancedMesh(g,new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}),LIM); litter.frustumCulled=false; litter.layers.set(1); litter.receiveShadow=true; root.add(litter); const cols=[0xb83c1a,0xd8602a,0xe8a040,0xc88a28,0x8e2418,0xe0a838]; let n=0;
+  const per=Math.max(6,Math.min(46,Math.floor(LIM/Math.max(1,trees.length))));
+  for(const t of trees){ if(t.y===undefined) continue; for(let i=0;i<per&&n<LIM;i++){ const a=Math.random()*tau, q=Math.sqrt(Math.random())*4.6, x=t.x+Math.cos(a)*q, z=t.z+Math.sin(a)*q; if(inWater(x,z)) continue; dummy.position.set(x,heightAt(x,z)+.05+Math.random()*.05,z); dummy.rotation.set((Math.random()-.5)*.4,a*3,(Math.random()-.5)*.4); dummy.scale.setScalar(.24+Math.random()*.26); dummy.updateMatrix(); litter.setMatrixAt(n,dummy.matrix); litter.setColorAt(n,col.set(cols[Math.floor(Math.random()*6)])); n++; } }
+  litterMax=n; litter.count=0; litter.visible=false; }
+export function buildLife(root){ buildMotes(root); buildLeaves(root); buildFlies(root); buildRings(root); buildLitter(root); }
+export function updateLife(t,dt,cam,season,rig,inside,day=1){
+  if(litter){ litter.visible=season===2&&!inside; if(litter.visible) litter.count=Math.floor(litterMax*Math.min(1,(day+5)/20)); }
   const on=!inside; if(on!==active){ active=on; motes.visible=leaves.visible=flies.visible=on; for(const r of rings) r.m.visible=false; }
   if(!on) return;
-  const sc=SEASONC[season], count=[210,90,260,0][season], dayK=1-rig.night;
+  const sc=SEASONC[season], count=[420,140,760,0][season], dayK=1-rig.night, gust=1+2.6*Math.max(0,Math.sin(t*.23)*Math.sin(t*.37+1.));
   motes.material.uniforms.uAmt.value=season===3?.25:rig.rain?.1:1;
   leaves.count=rig.rain?0:count;
-  for(let i=0;i<leaves.count;i++){ const l=leafD[i]; l.y-=l.v*dt; l.x+=(U.uWindDir.value.x*U.uWindAmp.value*2.2+Math.sin(t*1.5+l.ph)*1.2)*dt; l.z+=(U.uWindDir.value.y*U.uWindAmp.value*2.2+Math.cos(t*1.2+l.ph)*1.2)*dt; if(l.y<0){ l.y=14+Math.random()*3; }
+  for(let i=0;i<leaves.count;i++){ const l=leafD[i]; l.y-=l.v*dt; l.x+=(U.uWindDir.value.x*U.uWindAmp.value*2.2*gust+Math.sin(t*1.5+l.ph)*1.2)*dt; l.z+=(U.uWindDir.value.y*U.uWindAmp.value*2.2*gust+Math.cos(t*1.2+l.ph)*1.2)*dt; if(l.y<0){ l.y=14+Math.random()*3; }
     const wrap=(v,c,s)=>c-s/2+(((v-c+s/2)%s)+s)%s, x=wrap(l.x,cam.x,32), z=wrap(l.z,cam.z,32), gy=terrainHFast(x,z);
     dummy.position.set(x,gy+l.y*.8+.2,z); dummy.rotation.set(t*l.rx+l.ph,t*l.ry,Math.sin(t*2+l.ph)*.8); dummy.scale.setScalar(l.s*(season===0?.72:1)); dummy.updateMatrix(); leaves.setMatrixAt(i,dummy.matrix); if(season!==leaves.userData.s) leaves.setColorAt(i,col.set(sc[i%3])); }
   if(season!==leaves.userData.s){ leaves.userData.s=season; if(leaves.instanceColor) leaves.instanceColor.needsUpdate=true; }

@@ -111,8 +111,8 @@ const KEYS=[
  [1130,'#a85a58','#e08a5c','#f4c47c','#f8cc94','#984e50','#fff0b8','#6a2c28','#d48a68','#a06858','#f4c8a0','#2a0e12','#b83a1c','#c88a6c','#d8986c','#7a4a3c','#30182a','#ffb468','#14060c','#8e4028','#f8d090', .08,.34,3.1,.64,1.3,.0004,.0, 0.12],
  [1200,'#e088ac','#f4a4bc','#f8c4bc','#fbd4cc','#b090bc','#ffe8d0','#262a48','#585a94','#585a94','#c0a0c8','#1c1c26','#3c3a64','#9c86a8','#b49ac4','#4a4670','#222a48','#f8bcc0','#101224','#544674','#f8ccd0', .12,.34,1.7,.66,1.,.0008,.1, 0.22],
  [1320,'#2c2e7c','#5054a4','#a07cb4','#8c7cbc','#30306c','#ffd0c0','#1a1e54','#4e56a8','#3a3460','#a09cc4','#0c0e38','#262a64','#464684','#605490','#28306c','#161c58','#b4a8e0','#0a0a2c','#3e3a7a','#bcb0e4', .12,.36,.9,.84,.85,.0008,.55, .34],
- [1380,'#3444a0','#4c5cb0','#7476b8','#7c80bc','#262c70','#f4f0dc','#20285e','#5a68b4','#3c4674','#b4c0e8','#10143c','#2c3468','#2a3474','#46508c','#28347c','#161e58','#b8c8f8','#0a0e30','#3e48a0','#e8ecff', .1,.34,.95,1.4,.95,.0007,1, .5],
- [1560,'#2c3c94','#4454a8','#6a6cb0','#7076b4','#222868','#f4f0dc','#1c2458','#505eac','#36406c','#a8b4e0','#0e1236','#283060','#262e6c','#404a84','#242e74','#141a50','#acbcf0','#080c2a','#38429a','#dce2fc', .1,.34,.9,1.35,.95,.0007,1, .5]
+ [1380,'#18204e','#2a3264','#484c7c','#565a88','#262c70','#f4f0dc','#181e4e','#5a68b4','#3c4674','#b4c0e8','#080c2c','#1c2452','#1c2458','#343e78','#1e2868','#0e1444','#8c9ee0','#060824','#2c3688','#e0e6ff', .06,.34,2.,.9,.95,.0007,1, .5],
+ [1560,'#141c46','#262e5c','#424672','#4e5280','#222868','#f4f0dc','#161c48','#505eac','#36406c','#a8b4e0','#070a28','#1a214c','#1a2052','#303a72','#1c2562','#0c1240','#8496d8','#050720','#283280','#d8dffc', .06,.34,1.9,.85,.95,.0007,1, .5]
 ].map(r=>{ const o={t:r[0]}; F.forEach((k,i)=>o[k]=hex(r[i+1])); N.forEach((k,i)=>o[k]=r[i+1+F.length]); return o; });
 
 function palette(t){
@@ -125,7 +125,7 @@ function palette(t){
 // overcast / rain: the same hour, drained toward slate
 function weatherize(p,w){
   if(w==='clear') return p;
-  const q=w==='rain'?.5:.26, g=mixc(p.mid,[.3,.36,.52],.6), o={...p};
+  const q=w==='rain'?.5:w==='snow'?.42:.26, g=mixc(p.mid,[.3,.36,.52],.6), o={...p};
   for(const k of ['top','mid','low','cloudL','haze','water']) o[k]=mixc(p[k],g,q);
   o.cloudS=mixc(p.cloudS,[.16,.2,.32],q); o.sunI=p.sunI*(1-q*.72); o.mistAmt=Math.min(1,p.mistAmt+q*.5); o.fog=p.fog*(1+q*.9);
   return o;
@@ -212,10 +212,10 @@ function buildSky(root){
         float q=floor(b*34.+fract(atan(d.x,d.z)*7.)*.4)/34.; q=mix(b,q,.65);                                  // soft banding, as brushed
         vec3 c=q<.3?mix(uLow,uMid,q/.3):mix(uMid,uTop,clamp((q-.3)/.62,0.,1.));
         float az=atan(d.x,d.z);
-        if(uNight>.01){                                                                                      // stars: little crosses
+        if(uNight>.01){                                                                                      // stars: soft points, a few bright and most faint
           vec2 g=vec2(az*42.,h*70.), id=floor(g), f=fract(g)-.5; float s=h21(id);
-          if(s>.93&&h>.03){ float w=h21(id+7.)*.34+.1; float k=step(abs(f.x),w)*step(abs(f.y),.045)+step(abs(f.y),w*1.3)*step(abs(f.x),.03);
-            c+=clamp(k,0.,1.)*uNight*(.35+.65*h21(id+3.))*vec3(.92,.94,1.); }
+          if(s>.86&&h>.03){ vec2 o=(vec2(h21(id+11.),h21(id+13.))-.5)*.7; float r=length((f-o)*vec2(1.67,1.)), b=h21(id+3.); b=b*b; float k=exp(-r*r*mix(420.,130.,b));
+            c+=k*uNight*(.28+1.3*b)*mix(vec3(1.,.9,.8),vec3(.8,.88,1.),h21(id+7.)); }
           float ms=acos(clamp(dot(d,uMoonD),-1.,1.));
           c+=uNight*(exp(-ms*ms*260.)*.3+exp(-ms*ms*40.)*.13)*vec3(.74,.78,1.);
           vec3 mr=normalize(cross(uMoonD,vec3(0.,1.,0.))); float cres=length(vec2(dot(d-uMoonD,mr)-.015,d.y-uMoonD.y));
@@ -444,7 +444,7 @@ function groundMaterial(){
         #ifdef USE_FOG
         { float ff=1.-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth); gl_FragColor.rgb=mix(gl_FragColor.rgb,fogColor+uFogSun*pow(max(dot(normalize(vWP-cameraPosition),uSunDirW),0.),6.),ff); }
         #endif`).replace('#include <normal_fragment_maps>',`
-        { float dn=length(vWP-cameraPosition), nk=1.-smoothstep(26.,64.,dn); if(nk>.01){ float e=.05; vec2 q=vWP.xz/9.; float h0=texture2D(uTile,q).g, hx=texture2D(uTile,q+vec2(e/9.,0.)).g, hz=texture2D(uTile,q+vec2(0.,e/9.)).g; vec3 wn=normalize(vWN+vec3(h0-hx,0.,h0-hz)*3.2*nk*(1.-uSnow*.9)); normal=normalize(mat3(viewMatrix)*wn); } }`).replace('#include <map_fragment>',`
+        { float dn=length(vWP-cameraPosition), nk=1.-smoothstep(26.,64.,dn); if(nk>.01){ float e=.05; vec2 q=vWP.xz/9.; float h0=texture2D(uTile,q).g, hx=texture2D(uTile,q+vec2(e/9.,0.)).g, hz=texture2D(uTile,q+vec2(0.,e/9.)).g; vec3 wn=normalize(vWN+vec3(h0-hx,0.,h0-hz)*3.2*nk*(1.-uSnow*.9)); if(uSnow>.5){ float E=.9; vec2 q2=vWP.xz/31.; float s0=texture2D(uTile,q2).r, sx=texture2D(uTile,q2+vec2(E/31.,0.)).r, sz=texture2D(uTile,q2+vec2(0.,E/31.)).r; wn=normalize(wn+vec3(s0-sx,0.,s0-sz)*5.5*nk); } normal=normalize(mat3(viewMatrix)*wn); } }`).replace('#include <map_fragment>',`
         vec2 suv=vWP.xz/840.+.5; vec4 sp=texture2D(uSplat,suv);
         vec3 t1=texture2D(uTile,vWP.xz/9.).rgb, t2=texture2D(uTile,vWP.xz/31.).rgb, t3=texture2D(uTile,vWP.xz/157.).rgb;
         float g=(t1.r*.72+t2.r*.34+t3.r*.22-.14)*1.2+.0;
@@ -466,7 +466,7 @@ function groundMaterial(){
         c*=mix(1.,.55,wet);
         if(uWet>.003){ gPud=smoothstep(.62,.78,t3.g*.6+t2.r*.4+sp.g*.16-.04)*(1.-steep)*(1.-smoothstep(50.,110.,gd))*smoothstep(.1,.9,uWet)*(1.-uSnow); c*=1.-.36*uWet; }
         c*=cloudShade(vWP.xz);
-        if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.06)); }
+        if(uSnow>.01){ c=mix(c,ramp(.74+t3.r*.14+(t2.r-.5)*.16,uIceRow),uSnow*smoothstep(.15,.4,.5+(t2.r-.5)*.5-sp.g*.06)); c*=mix(vec3(.74,.78,.98),vec3(1.),mix(1.,smoothstep(.3,.62,t2.r),uSnow)); }
         diffuseColor.rgb*=c;`);
   };
   return m;
@@ -803,7 +803,8 @@ export const rig={ mistC:new THREE.Color(), mistK:0, water:new THREE.Color(), ra
 export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   U.uTime.value=t;
   const weather=weather0==='storm'?'rain':weather0==='snow'?'cloudy':weather0;
-  const P=weatherize(palette(minutes),weather);
+  const P=weatherize(palette(minutes),weather0==='snow'?'snow':weather), wk=U.uSnow.value*(1-P.night);
+  if(wk>.01){ P.shade=mixc(P.shade,hex('#26346c'),.75*wk); P.gS=mixc(P.gS,hex('#101a40'),.7*wk); P.gM=mixc(P.gM,hex('#6e7aa4'),.6*wk); P.gH=mixc(P.gH,hex('#fff4e8'),.7*wk); P.lit=mixc(P.lit,hex('#fff0dc'),.6*wk); }
   // sun crosses the south, so it sets over the lake; moon follows
   const a=clamp((minutes-330)/(1215-330),0,1)*Math.PI;
   const sx=Math.cos(a)*.92, sy=Math.sin(a)*.72+.012, sz=.6;

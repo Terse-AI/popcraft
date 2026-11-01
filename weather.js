@@ -11,16 +11,16 @@ export function buildWeather(scene,U,groundAt){
   rg.setAttribute('position',new THREE.BufferAttribute(rp,3)); rg.setAttribute('aE',new THREE.BufferAttribute(rE,1)); rg.setAttribute('aS',new THREE.BufferAttribute(rS,1));
   const rain=new THREE.LineSegments(rg,new THREE.ShaderMaterial({ transparent:true, depthWrite:false, fog:false, toneMapped:false, uniforms:{ uT:U.uTime, uWind:U.uWindDir, uK:uK.rain, uCol:U.uFog },
     vertexShader:`attribute float aE,aS; uniform float uT; uniform vec2 uWind; varying float vA;
-      void main(){ vec3 B=vec3(48.,28.,48.), p=position, c=cameraPosition; p.y=mod(p.y-uT*(21.+aS*9.),B.y); p.xz+=uWind*uT*2.4; vec3 q; q.xz=mod(p.xz-c.xz+B.xz*.5,B.xz)-B.xz*.5+c.xz; q.y=c.y-9.+p.y; float len=.6+aS*.7; q.y-=aE*len; q.xz+=uWind*aE*len*.13; float d=length(q-c); vA=(1.-aE*.92)*(.3+.7*aS)*smoothstep(1.2,5.,d)*(1.-smoothstep(16.,25.,d)); gl_Position=projectionMatrix*viewMatrix*vec4(q,1.); }`,
-    fragmentShader:`precision highp float; uniform float uK; uniform vec3 uCol; varying float vA; void main(){ gl_FragColor=vec4(mix(uCol,vec3(1.),.6),vA*uK*.62); }` }));
+      void main(){ vec3 B=vec3(48.,28.,48.), p=position, c=cameraPosition; p.y=mod(p.y-uT*(21.+aS*9.),B.y); p.xz+=uWind*uT*2.4; vec3 q; q.xz=mod(p.xz-c.xz+B.xz*.5,B.xz)-B.xz*.5+c.xz; q.y=c.y-9.+p.y; float len=.9+aS*1.2; q.y-=aE*len; q.xz+=uWind*aE*len*.13; float d=length(q-c); vA=(1.-aE*.92)*(.3+.7*aS)*smoothstep(1.2,5.,d)*(1.-smoothstep(16.,25.,d)); gl_Position=projectionMatrix*viewMatrix*vec4(q,1.); }`,
+    fragmentShader:`precision highp float; uniform float uK; uniform vec3 uCol; varying float vA; void main(){ gl_FragColor=vec4(mix(uCol,vec3(1.),.72),vA*uK*.9); }` }));
   rain.frustumCulled=false; rain.layers.set(1); rain.visible=false; rain.renderOrder=30; scene.add(rain);
 
-  const N=3400, sg=new THREE.BufferGeometry(), sp=new Float32Array(N*3), sS=new Float32Array(N);
+  const N=7000, sg=new THREE.BufferGeometry(), sp=new Float32Array(N*3), sS=new Float32Array(N);
   for(let i=0;i<N;i++){ sp.set([rnd(0,44),rnd(0,20),rnd(0,44)],i*3); sS[i]=Math.random(); }
   sg.setAttribute('position',new THREE.BufferAttribute(sp,3)); sg.setAttribute('aS',new THREE.BufferAttribute(sS,1));
   const snow=new THREE.Points(sg,new THREE.ShaderMaterial({ transparent:true, depthWrite:false, fog:false, toneMapped:false, uniforms:{ uT:U.uTime, uWind:U.uWindDir, uK:uK.snow, uPx:{value:1} },
     vertexShader:`attribute float aS; uniform float uT,uPx; uniform vec2 uWind; varying float vA;
-      void main(){ vec3 B=vec3(44.,20.,44.), p=position, c=cameraPosition; float ph=aS*40.; p.y=mod(p.y-uT*(.9+aS*1.1),B.y); p.x+=sin(uT*.6+ph)*1.3+uWind.x*uT*.9; p.z+=cos(uT*.47+ph*1.3)*1.3+uWind.y*uT*.9; vec3 q; q.xz=mod(p.xz-c.xz+B.xz*.5,B.xz)-B.xz*.5+c.xz; q.y=c.y-6.+p.y; float d=length(q-c); vA=(.55+.45*aS)*smoothstep(.3,1.6,d)*(1.-smoothstep(15.,22.,d)); gl_Position=projectionMatrix*viewMatrix*vec4(q,1.); gl_PointSize=clamp((1.2+aS*2.)*uPx*16./max(d,.6),1.2,11.*uPx); }`,
+      void main(){ vec3 B=vec3(44.,20.,44.), p=position, c=cameraPosition; float ph=aS*40.; p.y=mod(p.y-uT*(.9+aS*1.1),B.y); p.x+=sin(uT*.6+ph)*1.3+uWind.x*uT*.9; p.z+=cos(uT*.47+ph*1.3)*1.3+uWind.y*uT*.9; vec3 q; q.xz=mod(p.xz-c.xz+B.xz*.5,B.xz)-B.xz*.5+c.xz; q.y=c.y-6.+p.y; float d=length(q-c); vA=(.7+.3*aS)*smoothstep(.3,1.4,d)*(1.-smoothstep(15.,22.,d)); gl_Position=projectionMatrix*viewMatrix*vec4(q,1.); gl_PointSize=clamp((1.5+aS*aS*5.)*uPx*20./max(d,.6),1.4,17.*uPx); }`,
     fragmentShader:`precision highp float; uniform float uK; varying float vA; void main(){ float r=length(gl_PointCoord-.5)*2.; float a=(1.-smoothstep(.25,1.,r))*vA*uK; if(a<.004) discard; gl_FragColor=vec4(1.,.99,.97,a); }` }));
   snow.frustumCulled=false; snow.layers.set(1); snow.visible=false; snow.renderOrder=30; scene.add(snow);
 
