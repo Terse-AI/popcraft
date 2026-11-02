@@ -18,7 +18,7 @@ function buildMotes(root){
   motes=new THREE.Points(g,m); motes.frustumCulled=false; motes.layers.set(1); root.add(motes);
 }
 function buildLeaves(root){
-  const N=760, g=new THREE.BufferGeometry(), P=[0,0,-.5, .22,.05,-.1, 0,0,.5, -.22,.05,-.1], I=[0,1,2,0,2,3]; g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
+  const N=760, g=new THREE.BufferGeometry(), P=[0,0,-.55, .13,.04,-.34, .2,.06,-.06, .14,.05,.2, 0,0,.5, -.14,.05,.2, -.2,.06,-.06, -.13,.04,-.34, 0,-.02,-.06], I=[]; for(let i=0;i<8;i++) I.push(8,i,(i+1)%8); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
   const lm=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}); lm.onBeforeCompile=sh=>{ sh.uniforms.uLitC=U.uLit; sh.fragmentShader='uniform vec3 uLitC;\n'+sh.fragmentShader.replace('#include <opaque_fragment>','outgoingLight=mix(outgoingLight,diffuseColor.rgb*uLitC,.66);\n#include <opaque_fragment>'); };
   leaves=new THREE.InstancedMesh(g,lm,N); leaves.frustumCulled=false; leaves.layers.set(1); leaves.castShadow=false; root.add(leaves);
   for(let i=0;i<N;i++){ leafD.push({x:Math.random()*44,y:Math.random()*15,z:Math.random()*44,v:.5+Math.random()*.6,ph:Math.random()*tau,rx:1.5+Math.random()*2.5,ry:1+Math.random()*2,s:.2+Math.random()*.18}); leaves.setColorAt(i,col.set(0xffffff)); }
@@ -54,7 +54,7 @@ export function updateLife(t,dt,cam,season,rig,inside,day=1){
   leaves.count=rig.rain?0:count;
   for(let i=0;i<leaves.count;i++){ const l=leafD[i]; l.y-=l.v*dt; l.x+=(U.uWindDir.value.x*U.uWindAmp.value*2.2*gust+Math.sin(t*1.5+l.ph)*1.2)*dt; l.z+=(U.uWindDir.value.y*U.uWindAmp.value*2.2*gust+Math.cos(t*1.2+l.ph)*1.2)*dt; if(l.y<0){ l.y=14+Math.random()*3; }
     const wrap=(v,c,s)=>c-s/2+(((v-c+s/2)%s)+s)%s, x=wrap(l.x,cam.x,32), z=wrap(l.z,cam.z,32), gy=terrainHFast(x,z);
-    dummy.position.set(x,gy+l.y*.8+.2,z); dummy.rotation.set(t*l.rx+l.ph,t*l.ry,Math.sin(t*2+l.ph)*.8); dummy.scale.setScalar(l.s*(season===0?.72:1)); dummy.updateMatrix(); leaves.setMatrixAt(i,dummy.matrix); if(season!==leaves.userData.s) leaves.setColorAt(i,col.set(sc[i%3])); }
+    dummy.position.set(x,gy+l.y*.8+.2,z); dummy.rotation.set(t*l.rx+l.ph,t*l.ry,Math.sin(t*2+l.ph)*.8); dummy.scale.setScalar(l.s*(season===0?.72:1)*Math.min(1,Math.hypot(x-cam.x,z-cam.z)/6)); dummy.updateMatrix(); leaves.setMatrixAt(i,dummy.matrix); if(season!==leaves.userData.s) leaves.setColorAt(i,col.set(sc[i%3])); }
   if(season!==leaves.userData.s){ leaves.userData.s=season; if(leaves.instanceColor) leaves.instanceColor.needsUpdate=true; }
   leaves.instanceMatrix.needsUpdate=true;
   flies.visible=(season===0||season===1)&&dayK>.6&&!rig.rain;

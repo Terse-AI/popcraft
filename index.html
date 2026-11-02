@@ -940,7 +940,7 @@ let QUAL = (()=>{ try{ return sessionStorage.getItem('sv_safe')?'med':'high'; }c
 try{ localStorage.removeItem('sv_qual2'); }catch(e){}
 const QSET={ low:{dpr:0.85,shadow:1024,bloom:false,msaa:0,smaa:false,ao:0,sharp:.3},
             med:{dpr:1.4,shadow:1536,bloom:true,msaa:0,smaa:true,ao:.56,sharp:.26,vol:false},
-            high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false,ao:.68,sharp:.2,vol:true} };
+            high:{dpr:1.6,shadow:2048,bloom:true,msaa:2,smaa:false,ao:.68,sharp:.32,vol:true} };
 let volPass=null;
 const PIX_BUDGET={low:.9e6,med:2e6,high:3e6};
 const pixelRatio=()=>Math.min(devicePixelRatio,(QSET[QUAL]||QSET.med).dpr,Math.sqrt((PIX_BUDGET[QUAL]||2e6)/Math.max(1,innerWidth*innerHeight)))*GOV_SCALE[govStep];

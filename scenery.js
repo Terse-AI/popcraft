@@ -388,12 +388,12 @@ export function makeSprites(root,sheet,items,opts={}){
       float dith(vec2 p){ return fract(52.9829189*fract(dot(floor(p)+.5,vec2(.06711056,.00583715)))); }
       void main(){ if(vLodF<=dith(gl_FragCoord.xy)) discard;
         #ifdef BAKED
-        vec4 t=texture2D(uMap,vUv,-.8); if(t.a<.3) discard;
+        vec4 t=texture2D(uMap,vUv,-1.2); vec2 lq=vUv+fract(vP*.37); float crown=step(t.g,.5), lk=crown*(1.-smoothstep(170.,380.,vNear)), g1=texture2D(uMott,lq*vec2(31.,17.)).b, g2=texture2D(uMott,lq*vec2(83.,47.)).b; if(t.a<.3+lk*(g1-.42)*.66) discard;
         #else
         vec4 t=texture2D(uMap,vUv); if(t.a<.32) discard;
         #endif
         #ifdef BAKED
-        float v=t.r*1.4-.2+vSideL*vX*.2+(t.g>.5?0.:vTone); vec3 c=ramp(v,t.g>.5?uWoodRow:vRow);
+        float v=t.r*1.4-.2+vSideL*vX*.2+(t.g>.5?0.:vTone); v=mix(v,.5+(v-.5)*1.24+(g1-.5)*.66+(g2-.5)*.44-smoothstep(.56,.74,g1)*.2,lk); vec3 c=ramp(v,t.g>.5?uWoodRow:vRow);
         if(uSnow>.01&&t.g<.5) c=mix(c,ramp(.45+v*.6,uSnowRow),uSnow*t.b);
         #elif defined(COLORED)
         vec3 c=pow(t.rgb,vec3(2.2)); float v=dot(t.rgb,vec3(.3,.6,.1));
