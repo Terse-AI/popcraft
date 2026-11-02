@@ -55,7 +55,7 @@ export function makeCoop(G){
     for(const k of [...LISTS,...NUMS]) if(k in d){ if(k==='felled'||k==='broken') G.worldFx.sync(k,S[k]||[],d[k]); S[k]=d[k]; last[k]=js(d[k]); if(k==='forage') G.rebuildForage(); if(k==='digs') G.rebuildDigs(); }
     if(d.placements){ const now=new Set(d.placements.map(p=>p.id+'@'+p.x+','+p.z)); for(const [k,p] of was) if(!now.has(k)){ S.placements=[...S.placements,p]; G.dropPlacement(S.placements[S.placements.length-1]); } for(const p of d.placements) if(!was.has(p.id+'@'+p.x+','+p.z)) G.spawnPlacement(p.id,p.x,p.z,p.ry); S.placements=d.placements; } }
   /* a guest receives the whole farm, then keeps a life of their own on it */
-  function arrive(d){ const mine={}; PERSONAL.forEach(k=>mine[k]=d.you&&d.you[k]!==undefined?d.you[k]:S[k]); G.loadGame(d.snap); Object.assign(S,mine); if(!d.you){ S.inv={'seed:parsnip':15}; } setClock(d.clock); S.time=d.clock.time; G.festivalsToday(); snapshotHashes(); gold0=S.gold; G.dressUp&&G.dressUp(); G.renderStatus(); G.renderEnergy(); G.renderHotbar(); G.coWeather&&G.coWeather(); toast('👥 '+L('到了朋友的农场','You are on your friend\'s farm')); G.coopHud&&G.coopHud(); }
+  function arrive(d){ const mine={}; PERSONAL.forEach(k=>mine[k]=d.you&&d.you[k]!==undefined?d.you[k]:S[k]); G.loadGame(d.snap); Object.assign(S,mine); if(!d.you){ S.inv={['seed:'+G.starterSeed()]:15}; } setClock(d.clock); S.time=d.clock.time; G.festivalsToday(); snapshotHashes(); gold0=S.gold; G.dressUp&&G.dressUp(); G.renderStatus(); G.renderEnergy(); G.renderHotbar(); G.coWeather&&G.coWeather(); toast('👥 '+L('到了朋友的农场','You are on your friend\'s farm')); G.coopHud&&G.coopHud(); }
   G.coopPersonal=()=>{ const o={}; PERSONAL.forEach(k=>o[k]=S[k]); return o; };
 
   /* ---------- the night ---------- */

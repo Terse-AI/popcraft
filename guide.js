@@ -7,7 +7,7 @@ const CARDS=[
 const STEPS=[
  ['走到田边(WASD)','Walk to the field (WASD)',s=>s.moved>6],
  ['按 1 拿锄头,对着地面左键耕地','Press 1 for the hoe, left click to till',s=>s.S.stats.till>=1],
- ['按 Tab 打开背包,选防风草种子种下','Open your bag (Tab), pick parsnip seeds, plant one',s=>[...s.S.tiles.values()].some(t=>t.crop)],
+ ['按 Tab 打开背包,选种子种下','Open your bag (Tab), pick your seeds, plant one',s=>[...s.S.tiles.values()].some(t=>t.crop)],
  ['按 2 拿水壶,给它浇水','Press 2 for the can and water it',s=>[...s.S.tiles.values()].some(t=>t.crop&&t.watered)],
  ['去镇上和一位村民说话(M 看地图)','Go to town and talk to someone (M for the map)',s=>s.S.stats.meet>=1],
  ['回屋按 E 睡觉,结束第一天','Go home and press E to sleep',s=>s.S.day>1||s.S.absDay>1]];

@@ -1345,21 +1345,21 @@ async function boot(){
   try{ renderIcons(); }catch(e){}   // bake crop models → shop/inventory icons
   await setProgress(90);
 
-  // a new farmer: fifteen parsnip seeds, and a yard gone to weeds
+  // a new farmer: one of the valley's best daylight views, fifteen seeds that grow in its season, and a yard gone to weeds
   // saves belong to your NOVA account: the launcher says whether to continue, and signing in is what makes progress stick
   const bootQ=new URLSearchParams(location.search), bootMode=DBG?'':bootQ.get('mode'); let cloud=null; if(bootMode==='continue'||bootMode==='parked'){ const r=await nova(bootMode==='parked'?'parked':'load'); cloud=r&&r.data; }
   G.storeSave=async d=>{ if(!inNova||(G.coop.on&&!G.coop.host)){ return null; } const meta={day:S.day,season:S.season,year:S.year||1,gold:S.gold,time:Math.round(S.time)}, r=await nova('save',{data:d,meta},30000); if(r&&r.ok){ toast('💾 '+L('已保存到你的账号','Saved to your account')); return true; } if(r&&r.needAuth) savePrompt(); else toast('⚠️ '+L('这次没有存上,稍后再试','Could not save just now')); return false; };
   const coCode=(bootQ.get('co')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6), fresh=coCode?false:!(!DBG||DBG.load)||!G.loadGame(cloud);
   if(coCode&&!(await G.coop.autoJoin(coCode))) return G.coBack();
-  if(fresh){ G.invAdd('seed','parsnip',15); G.seedDebris(60); G.spawnForage(); G.spawnDigs(); G.rollTomorrow(); G.festivalsToday(); S.mail.push({zh:'亲爱的,这座小农场和湖畔小屋从今天起是你的了。去犁地、去钓鱼、去认识镇上的人吧。——爷爷','en':'My dear, this little farm and lakeside cabin are yours now. Till the soil, fish the lake, and meet the town. — Grandpa'}); }
+  if(fresh){ if(!DBG||DBG.open!==undefined){ const o=G.rollStart(DBG?DBG.open:undefined), at=o.at||[DOCK.x,DOCK.z1-2.6,-.97]; player.pos.set(at[0],0,at[1]); cam.yaw=player.yaw=at[2]; } G.invAdd('seed',G.starterSeed(),15); G.seedDebris(60); G.spawnForage(); G.spawnDigs(); G.rollTomorrow(); G.festivalsToday(); S.mail.push({zh:'亲爱的,这座小农场和湖畔小屋从今天起是你的了。去犁地、去钓鱼、去认识镇上的人吧。——爷爷','en':'My dear, this little farm and lakeside cabin are yours now. Till the soil, fish the lake, and meet the town. — Grandpa'}); }
   else if(!coCode) toast(L('存档已读取','Save loaded'));
   if(DBG) applyDebugShot();
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
-  retintGround(); applyWeather(); updateQualBtn(); buildTouch(); document.body.classList.toggle('lowfx',QUAL==='low'); paintHud();
+  retintGround(); applyWeather(); if(S.weather==='rain'||S.weather==='storm') paintU.uWet.value=1; updateQualBtn(); buildTouch(); document.body.classList.toggle('lowfx',QUAL==='low'); paintHud();
   await setProgress(95,L('正在准备光影…','Preparing the light…'));
   try{ await Promise.race([renderer.compileAsync(scene,camera),new Promise(r=>setTimeout(r,7000))]); }catch(e){}
   await setProgress(100,L('马上就好…','Almost there…'));
-  let shown=false; const reveal=()=>{ if(shown) return; shown=true; $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ G.pickFarm(()=>showCards(L,()=>startChecklist(S,L,player,snd))); } if(bootMode==='parked') afterAuth(); } };   // render targets match the now-visible viewport
+  let shown=false; const reveal=()=>{ if(shown) return; shown=true; $('#load').classList.add('hidden'); if(!DBG||DBG.hud) $('#hud').classList.remove('hidden'); dispatchEvent(new Event('resize')); if(!DBG){ nova('ready'); window.focus(); startAudio(); if(fresh){ toast('🎲 '+L('这座农场从'+SEAS()[S.season]+'天开始','This farm begins in '+SEAS()[S.season])); setTimeout(()=>G.pickFarm(()=>showCards(L,()=>startChecklist(S,L,player,snd))),3600); } if(bootMode==='parked') afterAuth(); } };   // render targets match the now-visible viewport
   setTimeout(reveal,4000); requestAnimationFrame(t=>{ frame(t); setTimeout(reveal,80); });
 }
 /* touch: on-screen actions, the stick is the left half of the screen */

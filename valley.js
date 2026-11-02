@@ -16,7 +16,7 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v, rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[
 
 export const SEASON_DAYS=28;
 export function defaultState(){ return {
-  season:0, day:1, year:1, time:360, gold:500, energy:270, maxEnergy:270, hp:100, maxHp:100, tool:0, toolLvl:[0,0,0,0,0], weapon:0, rod:0, bait:0, can:40,
+  season:0, startSeason:0, day:1, year:1, time:360, gold:500, energy:270, maxEnergy:270, hp:100, maxHp:100, tool:0, toolLvl:[0,0,0,0,0], weapon:0, rod:0, bait:0, can:40,
   festDone:false, heldSeed:null, heldPlace:null, heldFert:null, inv:{}, shipped:[], tiles:new Map(), weather:'clear', tomorrow:'clear', luck:0,
   inMine:false, inHouse:false, mineLevel:0, mineMax:0, festival:null, sleeping:false, running:false, boating:false,
   xp:{farm:0,mine:0,forage:0,fish:0,combat:0}, prof:{}, bag:12, hay:0,
@@ -150,6 +150,10 @@ export function makeValley(G){
   /* ---------- weather ---------- */
   function rollTomorrow(){ const r=Math.random(), rain=[.183,.13,.183,.15][S.season]; let w=r<rain?'rain':(r<rain+.2?'cloudy':'clear'); if(S.season===3&&w==='rain') w='snow'; if(S.season===1&&w==='rain'&&Math.random()<.25) w='storm'; if(S.season===1&&(S.day===12||S.day===25)) w='storm'; const nd=S.day%28+1, ns=S.day===28?(S.season+1)%4:S.season; if(FESTIVALS.some(f=>f.s===ns&&nd>=f.d&&nd<f.d+(f.days||1))||nd===1) w='clear'; S.tomorrow=w; }
   G.rollTomorrow=rollTomorrow;
+  /* a new farm opens on one of the valley's best daylight views: each is a season, a sky, an hour and a place to stand, picked by eye. The calendar runs on from whichever comes up, the years count from it, and the first seeds suit the season. at is [x,z,yaw], or the end of the dock when left out */
+  const OPENINGS=[ {s:2,w:'clear',t:900}, {s:2,w:'clear',t:1030,at:[-2,4,0]}, {s:0,w:'clear',t:640}, {s:0,w:'clear',t:900}, {s:1,w:'clear',t:640}, {s:1,w:'rain',t:800}, {s:3,w:'snow',t:800}, {s:3,w:'snow',t:700,at:[-7,4,0]} ], STARTER=['parsnip','pepper','eggplant','wild_wi'];
+  G.openings=OPENINGS; G.starterSeed=()=>STARTER[S.season];
+  G.rollStart=(i=Math.floor(Math.random()*OPENINGS.length))=>{ const o=OPENINGS[i]; S.season=S.startSeason=o.s; S.weather=o.w; S.time=o.t; return o; };
 
   /* ---------- machines and placement ---------- */
   function nearestMachine(){ let b=null,d=2.6; for(const m of S.machines){ const q=Math.hypot(m.x-player.pos.x,m.z-player.pos.z); if(q<d){ d=q; b=m; } } return b; }
@@ -322,10 +326,10 @@ export function makeValley(G){
     if(S.inMine) G.mine.leave(true); if(S.boating){ S.boating=false; }
     if(G.mine.mode==='desert'&&G.leaveDesert) G.leaveDesert(); if(G.mine.mode==='island'&&G.leaveIsland) G.leaveIsland();
     const lines=[]; let earned=0; for(const [k,i,n,p] of S.shipped){ const v=n*p; earned+=v; lines.push(META.of(k,i).name+' ×'+n+' = '+v+'g'); } S.shipped=[]; S.gold+=earned; S.stats.earned+=earned;
-    if(passedOut){ const fee=Math.min(1000,Math.floor(S.gold*.1)); S.gold-=fee; lines.push('💊 '+L('昏倒了,被送回家,扣除 ','You passed out and were carried home. Cost ')+fee+'g'); }
-    const energy=passedOut?S.maxEnergy*.5:(S.time>1440?S.maxEnergy*(1-(S.time-1440)/240):S.maxEnergy);
+    if(passedOut&&S.absDay){ const fee=Math.min(1000,Math.floor(S.gold*.1)); S.gold-=fee; lines.push('💊 '+L('昏倒了,被送回家,扣除 ','You passed out and were carried home. Cost ')+fee+'g'); }
+    const energy=!S.absDay?S.maxEnergy:passedOut?S.maxEnergy*.5:(S.time>1440?S.maxEnergy*(1-(S.time-1440)/240):S.maxEnergy);
     growth();
-    S.day++; S.absDay++; if(S.day>SEASON_DAYS){ S.day=1; S.season=(S.season+1)%4; if(S.season===0) S.year++; }
+    S.day++; S.absDay++; if(S.day>SEASON_DAYS){ S.day=1; S.season=(S.season+1)%4; if(S.season===(S.startSeason||0)) S.year++; }
     S.time=360; S.energy=Math.round(energy); S.hp=S.maxHp; S.weather=S.tomorrow; rollTomorrow(); S.luck=rnd(-.1,.1); S.festDone=false;
     if(S.weather==='rain'||S.weather==='storm') for(const [k,tl] of S.tiles) if(tl.tilled&&!inGreenhouse(...k.split(',').map(Number))){ tl.watered=true; if(tl.crop) tl.crop.watered=true; }
     for(const [k,tl] of S.tiles){ if(tl.sprinkler&&S.farmType!=='beach'){ const [x,z]=k.split(',').map(Number), r=tl.sprinkler; const cells=r===1?[[1,0],[-1,0],[0,1],[0,-1]]:(()=>{ const o=[]; for(let a=-r+1;a<=r-1;a++) for(let b=-r+1;b<=r-1;b++) if(a||b) o.push([a,b]); return o; })(); for(const [dx,dz] of cells){ const t2=G.getTile(x+dx,z+dz); if(t2&&t2.tilled){ t2.watered=true; if(t2.crop) t2.crop.watered=true; } } } }
@@ -476,7 +480,7 @@ export function makeValley(G){
   };
 
   /* ---------- saves ---------- */
-  const SAVE_KEYS=['season','day','year','time','gold','energy','maxEnergy','hp','maxHp','toolLvl','weapon','rod','can','inv','weather','tomorrow','luck','mineMax','xp','prof','bag','hay','built','orders','mail','quests','stats','absDay','museum','cc','ccDone','felled','broken','forage','digs','machines','placements','chests','crabs','friends','spouse','engaged','weddingDay','coop','toolAway','shipped','recipes','tackle','tackleUses','rings','boots','guild','tokens','achieved','mineChests','tools','tapped','owned','year','board','quest','order','cart','millIn','millOut','ponds','hutch','obelisks','krobusDrop','spouseDrop','fairDrop','joja','martBought','panning','pan','giants','baby','children','quarryDay','saplings','caveKind','caveBox','cans','grandpa','boat','walnuts','walnutSpots','parrots','qi','volcanoMax','forged','movieWeek','clubCard','crafts','farmType','decor','wall','floor','hat','sash','sashes','kids','ifarm','wn','frog','office','walnutFound','qiGems','qiOrder','qiDone','mastery','mastered','waivers','perfect','perfStatue','trinket','trinketSlot','anglerDrop','cannoliDrop','galaxy','guests','guestDay','dwarfBoon','farmhands'];
+  const SAVE_KEYS=['season','startSeason','day','year','time','gold','energy','maxEnergy','hp','maxHp','toolLvl','weapon','rod','can','inv','weather','tomorrow','luck','mineMax','xp','prof','bag','hay','built','orders','mail','quests','stats','absDay','museum','cc','ccDone','felled','broken','forage','digs','machines','placements','chests','crabs','friends','spouse','engaged','weddingDay','coop','toolAway','shipped','recipes','tackle','tackleUses','rings','boots','guild','tokens','achieved','mineChests','tools','tapped','owned','year','board','quest','order','cart','millIn','millOut','ponds','hutch','obelisks','krobusDrop','spouseDrop','fairDrop','joja','martBought','panning','pan','giants','baby','children','quarryDay','saplings','caveKind','caveBox','cans','grandpa','boat','walnuts','walnutSpots','parrots','qi','volcanoMax','forged','movieWeek','clubCard','crafts','farmType','decor','wall','floor','hat','sash','sashes','kids','ifarm','wn','frog','office','walnutFound','qiGems','qiOrder','qiDone','mastery','mastered','waivers','perfect','perfStatue','trinket','trinketSlot','anglerDrop','cannoliDrop','galaxy','guests','guestDay','dwarfBoon','farmhands'];
   G.snapshot=()=>{ const d={v:3}; SAVE_KEYS.forEach(k=>d[k]=S[k]); d.tiles=[...S.tiles.entries()]; d.debris=[...S.debris.entries()]; d.animals=S.animals.map(a=>({type:a.type,fr:a.fr,age:a.age,mood:a.mood})); return d; };
   G.saveGame=()=>{ try{ return G.storeSave?G.storeSave(G.snapshot()):null; }catch(e){ console.warn(e); } };
   G.migrate=d=>{ if(d.v===3) return d; if(d.v!==2) return null; // the old build: flat tiles, plain animals, hearts on villagers
