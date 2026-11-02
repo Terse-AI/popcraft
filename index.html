@@ -120,7 +120,7 @@
 </style>
 </head>
 <body>
-<script>if(window.parent===window&&!/[?&]shot/.test(location.search)){ const co=(location.search.match(/[?&]co=([A-Za-z0-9]{6})/)||[])[1]; location.replace('https://nova-games.up.railway.app/starvale'+(co?'?co='+co:'')); }</script>
+<script>if(window.parent===window&&!/[?&](shot|demo)/.test(location.search)){ const co=(location.search.match(/[?&]co=([A-Za-z0-9]{6})/)||[])[1]; location.replace('https://nova-games.up.railway.app/starvale'+(co?'?co='+co:'')); }</script>
 <canvas id="c"></canvas>
 
 <div id="load">
@@ -1354,7 +1354,7 @@ async function boot(){
   if(coCode&&!(await G.coop.autoJoin(coCode))) return G.coBack();
   if(fresh){ if(!DBG||DBG.open!==undefined){ const o=G.rollStart(DBG?DBG.open:undefined), at=o.at||[DOCK.x,DOCK.z1-2.6,-.97]; player.pos.set(at[0],0,at[1]); cam.yaw=player.yaw=at[2]; } G.invAdd('seed',G.starterSeed(),15); G.seedDebris(60); G.spawnForage(); G.spawnDigs(); G.rollTomorrow(); G.festivalsToday(); S.mail.push({zh:'亲爱的,这座小农场和湖畔小屋从今天起是你的了。去犁地、去钓鱼、去认识镇上的人吧。——爷爷','en':'My dear, this little farm and lakeside cabin are yours now. Till the soil, fish the lake, and meet the town. — Grandpa'}); }
   else if(!coCode) toast(L('存档已读取','Save loaded'));
-  if(DBG) applyDebugShot();
+  applyDebugShot();   // builds window.__sv; shot/demo params only apply when DBG is set
   renderStatus(); renderEnergy(); renderHotbar(); applyLang();
   retintGround(); applyWeather(); if(S.weather==='rain'||S.weather==='storm') paintU.uWet.value=1; updateQualBtn(); buildTouch(); document.body.classList.toggle('lowfx',QUAL==='low'); paintHud();
   await setProgress(95,L('正在准备光影…','Preparing the light…'));
@@ -1367,7 +1367,7 @@ async function boot(){
 function buildTouch(){ if(!('ontouchstart' in window)&&!(DBG&&DBG.touch)) return; const w=document.createElement('div'); w.id='touchpad'; w.style.cssText='position:absolute;right:12px;bottom:88px;display:grid;grid-template-columns:repeat(2,64px);gap:10px;pointer-events:auto;z-index:56';
   [['🛠',()=>G.useTool()],['E',()=>interact()],['⤴',()=>jump()],['🎣',()=>{ if(G.fishing.state) G.fishPress(true); else G.tryFish(); }],['🎒',()=>openInv()]].forEach(([l,f])=>{ const b=document.createElement('div'); b.className='pill'; b.style.cssText='width:64px;height:64px;justify-content:center;font-size:24px;border-radius:50%'; b.textContent=l; b.addEventListener('touchstart',e=>{ e.preventDefault(); e.stopPropagation(); f(); },{passive:false}); b.addEventListener('touchend',e=>{ e.stopPropagation(); G.fishPress(false); },{passive:false}); b.onclick=f; w.appendChild(b); }); $('#hud').appendChild(w); $('#help').style.display='none'; }
 // ?shot&t=1130&season=2&x=0&z=20&yaw=0&pitch=.1 freezes the clock on one composed view, for comparing frames
-function applyDebugShot(){ const q=DBG;
+function applyDebugShot(){ const q=DBG||{};
   if(q.t) S.time=q.t; if(q.season!==undefined) S.season=q.season; if(q.w) S.weather=q.w;
   if(q.x!==undefined) player.pos.x=q.x; if(q.z!==undefined) player.pos.z=q.z;
   if(q.yaw!==undefined) cam.yaw=q.yaw; if(q.pitch!==undefined) cam.pitch=q.pitch; if(q.dist) cam.dist=q.dist; if(q.h) cam.height=q.h; if(q.look) cam.look=q.look;
