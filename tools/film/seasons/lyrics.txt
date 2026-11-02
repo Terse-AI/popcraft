@@ -1,0 +1,28 @@
+# 13 slots, already timed to the song. Put each line as:  English line | 中文
+# Leave a slot as just " | " to keep our own line there. Lines starting with # are ignored.
+# 0.00–1.97 s
+ | 
+# 1.97–3.83 s
+ | 
+# 3.83–7.20 s
+ | 
+# 7.20–9.60 s
+ | 
+# 9.60–11.27 s
+ | 
+# 11.27–15.10 s
+ | 
+# 15.33–17.30 s
+ | 
+# 17.30–19.20 s
+ | 
+# 19.20–22.53 s
+ | 
+# 22.53–24.63 s
+ | 
+# 24.63–26.40 s
+ | 
+# 26.40–28.33 s
+ | 
+# 28.33–30.47 s
+ | 

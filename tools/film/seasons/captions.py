@@ -23,6 +23,12 @@ def sprite(en,zh):
     d.text((w/2,150),en,font=EN,anchor='mm',fill=(255,255,255,255)); d.text((w/2,292),zh,font=ZH,anchor='mm',fill=(255,255,255,240))
     a=t.split()[3]; sh=Image.new('RGBA',(w,h),(0,0,0,0)); sh.putalpha(a.filter(ImageFilter.GaussianBlur(14)).point(lambda v:int(v*.72)))
     out=Image.new('RGBA',(w,h),(0,0,0,0)); out.alpha_composite(sh,(0,6)); out.alpha_composite(t); return out
+# lyrics.txt, if filled in, replaces our lines: one line per slot, English and Chinese split by ' | ', in the order of the timings above
+if os.path.exists('lyrics.txt'):
+    rows=[r.rstrip('\n') for r in open('lyrics.txt',encoding='utf8') if not r.startswith('#')]
+    for i,r in enumerate(rows[:len(L)]):
+        if '|' in r and r.split('|')[0].strip():
+            en,zh=[x.strip() for x in r.split('|',1)]; a,b,_,_,m=L[i]; L[i]=(a,b,en,zh,m)
 S=[sprite(e,z) for _,_,e,z,_ in L]
 os.makedirs('caps',exist_ok=True)
 N=int(30.47*FPS)+1

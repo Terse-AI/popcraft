@@ -25,9 +25,9 @@ await page.evaluate(async()=>{
   const D=v.DOCK.z1;
   const L=[
    // spring morning: running the dock toward the mirror lake and the peaks
-   {id:'M1',t0:0,t1:3.833,in(){ set(0,640); },pose(u){ return {p:[-7,4],yaw:0,sp:0}; },cam(u){ return {p:[0,.95,lin(154,138,u)],l:[0,lin(23,25,u),-60],f:40}; }},
+   {id:'M1',t0:0,t1:3.833,in(){ set(0,640); },pose(u){ return {p:[lin(-7,2.5,u),22.4],yaw:Math.PI/2,sp:3.2}; },cam(u){ const x=lin(-7,2.5,u); return {p:[x-4.2,1.35,13.6],l:[x+7,3.3,70],f:34}; }},
    // summer noon: from the shore straight up until the whole valley is under us
-   {id:'M2',t0:3.833,t1:7.2,in(){ set(1,780); },pose(u){ return {p:[11,22],yaw:-.97,sp:0}; },cam(u){ const e=ease(u); return {p:mix([13.5,1.6,17.5],[2,30,-6],e),l:mix([4,3,32],[-40,26,110],e),f:42}; }},
+   {id:'M2',t0:3.833,t1:7.2,in(){ set(1,780); },pose(u){ return {p:[-7,4],yaw:0,sp:0}; },cam(u){ const e=ease(u); return {p:mix([0,2,216],[0,40,201],e),l:mix([0,9,-40],[0,0,-40],e),f:42}; }},
    // winter: snow falling on still water, at the water's edge
    {id:'M3',t0:7.2,t1:9.6,in(){ set(3,840,'snow'); },pose(u){ return {p:[34,lin(-30,-17,u)],yaw:0,sp:3.4}; },cam(u){ const e=ease(u); return {p:mix([34,2.4,9],[34,2.3,6.5],e),l:[34,4,-36],f:34}; }},
    // autumn: the boat crosses in front of a pink sunset
@@ -39,7 +39,7 @@ await page.evaluate(async()=>{
    // winter night: through the frost toward the lit cabin under the aurora
    {id:'M7',t0:19.2,t1:22.533,in(){ set(3,1400); },pose(u){ return {p:[0,lin(-2,-8,u)],yaw:Math.PI,sp:2.6}; },cam(u){ const e=ease(u); return {p:mix([.3,.85,5.5],[.1,1.15,.4],e),l:[0,2.4,-16],f:40}; }},
    // summer storm: low over the lake, out past the dock into the rain
-   {id:'M8',t0:22.533,t1:26.4,in(){ set(1,800,'storm'); },pose(u){ return {p:[-7,4],yaw:0,sp:0}; },cam(u){ return {p:mix([21.5,1.5,30],[11,.9,44],u),l:[-40,8,92],f:36}; }},
+   {id:'M8',t0:22.533,t1:26.4,in(){ set(1,800,'storm'); },pose(u){ return {p:[-7,4],yaw:0,sp:0}; },cam(u){ const e=ease(u); return {p:mix([-94,1.6,113],[-84,1.4,109],e),l:mix([60,11,40],[60,10,36],e),f:38}; }},
    // spring dusk: the sun going down over the peaks, the lake a mirror; it ends in light
    {id:'M9',t0:26.4,t1:30.67,in(){ set(0,1130); },pose(u){ return {p:[-7,4],yaw:0,sp:0}; },act(u){ S.time=lin(1124,1142,u); },cam(u){ const e=ease(u); return {p:mix([97,1.4,63],[91,1.3,66.5],e),l:mix([10,8,128],[6,8,128],e),f:40}; }},
   ];
