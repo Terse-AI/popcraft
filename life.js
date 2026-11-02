@@ -51,7 +51,7 @@ export function updateLife(t,dt,cam,season,rig,inside,day=1){
   if(!on) return;
   const sc=SEASONC[season], count=[420,140,760,0][season], dayK=1-rig.night, gust=1+2.6*Math.max(0,Math.sin(t*.23)*Math.sin(t*.37+1.));
   motes.material.uniforms.uAmt.value=season===3?.25:rig.rain?.1:1;
-  leaves.count=rig.rain?0:count;
+  leaves.count=rig.rain?0:Math.floor(count*(1-rig.night*.8));
   for(let i=0;i<leaves.count;i++){ const l=leafD[i]; l.y-=l.v*dt; l.x+=(U.uWindDir.value.x*U.uWindAmp.value*2.2*gust+Math.sin(t*1.5+l.ph)*1.2)*dt; l.z+=(U.uWindDir.value.y*U.uWindAmp.value*2.2*gust+Math.cos(t*1.2+l.ph)*1.2)*dt; if(l.y<0){ l.y=14+Math.random()*3; }
     const wrap=(v,c,s)=>c-s/2+(((v-c+s/2)%s)+s)%s, x=wrap(l.x,cam.x,32), z=wrap(l.z,cam.z,32), gy=terrainHFast(x,z);
     dummy.position.set(x,gy+l.y*.8+.2,z); dummy.rotation.set(t*l.rx+l.ph,t*l.ry,Math.sin(t*2+l.ph)*.8); dummy.scale.setScalar(l.s*(season===0?.72:1)*Math.min(1,Math.hypot(x-cam.x,z-cam.z)/6)); dummy.updateMatrix(); leaves.setMatrixAt(i,dummy.matrix); if(season!==leaves.userData.s) leaves.setColorAt(i,col.set(sc[i%3])); }

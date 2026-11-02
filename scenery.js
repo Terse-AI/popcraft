@@ -777,7 +777,7 @@ export function nearestOf(kind,x,z,reach){ let best=null, bd=reach; const cx=Mat
 export function addBoxObstacle(x,z,hx,hz){ const o={x,z,hx,hz,box:true}; obstacles.push(o); if(blockT) stampBlock(x,z,hx,hz); const k=gkey(x,z); [[-1,-1],[1,-1],[-1,1],[1,1],[0,0]].forEach(([a,b])=>{ const kk=gkey(x+a*hx,z+b*hz); if(!grid.has(kk)) grid.set(kk,[]); if(!grid.get(kk).includes(o)) grid.get(kk).push(o); }); return o; }
 
 let mistRings=[], birds=null, birdT=0, root=null;
-export const QUAL_RES={low:[512,320],med:[1080,680],high:[1400,880]};
+export const QUAL_RES={low:[512,320],med:[1080,680],high:/[?&]film=1/.test(location.search)?[2600,1640]:[1400,880]};
 export function buildScenery(parent,qual){
   root=new THREE.Group(); parent.add(root);
   bakeFields(); const before=root.children.length; buildSky(root); buildMountains(root,qual); aboveWater=root.children.slice(before); buildGround(root);
@@ -836,7 +836,7 @@ export function updateScenery(t,dt,minutes,weather0,camera,player,aurora){
   const target=(weather==='rain'?1.35:weather==='cloudy'?.95:.6)*(.82+.32*Math.sin(t*.13)); U.uWindAmp.value+=(target-U.uWindAmp.value)*Math.min(1,dt*.6);
   const c=camera.position;
   revealV.copy(player.pos); revealV.y+=1; revealV.project(camera);
-  U.uReveal.value.set(revealV.x*.5+.5,revealV.y*.5+.5,c.distanceTo(player.pos)-.8,camera.aspect);
+  U.uReveal.value.set(revealV.x*.5+.5,revealV.y*.5+.5,/[?&]film=1/.test(location.search)?0:c.distanceTo(player.pos)-.8,camera.aspect);
   layers.forEach(l=>{ l.o.position.x=c.x*.94; l.o.position.z=c.z*.94; });
   mistRings.forEach(o=>{ o.position.x=c.x; o.position.z=c.z; });
   if(birds){ birdT+=dt; const q=(birdT*.012)%1; birds.visible=q<.35&&P.night<.5; birds.position.set(lerp(c.x-260,c.x+260,q/.35),75+Math.sin(birdT*.1)*5,c.z+260); birds.rotation.y=-Math.PI/2; }

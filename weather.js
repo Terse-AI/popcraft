@@ -34,6 +34,7 @@ export function buildWeather(scene,U,groundAt){
 
   let next=0, rk=0, sk=0;
   return {
+    snap(r,s){ rk=r; sk=s; },
     setPixelRatio(pr){ snow.material.uniforms.uPx.value=pr; splash.material.uniforms.uPx.value=pr; },
     /* how thick the air is, for the far curtain of rain or snow */
     veil:()=>Math.max(rk*.82,sk*.42),

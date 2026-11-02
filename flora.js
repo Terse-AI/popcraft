@@ -290,7 +290,7 @@ function bladeVariant(root,name,geo,cap,mat){
 const pickVar=it=>{ const n=it.name, h=Math.abs(Math.floor(it.x*3+it.z*7));
   if(n.startsWith('spruce')) return 'con'+(h%3); if(n.startsWith('larch')) return 'lar'+(h%2); if(n.startsWith('broad')) return 'bro'+(h%2); if(n.startsWith('shrub')) return 'shr';
   if(n.startsWith('fern')) return 'fer'; if(n.startsWith('reed')) return 'ree'; if(n.startsWith('tuft')) return 'tuf'+(h%2); return null; };
-const RAD={ low:[30,20,2], med:[46,28,3.2], high:[62,36,5.4] };
+const RAD={ low:[30,20,2], med:[46,28,3.2], high:/[?&]film=1/.test(location.search)?[120,70,8]:[62,36,5.4] };
 let radT=46, radP=28, lastX=1e9, lastZ=1e9, lastYaw=9;
 export function setupFlora(root,trees,plants,qual){
   const [rt,rp,dens]=RAD[qual]||RAD.med; radT=rt; radP=rp; U.uLodT.value=rt; U.uLodP.value=rp; bladeSpan=rp*2; chunkDens=dens; chunkRoot=root; readTile();
