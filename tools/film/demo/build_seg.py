@@ -21,7 +21,7 @@ for d in segs:
     cmd=['ffmpeg','-nostdin','-v','error','-y','-safe','0','-f','concat','-i',os.path.abspath(lst)]
     if ha: cmd+=['-i',os.path.abspath(aud)]
     else: cmd+=['-f','lavfi','-i','anullsrc=r=48000:cl=stereo']
-    cmd+=['-vf','fps=30,scale=1920:1080:flags=lanczos,unsharp=5:5:.3,format=yuv420p','-r','30','-c:v','h264_videotoolbox','-b:v','14M','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-shortest','-movflags','+faststart',clip]
+    cmd+=['-vf','fps=30,unsharp=5:5:.2,format=yuv420p','-r','30','-c:v','h264_videotoolbox','-b:v','22M','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-shortest','-movflags','+faststart',clip]
     subprocess.run(['nice','-n','10']+cmd,check=True)
     clips.append(clip)
     dd=subprocess.run(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',clip],capture_output=True,text=True).stdout.strip()
