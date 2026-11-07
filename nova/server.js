@@ -60,7 +60,7 @@ const REVIEW_TOKEN = process.env.REVIEW_TOKEN || '';
 const isAdmin = req => { const t = req.headers['x-admin-token']; return !!t && ((!!ADMIN_TOKEN&&t===ADMIN_TOKEN)||(!!REVIEW_TOKEN&&t===REVIEW_TOKEN)); };
 const isReviewer = (req,a) => isAdmin(req) || (!!a&&!!OWNER_ID&&a.userId===OWNER_ID);
 
-const RESERVED = new Set(['','upload','games','portal','covers','sdk.js','mcp','agent.md','mcp-server.js','api','g','raw','assets','public','favicon.ico','robots.txt','health','about','popcraft','playforge','shenzhen']);
+const RESERVED = new Set(['','upload','games','portal','covers','sdk.js','mcp','agent.md','mcp-server.js','api','g','raw','assets','public','favicon.ico','robots.txt','health','about','popcraft','playforge']);
 function allGames(){ const out = []; try { for (const f of fs.readdirSync(GAMES)) { if (!f.endsWith('.json')) continue; try { out.push(JSON.parse(fs.readFileSync(path.join(GAMES,f),'utf8'))); } catch(e){} } } catch(e){} out.sort((a,b) => (b.featured?1:0)-(a.featured?1:0) || (b.created||0)-(a.created||0)); return out; }
 const listGames = () => allGames().filter(g => !g.hidden);
 const readMeta  = id => { try { return JSON.parse(fs.readFileSync(metaPath(id),'utf8')); } catch(e){ return null; } };
