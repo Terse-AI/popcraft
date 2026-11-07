@@ -13,6 +13,8 @@ for (const d of [GAMES, DRAFTS, SITES, SAVES, COVERS, VERSIONS]) fs.mkdirSync(d,
 const PUBLIC = path.join(__dirname, 'public');
 const STARVALE_URL = '/play/starvale';   // the game ships inside this service, in game/ (sync-game.sh copies it in before a deploy)
 const GAME = path.join(__dirname, 'game');
+const SHENZHEN_URL = '/play/shenzhen';   // 深圳生活 ships inside this service too, in shenzhen/ (sync-shenzhen.sh copies it in before a deploy)
+const SZ = path.join(__dirname, 'shenzhen');
 
 const MAX_HTML = 12 * 1024 * 1024, MAX_ZIP = 80 * 1024 * 1024, MAX_UNZIP = 240 * 1024 * 1024, MAX_SAVE = 4 * 1024 * 1024;
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -58,7 +60,7 @@ const REVIEW_TOKEN = process.env.REVIEW_TOKEN || '';
 const isAdmin = req => { const t = req.headers['x-admin-token']; return !!t && ((!!ADMIN_TOKEN&&t===ADMIN_TOKEN)||(!!REVIEW_TOKEN&&t===REVIEW_TOKEN)); };
 const isReviewer = (req,a) => isAdmin(req) || (!!a&&!!OWNER_ID&&a.userId===OWNER_ID);
 
-const RESERVED = new Set(['','upload','games','portal','covers','sdk.js','mcp','agent.md','mcp-server.js','api','g','raw','assets','public','favicon.ico','robots.txt','health','about','popcraft','playforge']);
+const RESERVED = new Set(['','upload','games','portal','covers','sdk.js','mcp','agent.md','mcp-server.js','api','g','raw','assets','public','favicon.ico','robots.txt','health','about','popcraft','playforge','shenzhen']);
 function allGames(){ const out = []; try { for (const f of fs.readdirSync(GAMES)) { if (!f.endsWith('.json')) continue; try { out.push(JSON.parse(fs.readFileSync(path.join(GAMES,f),'utf8'))); } catch(e){} } } catch(e){} out.sort((a,b) => (b.featured?1:0)-(a.featured?1:0) || (b.created||0)-(a.created||0)); return out; }
 const listGames = () => allGames().filter(g => !g.hidden);
 const readMeta  = id => { try { return JSON.parse(fs.readFileSync(metaPath(id),'utf8')); } catch(e){ return null; } };
@@ -214,6 +216,8 @@ function setup(){
   const STAR = { title:'StarVale', slug:'starvale', author:'NOVA Originals', url:STARVALE_URL, featured:true, saves:true, cover:'/public/starvale-card.jpg', blurb:'湖边的小农场,一年四季。种地、钓鱼、下矿、交朋友。' };
   let s = allGames().find(g => g.slug==='starvale' || g.slug==='popcraft');
   if (s) writeMeta({ ...s, ...STAR }); else writeMeta({ id:id6(), created:Date.now(), likes:0, plays:0, comments:[], ...STAR });
+  const SZM = { title:'深圳生活', slug:'shenzhen', author:'NOVA Originals', url:SHENZHEN_URL+'/', cover:'/public/shenzhen-card.jpg', blurb:'1:1 真实深圳夜景俯瞰。搜索全城 740 家真实店铺,飞过去,走进店里吃饭、购物、看电影。' };
+  if (fs.existsSync(path.join(SZ,'index.html'))) { const z = allGames().find(g => g.slug==='shenzhen'); if (z) writeMeta({ ...z, ...SZM }); else writeMeta({ id:id6(), created:Date.now(), likes:0, plays:0, comments:[], ...SZM }); }
   for (const g of allGames()) if (['persist-test','tiny-clicker'].includes(g.slug) && !g.hidden) writeMeta({ ...g, hidden:true });
   if (!allGames().some(g => g.slug==='starfall')) try { const seed = fs.readFileSync(path.join(__dirname,'seed-game.html')), id = id6(); fs.writeFileSync(htmlPath(id), seed); writeMeta({ id, slug:'starfall', title:'Starfall', author:'NOVA', created:Date.now(), likes:0, plays:0, comments:[] }); } catch(e){}
 }
@@ -258,6 +262,8 @@ http.createServer(async (req, res) => {
     if (req.method==='GET' && p==='/upload') return html(res,uploadPage());
     if (req.method==='GET' && (p==='/portal'||p==='/portal/agents'||p==='/portal/review'||/^\/portal\/[a-f0-9]{10}$/.test(p))) return html(res,portalPage());
     if ((req.method==='GET'||req.method==='HEAD') && p.startsWith(STARVALE_URL+'/')) { const f = path.normalize(path.join(GAME, decodeURIComponent(p.slice(STARVALE_URL.length))==='/'?'index.html':decodeURIComponent(p.slice(STARVALE_URL.length)))); if (f.startsWith(GAME+path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) return sendFile(req,res,f,'no-cache'); return send(res,404,'text/plain','not found'); }
+    if ((req.method==='GET'||req.method==='HEAD') && p===SHENZHEN_URL) { res.writeHead(301,{Location:SHENZHEN_URL+'/'+(u.search||'')}); return res.end(); }
+    if ((req.method==='GET'||req.method==='HEAD') && p.startsWith(SHENZHEN_URL+'/')) { const rel = decodeURIComponent(p.slice(SHENZHEN_URL.length)), f = path.normalize(path.join(SZ, rel==='/'?'index.html':rel)); if (f.startsWith(SZ+path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) return sendFile(req,res,f,/\.html$/.test(f)?'no-cache':'public, max-age=86400'); return send(res,404,'text/plain','not found'); }
     if (req.method==='GET' && p==='/sdk.js') return send(res,200,TYPES['.js'],fs.readFileSync(path.join(PUBLIC,'sdk.js')),{'Access-Control-Allow-Origin':'*','Cache-Control':'public, max-age=300'});
     if (req.method==='GET' && (m=p.match(/^\/covers\/([a-f0-9]{10})\.jpg$/))) { const f = path.join(COVERS,m[1]+'.jpg'); if (!fs.existsSync(f)) return send(res,404,'text/plain','Not found'); return send(res,200,'image/jpeg',fs.readFileSync(f),{'Cache-Control':'public, max-age=86400'}); }
     if (req.method==='GET' && p==='/popcraft') { res.writeHead(301,{Location:'/starvale'}); return res.end(); }
